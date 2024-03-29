@@ -16,4 +16,9 @@ standardReleasePipelineWithGenericTrigger(
                             sigType: '.sig',
                             sigOverwrite: true
                         )
+                        publishToMaven(
+                            signingArtifactsPath: "$WORKSPACE/repository/TrafficCapture/",
+                            mavenArtifactsPath: "$WORKSPACE/repository/TrafficCapture/",
+                            autoPublish: false
+                        )
     }
