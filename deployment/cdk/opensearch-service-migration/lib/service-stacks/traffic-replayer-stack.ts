@@ -106,8 +106,8 @@ export class TrafficReplayerStack extends MigrationServiceCore {
                 "TUPLE_DIR_PATH": `/shared-replayer-output/traffic-replayer-${deployId}`
             },
             cpuArchitecture: props.fargateCpuArch,
-            taskCpuUnits: 1024,
-            taskMemoryLimitMiB: 4096,
+            taskCpuUnits: 4096,
+            taskMemoryLimitMiB: 8192,
             ...props
         });
     }
