@@ -1,5 +1,6 @@
 package org.opensearch.migrations.replay;
 
+import io.netty.buffer.Unpooled;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Lombok;
@@ -12,7 +13,6 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.stream.Stream;
-import org.opensearch.migrations.replay.util.NettyUtils;
 
 @Slf4j
 @EqualsAndHashCode(exclude = "currentSegmentBytes")
@@ -65,17 +65,17 @@ public class HttpMessageAndTimestamp {
     }
 
     public String format(Optional<HttpByteBufFormatter.HttpMessageType> messageTypeOp) {
-        try (var bufStream = NettyUtils.createRefCntNeutralCloseableByteBufStream(packetBytes)) {
-            var packetBytesAsStr = messageTypeOp.map(mt-> HttpByteBufFormatter.httpPacketBytesToString(mt, packetBytes,
-                    HttpByteBufFormatter.LF_LINE_DELIMITER))
-                .orElseGet(()-> HttpByteBufFormatter.httpPacketBufsToString(bufStream, Utils.MAX_PAYLOAD_SIZE_TO_PRINT));
-            final StringBuilder sb = new StringBuilder("HttpMessageAndTimestamp{");
-            sb.append("firstPacketTimestamp=").append(firstPacketTimestamp);
-            sb.append(", lastPacketTimestamp=").append(lastPacketTimestamp);
-            sb.append(", message=[").append(packetBytesAsStr);
-            sb.append("]}");
-            return sb.toString();
-        }
+        var packetBytesAsStr = messageTypeOp.map(mt-> HttpByteBufFormatter.httpPacketBytesToString(mt, packetBytes,
+                HttpByteBufFormatter.LF_LINE_DELIMITER))
+                .orElseGet(()-> HttpByteBufFormatter.httpPacketBufsToString(
+                        packetBytes.stream().map(Unpooled::wrappedBuffer),
+                        Utils.MAX_PAYLOAD_SIZE_TO_PRINT, true));
+        final StringBuilder sb = new StringBuilder("HttpMessageAndTimestamp{");
+        sb.append("firstPacketTimestamp=").append(firstPacketTimestamp);
+        sb.append(", lastPacketTimestamp=").append(lastPacketTimestamp);
+        sb.append(", message=[").append(packetBytesAsStr);
+        sb.append("]}");
+        return sb.toString();
     }
 
     public void addSegment(byte[] data) {

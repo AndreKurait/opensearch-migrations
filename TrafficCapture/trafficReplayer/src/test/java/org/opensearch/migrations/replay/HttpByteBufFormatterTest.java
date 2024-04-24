@@ -1,13 +1,11 @@
 package org.opensearch.migrations.replay;
 
-
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.opensearch.migrations.replay.util.RefSafeStreamUtils;
 import org.opensearch.migrations.testutils.CountingNettyResourceLeakDetector;
 import org.opensearch.migrations.testutils.TestUtilities;
 import org.opensearch.migrations.testutils.WrapWithNettyLeakDetection;
@@ -16,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @WrapWithNettyLeakDetection
@@ -146,10 +145,10 @@ public class HttpByteBufFormatterTest {
     private static String prettyPrintByteBufs(List<byte[]> byteArrays,
                                        HttpByteBufFormatter.HttpMessageType messageType,
                                        boolean usePooled) {
-        return RefSafeStreamUtils.refSafeTransform(byteArrays.stream(),
-            b->TestUtilities.getByteBuf(b,usePooled),
-            bbs -> HttpByteBufFormatter.httpPacketBufsToString(messageType, bbs));
-
+        var bbList = byteArrays.stream().map(b->TestUtilities.getByteBuf(b,usePooled)).collect(Collectors.toList());
+        var formattedString = HttpByteBufFormatter.httpPacketBufsToString(messageType, bbList.stream(), false);
+        bbList.forEach(bb->bb.release());
+        return formattedString;
     }
 
     static String getExpectedResult(HttpByteBufFormatter.PacketPrintFormat format, BufferContent content) {
