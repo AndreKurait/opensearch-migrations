@@ -1,0 +1,20 @@
+// Service Migration Diagram
+digraph {
+	A [label="Application Load Balancer (ALB)" fillcolor=lightblue shape=box style=filled]
+	O [label="Source Cluster (Old Elasticsearch Cluster)" fillcolor=lightgreen shape=ellipse style=filled]
+	T [label="Target Cluster (New Elasticsearch Cluster)" fillcolor=lightyellow shape=ellipse style=filled]
+	A -> O [label="Source Listener (Port 19200)" color=blue]
+	A -> T [label="Target Listener (Port 29200)" color=green]
+	A -> O [label="Migration Listener (Port 9200 - Initial)" color=red style=dashed]
+	A -> T [label="Migration Listener (Port 9200 - Final)" color=red style=dotted]
+	subgraph cluster_legend {
+		color=lightgrey label=Legend shape=box style=filled
+		"Constant Routing" [shape=plaintext]
+		"Initial Only" [shape=plaintext]
+		"Final Only" [shape=plaintext]
+		"Constant Routing" -> "Constant Routing" [style=solid]
+		"Initial Only" -> "Initial Only" [style=dashed]
+		"Final Only" -> "Final Only" [style=dotted]
+	}
+}
+

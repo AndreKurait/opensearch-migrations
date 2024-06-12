@@ -154,15 +154,15 @@ STAGE='aws-integ'
 RUN_POST_ACTIONS=false
 CREATE_SLR=false
 BOOTSTRAP_REGION=false
-SKIP_CAPTURE_PROXY=false
+SKIP_CAPTURE_PROXY=true
 SKIP_SOURCE_DEPLOY=false
 SKIP_MIGRATION_DEPLOY=false
 SOURCE_CONTEXT_FILE='./defaultSourceContext.json'
 MIGRATION_CONTEXT_FILE='./defaultMigrationContext.json'
 SOURCE_CONTEXT_ID='source-single-node-ec2'
 MIGRATION_CONTEXT_ID='migration-default'
-MIGRATIONS_GIT_URL='https://github.com/opensearch-project/opensearch-migrations.git'
-MIGRATIONS_GIT_BRANCH='main'
+MIGRATIONS_GIT_URL='https://github.com/AndreKurait/opensearch-migrations.git'
+MIGRATIONS_GIT_BRANCH='DemoTesting'
 CLEAN_UP_ALL=false
 
 while [[ $# -gt 0 ]]; do
