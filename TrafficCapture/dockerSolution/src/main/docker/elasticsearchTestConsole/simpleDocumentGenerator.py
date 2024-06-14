@@ -1,10 +1,17 @@
 #!/usr/bin/env python
+import sys
 import requests
 import time
 import argparse
 from datetime import datetime
+import urllib3
+import os
 
-# url_base="http://test.elb.us-west-2.amazonaws.com:9200"
+# Disable InsecureRequestWarning
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Set the base URL from the environment variable SOURCE_DOMAIN_ENDPOINT or use a default value
+url_base = os.environ.get('SOURCE_DOMAIN_ENDPOINT', 'https://capture-proxy:9200')
 username = 'admin'
 password = 'admin'
 
@@ -20,16 +27,15 @@ def get_current_date_index():
 
 
 # Function to send a request
-def send_request(index, counter, url_base):
-    url = f"{url_base}/{index}/_doc/{counter}"
+def send_request(index_suffix, url_base):
     timestamp = datetime.now().isoformat()
+    url = f"{url_base}/simple_doc_{index_suffix}/_doc/{timestamp}?refresh=true"
     # Basic Authentication
     auth = (username, password)
     payload = {
         "timestamp": timestamp,
         "new_field": "apple"
     }
-
     try:
         # a new connection for every request
         #response = requests.put(url, json=payload, auth=auth)
@@ -57,7 +63,7 @@ total5xxCount = 0
 totalErrorCount = 0
 while True:
     current_index = get_current_date_index()
-    response_code = send_request(current_index, counter, args.endpoint)
+    response_code = send_request(current_index, url_base)
     if (response_code is not None):
         first_digit = int(str(response_code)[:1])
         if (first_digit == 2):
@@ -70,5 +76,6 @@ while True:
         totalErrorCount += 1
     print(f"Summary: 2xx responses = {total2xxCount}, 4xx responses = {total4xxCount}, "
           f"5xx responses = {total5xxCount}, Error requests = {totalErrorCount}")
+    sys.stdout.flush()
     counter += 1
     time.sleep(0.1)
