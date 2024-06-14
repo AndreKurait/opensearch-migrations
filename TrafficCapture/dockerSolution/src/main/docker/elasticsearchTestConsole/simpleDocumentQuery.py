@@ -27,6 +27,7 @@ def parse_args():
     parser.add_argument("--source-password", help="Source cluster password.", default=source_password)
     parser.add_argument("--target-username", help="Target cluster username.", default=target_username)
     parser.add_argument("--target-password", help="Target cluster password.", default=target_password)
+    parser.add_argument("--target-no-auth", action='store_true', help="Flag to provide no auth in target requests.")
     return parser.parse_args()
 
 def get_latest_document(url_base, auth):
@@ -89,40 +90,42 @@ def calculate_delay(latest_document, current_time):
     delay = (current_time - datetime.fromisoformat(latest_timestamp)).total_seconds() if latest_document else "N/A"
     return latest_timestamp, delay
 
-def print_delays(source_delay, target_delay, target_timestamp_diffs):
-    difference_in_timestamps = abs(source_delay - target_delay) if source_delay != "N/A" and target_delay != "N/A" else "N/A"
+def print_delays(source_delay, target_delay, source_timestamp_diffs, target_timestamp_diffs):
+    source_timestamp_diffs.append((source_delay, datetime.now()))
     target_timestamp_diffs.append((target_delay, datetime.now()))
-    
+
     # Remove data older than 5 seconds
+    while source_timestamp_diffs and (datetime.now() - source_timestamp_diffs[0][1]).total_seconds() > 5:
+        source_timestamp_diffs.popleft()
     while target_timestamp_diffs and (datetime.now() - target_timestamp_diffs[0][1]).total_seconds() > 5:
         target_timestamp_diffs.popleft()
-    
-    valid_diffs = [diff for diff, _ in difference_in_timestamps if diff != "N/A"]
-    
+
+    valid_source_diffs = [diff for diff, _ in source_timestamp_diffs if diff != "N/A"]
+    valid_target_diffs = [diff for diff, _ in target_timestamp_diffs if diff != "N/A"]
+
     if len(target_timestamp_diffs) >= 2:
         speedup_factor = calculate_average_speedup_factor(target_timestamp_diffs)
         print(f"Speedup Factor (last 5 seconds): {speedup_factor:.3f}")
     else:
         print("Insufficient data points to calculate Speedup Factor")
-    
-    rolling_average = sum(valid_diffs) / len(valid_diffs) if valid_diffs else "N/A"
 
-    print(f"Difference in latest timestamps (seconds): {difference_in_timestamps:.3f}" if difference_in_timestamps != "N/A" else "Difference in latest timestamps (seconds): N/A")
-    print(f"Rolling average of difference in timestamps over last 5 seconds: {rolling_average:.3f}" if rolling_average != "N/A" else "Rolling average of difference in timestamps over last 5 seconds: N/A")
-    if len(target_timestamp_diffs) >= 2:
-        average_speedup_factor = calculate_average_speedup_factor(target_timestamp_diffs)
-        print(f"Average Speedup Factor (last 5 seconds): {average_speedup_factor:.3f}")
-    else:
-        print("Insufficient data points to calculate Average Speedup Factor")
-        
+    source_rolling_average = sum(valid_source_diffs) / len(valid_source_diffs) if valid_source_diffs else "N/A"
+    target_rolling_average = sum(valid_target_diffs) / len(valid_target_diffs) if valid_target_diffs else "N/A"
+    rolling_average_diff = abs(source_rolling_average - target_rolling_average) if source_rolling_average != "N/A" and target_rolling_average != "N/A" else "N/A"
+
+    print(f"Rolling average of source delay over last 5 seconds: {source_rolling_average:.3f}" if source_rolling_average != "N/A" else "Rolling average of source delay over last 5 seconds: N/A")
+    print(f"Rolling average of target delay over last 5 seconds: {target_rolling_average:.3f}" if target_rolling_average != "N/A" else "Rolling average of target delay over last 5 seconds: N/A")
+    print(f"Difference in rolling averages over last 5 seconds: {rolling_average_diff:.3f}" if rolling_average_diff != "N/A" else "Difference in rolling averages over last 5 seconds: N/A")
+
 def main_loop():
     args = parse_args()
     source_url_base = args.source_endpoint if args.source_endpoint else os.getenv('SOURCE_DOMAIN_ENDPOINT', 'https://capture-proxy:9200')
     target_url_base = args.target_endpoint if args.target_endpoint else os.getenv('MIGRATION_DOMAIN_ENDPOINT', 'https://opensearchtarget:9200')
 
     source_auth = (args.source_username, args.source_password)
-    target_auth = (args.target_username, args.target_password)
+    target_auth = None if args.target_no_auth else (args.target_username, args.target_password)
     
+    source_timestamp_diffs = deque()
     target_timestamp_diffs = deque()
 
     while True:
@@ -138,7 +141,7 @@ def main_loop():
             target_latest_timestamp, target_delay = calculate_delay(target_latest_document, current_time)
             print(f"Target latest timestamp: {target_latest_timestamp}")
             print(f"Target delay in seconds: {target_delay:.3f}" if target_delay != "N/A" else "Target delay in seconds: N/A")
-            print_delays(source_delay, target_delay, target_timestamp_diffs)
+            print_delays(source_delay, target_delay, source_timestamp_diffs, target_timestamp_diffs)
             sys.stdout.flush()
 
             time.sleep(0.1)

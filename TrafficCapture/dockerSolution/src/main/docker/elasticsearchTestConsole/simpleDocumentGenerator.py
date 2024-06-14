@@ -10,36 +10,22 @@ import os
 # Disable InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Set the base URL from the environment variable SOURCE_DOMAIN_ENDPOINT or use a default value
-url_base = os.environ.get('SOURCE_DOMAIN_ENDPOINT', 'https://capture-proxy:9200')
-username = 'admin'
-password = 'admin'
-
-session = requests.Session()
-keep_alive_headers = {
-    'Connection': 'keep-alive'
-}
-
-
 # Function to get current date in a specific format for indexing
 def get_current_date_index():
     return datetime.now().strftime("%Y-%m-%d")
 
 
 # Function to send a request
-def send_request(index_suffix, url_base):
+def send_request(index_suffix, url_base, auth):
     timestamp = datetime.now().isoformat()
     url = f"{url_base}/simple_doc_{index_suffix}/_doc/{timestamp}?refresh=true"
-    # Basic Authentication
-    auth = (username, password)
     payload = {
         "timestamp": timestamp,
         "new_field": "apple"
     }
     try:
         # a new connection for every request
-        #response = requests.put(url, json=payload, auth=auth)
-        response = session.put(url, json=payload, auth=auth, headers=keep_alive_headers, verify=False)
+        response = session.put(url, json=payload, auth=auth, headers=keep_alive_headers, verify=False, timeout=0.5)
         print(response.text)
         print(f"Request sent at {timestamp}: {response.status_code}")
         return response.status_code
@@ -51,10 +37,21 @@ def send_request(index_suffix, url_base):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--endpoint", help="Source cluster endpoint e.g. http://test.elb.us-west-2.amazonaws.com:9200.")
+    parser.add_argument("--no-auth", action='store_true', help="Flag to provide no auth in requests.")
     return parser.parse_args()
 
 
 args = parse_args()
+
+# Set the base URL from the argument or environment variable SOURCE_DOMAIN_ENDPOINT or use a default value
+url_base = args.endpoint if args.endpoint else os.environ.get('SOURCE_DOMAIN_ENDPOINT', 'https://capture-proxy:9200')
+auth = None if args.no_auth else ('admin', 'admin')
+
+session = requests.Session()
+keep_alive_headers = {
+    'Connection': 'keep-alive'
+}
+
 # Main loop
 counter = 1
 total2xxCount = 0
@@ -63,7 +60,7 @@ total5xxCount = 0
 totalErrorCount = 0
 while True:
     current_index = get_current_date_index()
-    response_code = send_request(current_index, url_base)
+    response_code = send_request(current_index, url_base, auth)
     if (response_code is not None):
         first_digit = int(str(response_code)[:1])
         if (first_digit == 2):
