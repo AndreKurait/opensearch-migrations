@@ -8,9 +8,14 @@ import time
 from collections import deque
 import sys
 from concurrent import futures
+import logging
 
 # Suppress only the single InsecureRequestWarning from urllib3 needed for this script
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Set the base URLs from the environment variables or use default values
 source_url_base = os.getenv('SOURCE_DOMAIN_ENDPOINT', 'https://capture-proxy-es:19200')
@@ -53,10 +58,9 @@ def get_latest_document(session, url_base, auth):
             latest_doc = hits[0]['_source']
             return latest_doc
         else:
-            print("No documents found.")
             return None
     except requests.RequestException as e:
-        print(f"Error querying latest document: {e}")
+        logger.error(f"An error occurred while fetching the latest document: {e}")
         return None
 
 def calculate_average_speedup_factor(data):
@@ -74,35 +78,41 @@ def calculate_average_speedup_factor(data):
     first_timestamp = data[0][1]
     last_delay = data[-1][0]
     last_timestamp = data[-1][1]
+    if first_delay is None or last_delay is None:
+        return 0
     average_speedup = max(1 + (first_delay - last_delay) / (last_timestamp - first_timestamp).total_seconds(), 0)
 
     return average_speedup
 
 def calculate_delay(latest_document, current_time):
-    latest_timestamp = latest_document['timestamp'] if latest_document else "N/A"
-    delay = (current_time - datetime.fromisoformat(latest_timestamp)).total_seconds() if latest_document else "N/A"
+    if latest_document:
+        latest_timestamp = latest_document['timestamp']
+        delay = (current_time - datetime.fromisoformat(latest_timestamp)).total_seconds()
+    else:
+        latest_timestamp = None
+        delay = None
     return latest_timestamp, delay
 
-def print_delays(source_delay, target_delay, source_timestamp_diffs, target_timestamp_diffs):
+def add_delay_messages(source_delay, target_delay, source_timestamp_diffs, target_timestamp_diffs, log_messages):
     source_timestamp_diffs.append((source_delay, datetime.now()))
     target_timestamp_diffs.append((target_delay, datetime.now()))
 
-    valid_source_diffs = [diff for diff, _ in source_timestamp_diffs if diff != "N/A"]
-    valid_target_diffs = [diff for diff, _ in target_timestamp_diffs if diff != "N/A"]
+    valid_source_diffs = [diff for diff, _ in source_timestamp_diffs if diff is not None]
+    valid_target_diffs = [diff for diff, _ in target_timestamp_diffs if diff is not None]
 
     if len(target_timestamp_diffs) >= 2:
         speedup_factor = calculate_average_speedup_factor(target_timestamp_diffs)
-        print(f"Speedup Factor (last 5 seconds): {speedup_factor:.3f}")
+        log_messages.append(f"Speedup Factor (last 5 seconds): {speedup_factor:.3f}")
     else:
-        print("Insufficient data points to calculate Speedup Factor")
+        log_messages.append("Insufficient data points to calculate Speedup Factor")
 
-    source_rolling_average = sum(valid_source_diffs) / len(valid_source_diffs) if valid_source_diffs else "N/A"
-    target_rolling_average = sum(valid_target_diffs) / len(valid_target_diffs) if valid_target_diffs else "N/A"
-    rolling_average_diff = abs(source_rolling_average - target_rolling_average) if source_rolling_average != "N/A" and target_rolling_average != "N/A" else "N/A"
+    source_rolling_average = sum(valid_source_diffs) / len(valid_source_diffs) if valid_source_diffs else None
+    target_rolling_average = sum(valid_target_diffs) / len(valid_target_diffs) if valid_target_diffs else None
+    rolling_average_diff = abs(source_rolling_average - target_rolling_average) if source_rolling_average is not None and target_rolling_average is not None else None
 
-    print(f"Rolling average of source delay over last 5 seconds: {source_rolling_average:.3f}" if source_rolling_average != "N/A" else "Rolling average of source delay over last 5 seconds: N/A")
-    print(f"Rolling average of target delay over last 5 seconds: {target_rolling_average:.3f}" if target_rolling_average != "N/A" else "Rolling average of target delay over last 5 seconds: N/A")
-    print(f"Difference in rolling averages over last 5 seconds:  {rolling_average_diff:.3f}" if rolling_average_diff != "N/A" else "Difference in rolling averages over last 5 seconds: N/A")
+    log_messages.append(f"Rolling average of source delay over last 5 seconds: {source_rolling_average:.3f}" if source_rolling_average is not None else "Rolling average of source delay over last 5 seconds: N/A")
+    log_messages.append(f"Rolling average of target delay over last 5 seconds: {target_rolling_average:.3f}" if target_rolling_average is not None else "Rolling average of target delay over last 5 seconds: N/A")
+    log_messages.append(f"Difference in rolling averages over last 5 seconds:  {rolling_average_diff:.3f}" if rolling_average_diff is not None else "Difference in rolling averages over last 5 seconds: N/A")
 
 def main_loop():
     args = parse_args()
@@ -120,6 +130,7 @@ def main_loop():
 
     while True:
         try:
+            log_messages = []
             with futures.ThreadPoolExecutor() as executor:
                 future_source = executor.submit(get_latest_document, session, source_url_base, source_auth)
                 future_target = executor.submit(get_latest_document, session, target_url_base, target_auth)
@@ -130,16 +141,15 @@ def main_loop():
             source_latest_timestamp, source_delay = calculate_delay(source_latest_document, current_time)
             target_latest_timestamp, target_delay = calculate_delay(target_latest_document, current_time)
 
-            if not args.no_clear_output:
-                # send clear command, not flushing until after print for smoother visuals
-                print(f"\033c", end="")
+            clear_message = f"\033c" if not args.no_clear_output else ""
 
-            print(f"Source latest timestamp: {source_latest_timestamp}")
-            print(f"Source delay in seconds: {source_delay:.3f}" if source_delay != "N/A" else "Source delay in seconds: N/A")
-            print(f"Target latest timestamp: {target_latest_timestamp}")
-            print(f"Target delay in seconds: {target_delay:.3f}" if target_delay != "N/A" else "Target delay in seconds: N/A")
-            print_delays(source_delay, target_delay, source_timestamp_diffs, target_timestamp_diffs)
-            sys.stdout.flush()
+            log_messages.append(f"Source latest timestamp: {source_latest_timestamp if source_latest_timestamp else 'N/A'}")
+            log_messages.append(f"Source delay in seconds: {source_delay:.3f}" if source_delay is not None else "Source delay in seconds: N/A")
+            log_messages.append(f"Target latest timestamp: {target_latest_timestamp if target_latest_timestamp else 'N/A'}")
+            log_messages.append(f"Target delay in seconds: {target_delay:.3f}" if target_delay is not None else "Target delay in seconds: N/A")
+            add_delay_messages(source_delay, target_delay, source_timestamp_diffs, target_timestamp_diffs, log_messages)
+
+            logger.info(clear_message + "\n".join(log_messages))
 
             # Remove data older than 5 seconds
             while source_timestamp_diffs and (datetime.now() - source_timestamp_diffs[0][1]).total_seconds() > 5:
@@ -155,7 +165,7 @@ def main_loop():
 
             time.sleep(0.25)
         except Exception as e:
-            print(f"An error occurred: {e}. Retrying...")
+            logger.error(f"An error occurred: {e}. Retrying...")
 
 if __name__ == "__main__":
     main_loop()
