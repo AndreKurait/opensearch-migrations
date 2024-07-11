@@ -2,6 +2,7 @@ package com.rfs.common;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 
 import com.beust.jcommander.Parameter;
 
@@ -49,7 +50,7 @@ public class ConnectionDetails {
             this.authType = AuthType.BASIC;
         } else {
             this.authType = AuthType.NONE;
-        }        
+        }
 
         this.username = username;
         this.password = password;
@@ -76,7 +77,7 @@ public class ConnectionDetails {
             } else {
                 throw new IllegalArgumentException("Invalid protocol");
             }
-        }        
+        }
     }
 
     public static interface Params {

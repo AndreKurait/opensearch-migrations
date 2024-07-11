@@ -40,10 +40,14 @@ dependencies {
     implementation group: 'software.amazon.awssdk', name: 's3'
     implementation group: 'software.amazon.awssdk', name: 's3-transfer-manager'
     implementation group: 'software.amazon.awssdk.crt', name: 'aws-crt'
+    implementation group: 'software.amazon.awssdk', name: 'auth'
+    implementation group: 'software.amazon.awssdk', name: 'http-client-spi'
 
-    implementation platform('io.projectreactor:reactor-bom:2023.0.5') 
-    implementation 'io.projectreactor.netty:reactor-netty-core' 
+    implementation platform('io.projectreactor:reactor-bom:2023.0.5')
+    implementation 'io.projectreactor.netty:reactor-netty-core'
     implementation 'io.projectreactor.netty:reactor-netty-http'
+    implementation group: 'org.springframework', name: 'spring-webflux', version: '5.3.37'
+
 
     testImplementation testFixtures(project(path: ':RFS'))
     testImplementation group: 'io.projectreactor', name: 'reactor-test'

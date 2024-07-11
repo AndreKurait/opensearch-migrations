@@ -1,7 +1,7 @@
 package com.rfs.cms;
 
+import com.rfs.common.AuthConfig;
 import com.rfs.common.ConnectionDetails;
-import com.rfs.common.RestClient;
 import io.netty.handler.codec.http.HttpMethod;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -17,7 +17,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Slf4j
@@ -45,12 +44,13 @@ public class ReactorHttpClient implements AbstractedHttpClient {
                 .headers(h -> {
                     h.add("Content-Type", "application/json");
                     h.add("User-Agent", "RfsWorker-1.0");
-                    if (connectionDetails.authType == ConnectionDetails.AuthType.BASIC) {
-                        String credentials = connectionDetails.username + ":" + connectionDetails.password;
+                    if (connectionDetails.authConfig instanceof AuthConfig.BasicAuth) {
+                        var auth = (AuthConfig.BasicAuth) connectionDetails.authConfig;
+                        String credentials = auth.username + ":" + auth.password;
                         String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes());
                         h.add("Authorization", "Basic " + encodedCredentials);
                     }
-                });
+                }).;
     }
 
     @Override

@@ -95,13 +95,13 @@ public class OpenSearchClient {
         if (response.code == HttpURLConnection.HTTP_NOT_FOUND) {
             client.put(objectPath, settings.toString());
             return Optional.of(settings);
-        } 
+        }
         // The only response code that can end up here is HTTP_OK, which means the object already existed
         return Optional.empty();
     }
 
     /*
-     * Attempts to register a snapshot repository; no-op if the repo already exists.  
+     * Attempts to register a snapshot repository; no-op if the repo already exists.
      */
     public void registerSnapshotRepo(String repoName, ObjectNode settings){
         String targetPath = "_snapshot/" + repoName;
