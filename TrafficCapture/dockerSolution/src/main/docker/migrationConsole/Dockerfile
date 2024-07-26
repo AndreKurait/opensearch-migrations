@@ -13,6 +13,7 @@ WORKDIR /root/kafka-tools
 # Get kafka distribution and unpack to 'kafka'
 RUN wget -O- https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz | tar --transform 's!^[^/]*!kafka!' -xvz
 RUN wget -O kafka/libs/msk-iam-auth.jar https://github.com/aws/aws-msk-iam-auth/releases/download/v2.0.3/aws-msk-iam-auth-2.0.3-all.jar
+
 WORKDIR /root
 
 # Add Traffic Replayer jars for running KafkaPrinter from this container
@@ -38,6 +39,11 @@ RUN chmod ug+x /root/kafka-tools/kafkaExport.sh
 
 COPY loadServicesFromParameterStore.sh /root/
 RUN chmod ug+x /root/loadServicesFromParameterStore.sh
+
+# Install Java for Kafka Tools, Create Snapshot, and Metadata Migration
+RUN dnf install -y java-11-amazon-corretto && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
 
 WORKDIR /root
 COPY lib /root/lib
