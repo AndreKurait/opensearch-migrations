@@ -1,16 +1,31 @@
 plugins {
-  id "java-library"
+//  id "java-library"
+  id 'java-platform'
 }
 
-java.sourceCompatibility = JavaVersion.VERSION_11
-java.targetCompatibility = JavaVersion.VERSION_11
+javaPlatform {
+  allowDependencies()
+}
+
+
+// java.sourceCompatibility = JavaVersion.VERSION_11
+// java.targetCompatibility = JavaVersion.VERSION_11
 
 repositories {
   mavenCentral()
 }
 
-dependencies {
+publishing {
+  publications {
+    mavenJava(MavenPublication) {
+      from components.javaPlatform
+    }
+  }
+}
 
+dependencies {
+  def reactor = '2023.0.5';
+  api platform("io.projectreactor:reactor-bom:$reactor")
   constraints {
     def netty = '4.1.108.Final'
     api group: 'io.netty', name: 'netty-buffer', version: netty
@@ -119,16 +134,19 @@ dependencies {
 
     api group: 'org.hamcrest', name: 'hamcrest', version: '2.2'
 
+    api group: 'io.projectreactor.netty', name: 'reactor-netty-core'
+    api group: 'io.projectreactor.netty', name: 'reactor-netty-http'
+
     // ************************************************************
     // The following constraints are for mitigating transitive CVEs
     // ************************************************************
-    implementation group: 'net.minidev', name: 'json-smart', version: '2.4.9'
-    implementation group: 'xalan', name: 'xalan', version: '2.7.3'
-    implementation group: 'com.thoughtworks.xstream', name: 'xstream', version: '1.4.20'
-    implementation group: 'commons-net', name: 'commons-net', version: '3.9.0'
-    implementation group: 'org.jsoup', name: 'jsoup', version: '1.15.3'
-    implementation group: 'org.apache.tika', name: 'tika-core', version: '1.28.4'
-    implementation group: 'com.jayway.jsonpath', name: 'json-path', version: '2.9.0'
+    api group: 'net.minidev', name: 'json-smart', version: '2.4.9'
+    api group: 'xalan', name: 'xalan', version: '2.7.3'
+    api group: 'com.thoughtworks.xstream', name: 'xstream', version: '1.4.20'
+    api group: 'commons-net', name: 'commons-net', version: '3.9.0'
+    api group: 'org.jsoup', name: 'jsoup', version: '1.15.3'
+    api group: 'org.apache.tika', name: 'tika-core', version: '1.28.4'
+    api group: 'com.jayway.jsonpath', name: 'json-path', version: '2.9.0'
 
   }
 }

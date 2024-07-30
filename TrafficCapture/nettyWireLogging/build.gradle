@@ -7,8 +7,10 @@ plugins {
     id 'io.freefair.lombok'
 }
 
+apply plugin: 'java-library'
+
 dependencies {
-    api project(":commonDependencyVersionConstraints")
+    implementation platform(project(":commonDependencyVersionConstraints"))
 
     implementation project(':TrafficCapture:captureOffloader')
     implementation project(':coreUtilities')

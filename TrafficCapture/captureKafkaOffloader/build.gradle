@@ -2,14 +2,17 @@
 plugins {
     id 'org.opensearch.migrations.java-library-conventions'
     id 'io.freefair.lombok'
+    id 'java-library'
 }
+
+apply plugin: 'java-library'
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    api project(":commonDependencyVersionConstraints")
+    api platform(project(":commonDependencyVersionConstraints"))
     implementation project(':TrafficCapture:captureOffloader')
     implementation project(':coreUtilities')
     implementation group: 'com.google.protobuf', name:'protobuf-java'

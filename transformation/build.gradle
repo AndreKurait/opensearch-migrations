@@ -19,9 +19,11 @@ buildscript {
 plugins {
     id 'org.opensearch.migrations.java-library-conventions'
     id 'io.freefair.lombok'
-    id 'java'
+    id 'java-library'
     id 'java-test-fixtures'
 }
+
+apply plugin: 'java-library'
 
 java.sourceCompatibility = JavaVersion.VERSION_11
 java.targetCompatibility = JavaVersion.VERSION_11
@@ -31,7 +33,7 @@ repositories {
 }
 
 dependencies {
-    api project(":commonDependencyVersionConstraints")
+    api platform(project(":commonDependencyVersionConstraints"))
 
     implementation group: 'org.slf4j', name: 'slf4j-api'
 

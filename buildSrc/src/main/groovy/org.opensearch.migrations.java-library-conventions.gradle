@@ -7,5 +7,5 @@ plugins {
     id 'org.opensearch.migrations.java-common-conventions'
 
     // Apply the java-library plugin for API and implementation separation.
-    id 'java-library'
+//    id 'java-library'
 }

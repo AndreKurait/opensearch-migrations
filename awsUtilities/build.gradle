@@ -19,7 +19,7 @@ buildscript {
 plugins {
     id 'org.opensearch.migrations.java-library-conventions'
     id 'io.freefair.lombok'
-    id 'java'
+    id 'java-library'
 }
 
 java.sourceCompatibility = JavaVersion.VERSION_11
@@ -30,7 +30,7 @@ repositories {
 }
 
 dependencies {
-    api project(":commonDependencyVersionConstraints")
+    api platform(project(':commonDependencyVersionConstraints'))
 
     implementation group: 'software.amazon.awssdk', name: 'arns'
     implementation group: 'software.amazon.awssdk', name: 'auth'

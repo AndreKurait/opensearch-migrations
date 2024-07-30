@@ -19,7 +19,8 @@ ext {
 }
 
 dependencies {
-    implementation project(":commonDependencyVersionConstraints")
+    implementation platform(project(":commonDependencyVersionConstraints"))
+    implementation project(':awsUtilities')
     implementation project(':coreUtilities')
     implementation project(':transformation')
 

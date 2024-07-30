@@ -21,13 +21,14 @@ plugins {
     id 'org.owasp.dependencycheck' version '8.2.1'
     id 'io.freefair.lombok'
 }
+apply plugin: 'java-library'
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    api project(":commonDependencyVersionConstraints")
+    api platform(project(":commonDependencyVersionConstraints"))
 }
 
 tasks.named('test') {
