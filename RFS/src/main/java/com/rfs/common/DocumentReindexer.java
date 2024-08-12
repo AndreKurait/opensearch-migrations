@@ -35,8 +35,12 @@ public class DocumentReindexer {
             .zipWith(documentStream
                 .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
                 .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
-                .doOnNext(bulk -> logger.info("{} documents in current bulk request. First doc is size {} bytes.",
-                    bulk.size(), bulk.get(0).getBytes(StandardCharsets.UTF_8).length))
+                .doOnNext(bulk -> logger.info("{} documents in current bulk request. First doc is size {} bytes. String {} $$$ Bytes {}",
+                    bulk.size(),
+                    bulk.get(0).getBytes(StandardCharsets.UTF_8).length,
+                    bulk.get(0),
+                    bulk.get(0).getBytes(StandardCharsets.UTF_8)
+                    ))
                 .map(this::convertToBulkRequestBody)  // Assemble the bulk request body from the parts
             )
             .map(Tuple2::getT2)
