@@ -1,9 +1,7 @@
 package com.rfs.common;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -35,8 +33,7 @@ public class DocumentReindexer {
             .bufferUntil(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
             .doOnNext(bulk -> logger.info("{} documents in current bulk request", bulk.size()))
             .map(this::convertToBulkRequestBody)  // Assemble the bulk request body from the parts
-            .delayElements(Duration.ofMillis((long) (1000 / maxRequestsPerSecond))) // Slow down rate of requests
-            .limitRate(Math.max((int) maxRequestsPerSecond * 2, 10), 1) // Control accumulation of requests
+            .limitRate(Math.max((int) maxRequestsPerSecond * 2, 10)) // Control accumulation of requests
             .flatMap(
                 bulkJson -> client.sendBulkRequest(indexName, bulkJson, context.createBulkRequest()) // Send the request
                     .doOnSuccess(unused -> logger.debug("Batch succeeded"))
@@ -72,8 +69,11 @@ public class DocumentReindexer {
             @Override
             public boolean test(String next) {
                 currentItemCount++;
-//                currentSize += next.getBytes(StandardCharsets.UTF_8).length;
-                currentSize += next.length();
+                if (maxSizeInBytes == 1_000_000) {
+                    currentSize += next.getBytes(StandardCharsets.UTF_8).length;
+                } else {
+                    currentSize += next.length();
+                }
 
                 // Return false to keep buffering while conditions are met
                 if (currentSize == 0 ||
