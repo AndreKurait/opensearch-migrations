@@ -84,7 +84,8 @@ public class DocumentReindexer {
             public boolean test(String next) {
                 currentItemCount++;
                 // TODO: Move to Bytebufs to convert from string to bytes only once
-                currentSize += next.getBytes(StandardCharsets.UTF_8).length;
+                // Add one for newline between bulk sections
+                currentSize += next.getBytes(StandardCharsets.UTF_8).length + 1;
 
                 // Return true to keep buffering while conditions are met
                 if (currentSize == 0 ||
