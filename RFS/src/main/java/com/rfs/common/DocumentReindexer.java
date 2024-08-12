@@ -31,30 +31,31 @@ public class DocumentReindexer {
         Flux<Document> documentStream,
         IDocumentMigrationContexts.IDocumentReindexContext context
     ) {
-        final int maxRequestBufferForBursting = Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100); // After a pause/slowdown, allow up to 30 seconds of bursting
+        final int requestBuffer = Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100); // After a pause/slowdown, allow up to 30 seconds of bursting or 100 requests
         return Flux.interval(Duration.ofMillis((long) (1000 / maxRequestsPerSecond)), Schedulers.single())
-            .onBackpressureBuffer(maxRequestBufferForBursting, BufferOverflowStrategy.DROP_OLDEST)  // Drop ticks on backpressure, note requests are not dropped
+            .onBackpressureBuffer(requestBuffer, BufferOverflowStrategy.DROP_OLDEST)  // Drop ticks on backpressure, note requests are not dropped
             .zipWith(documentStream
+                .publishOn(Schedulers.single())
                 .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
                 .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
             )
             .map(Tuple2::getT2)
-            .publishOn(Schedulers.single())
+            .publishOn(Schedulers.parallel())
             .flatMap(
-                bulkSections -> {
-                    logger.info("{} documents in current bulk request. First doc is size {} bytes",
-                        bulkSections.size(),
-                        bulkSections.get(0).getBytes(StandardCharsets.UTF_8).length);
-                    return client
-                        .sendBulkRequest(indexName,
-                            this.convertToBulkRequestBody(bulkSections),
-                            context.createBulkRequest()) // Send the request
-                        .doOnSuccess(unused -> logger.debug("Batch succeeded"))
-                        .doOnError(error -> logger.error("Batch failed", error))
-                        // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
-                        .onErrorResume(e -> Mono.empty())
-                        .subscribeOn(Schedulers.boundedElastic());
-                },
+                bulkSections -> client
+                    .sendBulkRequest(indexName,
+                        this.convertToBulkRequestBody(bulkSections),
+                        context.createBulkRequest()) // Send the request
+                    .doFirst( () ->
+                        logger.info("{} documents in current bulk request. First doc is size {} bytes",
+                            bulkSections.size(),
+                            bulkSections.get(0).getBytes(StandardCharsets.UTF_8).length)
+                    )
+                    .doOnSuccess(unused -> logger.debug("Batch succeeded"))
+                    .doOnError(error -> logger.error("Batch failed", error))
+                    // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
+                    .onErrorResume(e -> Mono.empty())
+                    .subscribeOn(Schedulers.boundedElastic()),
                 maxConcurrentRequests)
             .doOnComplete(() -> logger.debug("All batches processed"))
             .then();
