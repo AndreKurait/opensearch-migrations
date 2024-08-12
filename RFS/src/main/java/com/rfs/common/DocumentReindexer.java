@@ -11,6 +11,7 @@ import org.apache.lucene.document.Document;
 import org.opensearch.migrations.reindexer.tracing.IDocumentMigrationContexts;
 
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -30,22 +31,19 @@ public class DocumentReindexer {
         Flux<Document> documentStream,
         IDocumentMigrationContexts.IDocumentReindexContext context
     ) {
+        final int maxRequestBufferForBursting = Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100); // After a pause/slowdown, allow up to 30 seconds of bursting
         return Flux.interval(Duration.ofMillis((long) (1000 / maxRequestsPerSecond)), Schedulers.single())
-            .onBackpressureDrop()  // Drop ticks on backpressure, note requests are not dropped
+            .onBackpressureBuffer(maxRequestBufferForBursting, BufferOverflowStrategy.DROP_OLDEST)  // Drop ticks on backpressure, note requests are not dropped
             .zipWith(documentStream
                 .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
                 .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
-                .doOnNext(bulk -> logger.info("{} documents in current bulk request. First doc is size {} bytes",
-                    bulk.size(),
-                    bulk.get(0).getBytes(StandardCharsets.UTF_8).length
-                ))
-                .map(this::convertToBulkRequestBody)  // Assemble the bulk request body from the parts
             )
             .map(Tuple2::getT2)
-            .limitRate(
-                Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100), // High tide: 30s of requests, min 10, max 100 i.e. After a pause/slowdown, allow up to 30 seconds of bursting
-                Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100) - 1 // Low tide: High Tide - 1 to replenish as it is taken
-            )
+            .doOnNext(bulk -> logger.info("{} documents in current bulk request. First doc is size {} bytes",
+                bulk.size(),
+                bulk.get(0).getBytes(StandardCharsets.UTF_8).length
+            ))
+            .map(this::convertToBulkRequestBody)
             .flatMap(
                 bulkJson -> client.sendBulkRequest(indexName, bulkJson, context.createBulkRequest()) // Send the request
                     .doOnSuccess(unused -> logger.debug("Batch succeeded"))
