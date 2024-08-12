@@ -35,18 +35,16 @@ public class DocumentReindexer {
             .zipWith(documentStream
                 .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
                 .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
-                .doOnNext(bulk -> logger.info("{} documents in current bulk request. First doc is size {} bytes. String {} $$$ Bytes {}",
+                .doOnNext(bulk -> logger.info("{} documents in current bulk request. First doc is size {} bytes",
                     bulk.size(),
-                    bulk.get(0).getBytes(StandardCharsets.UTF_8).length,
-                    bulk.get(0),
-                    bulk.get(0).getBytes(StandardCharsets.UTF_8)
-                    ))
+                    bulk.get(0).getBytes(StandardCharsets.UTF_8).length
+                ))
                 .map(this::convertToBulkRequestBody)  // Assemble the bulk request body from the parts
             )
             .map(Tuple2::getT2)
             .limitRate(
                 Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100), // High tide: 30s of requests, min 10, max 100 i.e. After a pause/slowdown, allow up to 30 seconds of bursting
-                1
+                Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100) - 1 // Low tide: High Tide - 1 to replenish as it is taken
             )
             .flatMap(
                 bulkJson -> client.sendBulkRequest(indexName, bulkJson, context.createBulkRequest()) // Send the request
