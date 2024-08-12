@@ -3,6 +3,7 @@ package com.rfs.common;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -28,14 +29,14 @@ public class DocumentReindexer {
         Flux<Document> documentStream,
         IDocumentMigrationContexts.IDocumentReindexContext context
     ) {
+
         return documentStream
-            .onBackpressureBuffer()
             .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
             .bufferUntil(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
             .doOnNext(bulk -> logger.info("{} documents in current bulk request", bulk.size()))
             .map(this::convertToBulkRequestBody)  // Assemble the bulk request body from the parts
-//            .delayElements(Duration.ofMillis((long) (1000 / maxRequestsPerSecond))) // Slow down rate of requests
-            .limitRate(Math.max((int) maxRequestsPerSecond * 2, 10)) // Set max accumulation of requests when cluster cannot keep up
+            .delayElements(Duration.ofMillis((long) (1000 / maxRequestsPerSecond))) // Slow down rate of requests
+            .limitRate(Math.max((int) maxRequestsPerSecond * 2, 10), 1) // Control accumulation of requests
             .flatMap(
                 bulkJson -> client.sendBulkRequest(indexName, bulkJson, context.createBulkRequest()) // Send the request
                     .doOnSuccess(unused -> logger.debug("Batch succeeded"))
