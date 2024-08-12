@@ -1,6 +1,7 @@
 package com.rfs.common;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
@@ -12,6 +13,8 @@ import org.opensearch.migrations.reindexer.tracing.IDocumentMigrationContexts;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+import reactor.util.function.Tuple2;
 
 @RequiredArgsConstructor
 public class DocumentReindexer {
@@ -27,13 +30,20 @@ public class DocumentReindexer {
         Flux<Document> documentStream,
         IDocumentMigrationContexts.IDocumentReindexContext context
     ) {
-
-        return documentStream
-            .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
-            .bufferUntil(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
-            .doOnNext(bulk -> logger.info("{} documents in current bulk request", bulk.size()))
-            .map(this::convertToBulkRequestBody)  // Assemble the bulk request body from the parts
-            .limitRate(Math.max((int) maxRequestsPerSecond * 2, 10)) // Control accumulation of requests
+        return Flux.interval(Duration.ofMillis((long) (1000 / maxRequestsPerSecond)), Schedulers.immediate())
+            .onBackpressureDrop()  // Drop ticks on backpressure, note requests are not dropped
+            .zipWith(documentStream
+                .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
+                .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
+                .doOnNext(bulk -> logger.info("{} documents in current bulk request. First doc is size {} bytes.",
+                    bulk.size(), bulk.get(0).getBytes(StandardCharsets.UTF_8).length))
+                .map(this::convertToBulkRequestBody)  // Assemble the bulk request body from the parts
+            )
+            .map(Tuple2::getT2)
+            .limitRate(
+                Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100), // High tide: 30s of requests, min 10, max 100 i.e. After a pause/slowdown, allow up to 30 seconds or 100 requests of bursting
+                1 // Low tide: 1 i.e. replenish buffer 1 at a time
+            )
             .flatMap(
                 bulkJson -> client.sendBulkRequest(indexName, bulkJson, context.createBulkRequest()) // Send the request
                     .doOnSuccess(unused -> logger.debug("Batch succeeded"))
@@ -69,23 +79,20 @@ public class DocumentReindexer {
             @Override
             public boolean test(String next) {
                 currentItemCount++;
-                if (maxSizeInBytes == 1_000_000) {
-                    currentSize += next.getBytes(StandardCharsets.UTF_8).length;
-                } else {
-                    currentSize += next.length();
-                }
+                // TODO: Move to Bytebufs to convert from string to bytes only once
+                currentSize += next.getBytes(StandardCharsets.UTF_8).length;
 
-                // Return false to keep buffering while conditions are met
+                // Return true to keep buffering while conditions are met
                 if (currentSize == 0 ||
                     (currentItemCount <= maxItems && currentSize <= maxSizeInBytes)) {
-                    return false;
+                    return true;
                 }
 
-                // Reset and return true to signal to stop buffering.
+                // Reset and return false to signal to stop buffering.
                 // Next item is excluded from current buffer
                 currentItemCount = 0;
                 currentSize = 0;
-                return true;
+                return false;
             }
         };
     }
