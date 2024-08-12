@@ -119,7 +119,6 @@ public class RestClient {
         return asyncRequest(method, path, body, convertedHeaders, context);
     }
 
-
     public Mono<HttpResponse> asyncRequest(HttpMethod method, String path, String body, Map<String, List<String>> additionalHeaders,
                                            @Nullable IRfsContexts.IRequestContext context) {
         assert connectionContext.getUri() != null;

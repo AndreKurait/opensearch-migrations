@@ -256,7 +256,6 @@ public class OpenSearchClient {
             throw new OperationFailed(errorMessage, getResponse);
         }
     }
-
     public Mono<BulkResponse> sendBulkRequest(String indexName, String body, IRfsContexts.IRequestContext context) {
         String targetPath = indexName + "/_bulk";
 

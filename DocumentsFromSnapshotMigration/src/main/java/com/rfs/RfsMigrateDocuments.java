@@ -118,14 +118,27 @@ public class RfsMigrateDocuments {
 
         @Parameter(required = false,
         names = "--documents-per-bulk-request",
-        description = "Optional.  The number of documents to be included within each bulk request sent, default 1000")
-        int numDocsPerBulkRequest = 1000;
+        description = "Optional.  The number of documents to be included within each bulk request sent. Default no max (controlled by documents size)")
+        int numDocsPerBulkRequest = Integer.MAX_VALUE;
+
+        @Parameter(required = false,
+            names = "--documents-size-per-bulk-request",
+            description = "Optional. The maximum aggregate document size to be used in bulk requests in bytes. " +
+                "Note does not apply to single document requests. Default 1 MiB")
+        long numBytesPerBulkRequest = 1024L * 1024L;
 
         @Parameter(required = false,
             names = "--max-connections",
             description = "Optional.  The maximum number of connections to simultaneously " +
                 "used to communicate to the target, default 50")
         int maxConnections = 50;
+
+        @Parameter(required = false,
+            names = "--max-requests-per-second",
+            description = "Optional. The maximum number of requests per second to the target. Default 10")
+        double maxRequestsPerSecond = 10;
+
+
     }
 
     public static class NoWorkLeftException extends Exception {
@@ -191,8 +204,9 @@ public class RfsMigrateDocuments {
                 log.info("Running RfsMigrateDocuments with workerId = " + workerId);
 
                 OpenSearchClient targetClient = new OpenSearchClient(connectionContext);
-                DocumentReindexer reindexer = new DocumentReindexer(targetClient, arguments.numDocsPerBulkRequest,
-                    arguments.maxConnections);
+                DocumentReindexer reindexer = new DocumentReindexer(targetClient,
+                    arguments.numDocsPerBulkRequest, arguments.numBytesPerBulkRequest,
+                    arguments.maxConnections, arguments.maxRequestsPerSecond);
 
                 SourceRepo sourceRepo;
                 if (snapshotLocalDirPath == null) {
