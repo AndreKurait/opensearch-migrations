@@ -39,20 +39,23 @@ public class DocumentReindexer {
                 .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
             )
             .map(Tuple2::getT2)
-            .doOnNext(bulk -> logger.info("{} documents in current bulk request. First doc is size {} bytes",
-                bulk.size(),
-                bulk.get(0).getBytes(StandardCharsets.UTF_8).length
-            ))
-            .map(this::convertToBulkRequestBody)
+            .publishOn(Schedulers.single())
             .flatMap(
-                bulkJson -> client.sendBulkRequest(indexName, bulkJson, context.createBulkRequest()) // Send the request
-                    .doOnSuccess(unused -> logger.debug("Batch succeeded"))
-                    .doOnError(error -> logger.error("Batch failed", error))
-                    // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
-                    .onErrorResume(e -> Mono.empty())
-                    .subscribeOn(Schedulers.boundedElastic()),
-                maxConcurrentRequests
-            )
+                bulkSections -> {
+                    logger.info("{} documents in current bulk request. First doc is size {} bytes",
+                        bulkSections.size(),
+                        bulkSections.get(0).getBytes(StandardCharsets.UTF_8).length);
+                    return client
+                        .sendBulkRequest(indexName,
+                            this.convertToBulkRequestBody(bulkSections),
+                            context.createBulkRequest()) // Send the request
+                        .doOnSuccess(unused -> logger.debug("Batch succeeded"))
+                        .doOnError(error -> logger.error("Batch failed", error))
+                        // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
+                        .onErrorResume(e -> Mono.empty())
+                        .subscribeOn(Schedulers.boundedElastic());
+                },
+                maxConcurrentRequests)
             .doOnComplete(() -> logger.debug("All batches processed"))
             .then();
     }
