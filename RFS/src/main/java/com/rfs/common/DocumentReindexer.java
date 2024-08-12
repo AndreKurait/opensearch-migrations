@@ -30,7 +30,7 @@ public class DocumentReindexer {
         Flux<Document> documentStream,
         IDocumentMigrationContexts.IDocumentReindexContext context
     ) {
-        return Flux.interval(Duration.ofMillis((long) (1000 / maxRequestsPerSecond)), Schedulers.immediate())
+        return Flux.interval(Duration.ofMillis((long) (1000 / maxRequestsPerSecond)), Schedulers.single())
             .onBackpressureDrop()  // Drop ticks on backpressure, note requests are not dropped
             .zipWith(documentStream
                 .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
@@ -41,16 +41,18 @@ public class DocumentReindexer {
             )
             .map(Tuple2::getT2)
             .limitRate(
-                Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100), // High tide: 30s of requests, min 10, max 100 i.e. After a pause/slowdown, allow up to 30 seconds or 100 requests of bursting
-                1 // Low tide: 1 i.e. replenish buffer 1 at a time
+                Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100), // High tide: 30s of requests, min 10, max 100 i.e. After a pause/slowdown, allow up to 30 seconds of bursting
+                1
             )
             .flatMap(
                 bulkJson -> client.sendBulkRequest(indexName, bulkJson, context.createBulkRequest()) // Send the request
                     .doOnSuccess(unused -> logger.debug("Batch succeeded"))
                     .doOnError(error -> logger.error("Batch failed", error))
                     // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
-                    .onErrorResume(e -> Mono.empty()),
-                maxConcurrentRequests)
+                    .onErrorResume(e -> Mono.empty())
+                    .subscribeOn(Schedulers.boundedElastic()),
+                maxConcurrentRequests
+            )
             .doOnComplete(() -> logger.debug("All batches processed"))
             .then();
     }
