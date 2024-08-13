@@ -166,7 +166,6 @@ public class RestClient {
                             bodyOp.orElse(null)
                             ))
                 ))
-            .doOnRequest(__ -> log.info("Test log inside async request"))
             .doOnError(t -> {
                 if (context != null) {
                     context.addTraceException(t, true);

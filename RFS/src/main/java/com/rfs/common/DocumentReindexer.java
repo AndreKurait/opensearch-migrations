@@ -11,12 +11,10 @@ import org.apache.lucene.document.Document;
 import org.opensearch.migrations.reindexer.tracing.IDocumentMigrationContexts;
 
 import lombok.RequiredArgsConstructor;
-import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
-import reactor.util.function.Tuple2;
 
 @RequiredArgsConstructor
 public class DocumentReindexer {
@@ -35,23 +33,21 @@ public class DocumentReindexer {
         // After a pause/slowdown, allow up to 5 seconds of bursting or twice the allowed concurrent requests
         final int requestBuffer = Math.min((int) (maxRequestsPerSecond * 5), maxConcurrentRequests * 2);
         final long millisBetweenRequestStarts = (long) (1000 / maxRequestsPerSecond);
+        final Scheduler requestDelayScheduler = Schedulers.newSingle("requestDelayScheduler");
         return documentStream
             .map(this::convertDocumentToBulkSection)
             .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest))
             .subscribeOn(Schedulers.parallel()) // Process documents in parallel
-            .delayElements(Duration.ofMillis(millisBetweenRequestStarts), Schedulers.single())
+            .delayElements(Duration.ofMillis(millisBetweenRequestStarts), requestDelayScheduler)
+            .doFinally(unused -> requestDelayScheduler.dispose()) // Clean up request delay scheduler
             .limitRate(requestBuffer) // Buffer delayed requests to allow for limited bursting
-            .publishOn(Schedulers.parallel())
+            .publishOn(Schedulers.parallel()) // Initiate request scheduling in parallel
             .flatMap(
                 bulkSections -> client
                     .sendBulkRequest(indexName,
                         this.convertToBulkRequestBody(bulkSections),
                         context.createBulkRequest()) // Send the request
-                    .doOnRequest(ignored ->
-                        logger.info("{} documents in current bulk request. First doc is size {} bytes",
-                            bulkSections.size(),
-                            bulkSections.get(0).getBytes(StandardCharsets.UTF_8).length)
-                    )
+                    .doOnRequest(unused -> logger.info("{} documents in current bulk request.", bulkSections.size()))
                     .doOnSuccess(unused -> logger.debug("Batch succeeded"))
                     .doOnError(error -> logger.error("Batch failed", error))
                     // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
