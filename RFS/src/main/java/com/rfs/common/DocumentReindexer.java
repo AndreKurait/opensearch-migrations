@@ -31,17 +31,20 @@ public class DocumentReindexer {
         Flux<Document> documentStream,
         IDocumentMigrationContexts.IDocumentReindexContext context
     ) {
-        final int requestBuffer = Math.min(Math.max((int) maxRequestsPerSecond * 5, 10), 50); // After a pause/slowdown, allow up to 5 seconds of bursting or 50 requests
+        // After a pause/slowdown, allow up to 5 seconds of bursting or twice the allowed concurrent requests
+        final int requestBuffer = Math.min((int) (maxRequestsPerSecond * 5), maxConcurrentRequests * 2);
+        final long millisBetweenRequestStarts = (long) (1000 / maxRequestsPerSecond);
         return
-            Flux.interval(Duration.ofMillis((long) (1000 / maxRequestsPerSecond)), Schedulers.newSingle("requestScheduler"))
+            Flux.interval(Duration.ofMillis(millisBetweenRequestStarts), Schedulers.newSingle("requestScheduler"))
             .onBackpressureBuffer(requestBuffer, BufferOverflowStrategy.DROP_OLDEST)  // Drop ticks on backpressure, note requests are not dropped
+            .publishOn(Schedulers.parallel()) // Parallel for Non-I/O Tasks
             .zipWith(documentStream
-                .subscribeOn(Schedulers.parallel()) // CPU Bound Tasks
+                .subscribeOn(Schedulers.parallel())  // Parallel for Non-I/O Tasks
                 .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
                 .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
             )
-            .subscribeOn(Schedulers.parallel()) // CPU Bound Tasks
             .map(Tuple2::getT2)
+            .publishOn(RestClient.IO_SCHEDULER)
             .flatMap(
                 bulkSections -> client
                     .sendBulkRequest(indexName,
@@ -57,7 +60,7 @@ public class DocumentReindexer {
                     // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
                     .onErrorResume(e -> Mono.empty()),
                 maxConcurrentRequests)
-            .publishOn(Schedulers.parallel()) // Switch to Standard scheduler after IO operations
+            .publishOn(Schedulers.parallel()) // Parallel for Non-I/O Tasks after this
             .doOnComplete(() -> logger.debug("All batches processed"))
             .then();
     }

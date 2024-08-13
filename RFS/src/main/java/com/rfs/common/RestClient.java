@@ -30,7 +30,6 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
-import reactor.netty.ByteBufMono;
 import reactor.netty.Connection;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientRequest;
@@ -53,7 +52,7 @@ public class RestClient {
     private static final String USER_AGENT = "RfsWorker-1.0";
     private static final String JSON_CONTENT_TYPE = "application/json";
 
-    private static final Scheduler IO_SCHEDULER = Schedulers.newBoundedElastic(
+    public static final Scheduler IO_SCHEDULER = Schedulers.newBoundedElastic(
         Runtime.getRuntime().availableProcessors() * 20, // Thread pool size
         Integer.MAX_VALUE, // Max task capacity per thread
         "restClientBoundedElastic"
@@ -153,8 +152,7 @@ public class RestClient {
         return connectionContext.getRequestTransformer().transform(method.name(), path, headers, Mono.justOrEmpty(body)
                 .map(b -> ByteBuffer.wrap(b.getBytes(StandardCharsets.UTF_8)))
             )
-            .subscribeOn(Schedulers.parallel())// Perform CPU Bound Transformation above
-            .publishOn(IO_SCHEDULER) // Switch for I/O bound tasks below
+            .subscribeOn(IO_SCHEDULER)
             .flatMap(transformedRequest ->
                 client.doOnRequest((r, conn) -> contextCleanupRef.set(addSizeMetricsHandlersAndGetCleanup(context).apply(r, conn)))
                 .headers(h -> transformedRequest.getHeaders().forEach(h::add))
