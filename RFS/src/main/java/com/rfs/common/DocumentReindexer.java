@@ -41,6 +41,7 @@ public class DocumentReindexer {
             .subscribeOn(Schedulers.parallel()) // Process documents in parallel
             .delayElements(Duration.ofMillis(millisBetweenRequestStarts), Schedulers.single())
             .limitRate(requestBuffer) // Buffer delayed requests to allow for limited bursting
+            .publishOn(Schedulers.parallel())
             .flatMap(
                 bulkSections -> client
                     .sendBulkRequest(indexName,
@@ -57,7 +58,6 @@ public class DocumentReindexer {
                     .onErrorResume(e -> Mono.empty()),
                 maxConcurrentRequests
             )
-            .publishOn(Schedulers.parallel()) // Parallel for Non-I/O Tasks after this
             .doOnComplete(() -> logger.debug("All batches processed"))
             .then();
     }

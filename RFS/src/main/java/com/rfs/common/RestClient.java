@@ -166,12 +166,14 @@ public class RestClient {
                             bodyOp.orElse(null)
                             ))
                 ))
+            .doOnRequest(__ -> log.info("Test log inside async request"))
             .doOnError(t -> {
                 if (context != null) {
                     context.addTraceException(t, true);
                 }
             })
-            .doOnTerminate(() -> contextCleanupRef.get().run());
+            .doOnTerminate(() -> contextCleanupRef.get().run())
+            .publishOn(Schedulers.parallel()); // Switch to non-io publisher after request
     }
 
     private Map<String, String> extractHeaders(HttpHeaders headers) {

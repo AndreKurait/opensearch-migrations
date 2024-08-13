@@ -174,11 +174,11 @@ public class RfsMigrateDocuments {
     }
 
     public static void main(String[] args) throws Exception {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            // Shutdown Reactor schedulers
-            Schedulers.resetOnScheduleHooks();
-            log.info("Schedulers have been shut down.");
-        }));
+//        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+//            // Shutdown Reactor schedulers
+//            Schedulers.resetOnScheduleHooks();
+//            log.info("Schedulers have been shut down.");
+//        }));
 
         Args arguments = new Args();
         JCommander jCommander = JCommander.newBuilder().addObject(arguments).build();
@@ -254,7 +254,7 @@ public class RfsMigrateDocuments {
         }
 
         // In case schedulers haven't shut down, shut down to close any daemon threads
-        Schedulers.shutdownNow();
+//        Schedulers.shutdownNow();
     }
 
     private static RootDocumentMigrationContext makeRootContext(Args arguments) {
