@@ -41,6 +41,7 @@ import reactor.util.annotation.Nullable;
 public class RestClient {
     private final ConnectionContext connectionContext;
     private final HttpClient client;
+    private final Scheduler ioScheduler;
 
     public static final String READ_METERING_HANDLER_NAME = "REST_CLIENT_READ_METERING_HANDLER";
     public static final String WRITE_METERING_HANDLER_NAME = "REST_CLIENT_WRITE_METERING_HANDLER";
@@ -51,14 +52,6 @@ public class RestClient {
 
     private static final String USER_AGENT = "RfsWorker-1.0";
     private static final String JSON_CONTENT_TYPE = "application/json";
-
-    public static final Scheduler IO_SCHEDULER = Schedulers.newBoundedElastic(
-        Runtime.getRuntime().availableProcessors() * 20, // Thread pool size
-        Integer.MAX_VALUE, // Max task capacity per thread
-        "restClientBoundedElastic"
-    );
-
-
     public RestClient(ConnectionContext connectionContext) {
         this(connectionContext, 0);
     }
@@ -76,6 +69,9 @@ public class RestClient {
 
     protected RestClient(ConnectionContext connectionContext, HttpClient httpClient) {
         this.connectionContext = connectionContext;
+
+        // Construct scheduler with equal threads to number of cores for netty async-io
+        this.ioScheduler = Schedulers.newParallel("restClient");
 
         SslProvider sslProvider;
         if (connectionContext.isInsecure()) {
@@ -152,7 +148,8 @@ public class RestClient {
         return connectionContext.getRequestTransformer().transform(method.name(), path, headers, Mono.justOrEmpty(body)
                 .map(b -> ByteBuffer.wrap(b.getBytes(StandardCharsets.UTF_8)))
             )
-            .subscribeOn(IO_SCHEDULER)
+            .subscribeOn(Schedulers.parallel()) // Perform CPU bound transformation on non-io scheduler
+            .publishOn(ioScheduler) // Perform all actions below on i/o scheduler
             .flatMap(transformedRequest ->
                 client.doOnRequest((r, conn) -> contextCleanupRef.set(addSizeMetricsHandlersAndGetCleanup(context).apply(r, conn)))
                 .headers(h -> transformedRequest.getHeaders().forEach(h::add))

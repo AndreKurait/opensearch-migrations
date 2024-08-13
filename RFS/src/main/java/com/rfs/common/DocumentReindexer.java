@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.function.Tuple2;
 
@@ -34,17 +35,12 @@ public class DocumentReindexer {
         // After a pause/slowdown, allow up to 5 seconds of bursting or twice the allowed concurrent requests
         final int requestBuffer = Math.min((int) (maxRequestsPerSecond * 5), maxConcurrentRequests * 2);
         final long millisBetweenRequestStarts = (long) (1000 / maxRequestsPerSecond);
-        return
-            Flux.interval(Duration.ofMillis(millisBetweenRequestStarts), Schedulers.newSingle("requestScheduler"))
-            .onBackpressureBuffer(requestBuffer, BufferOverflowStrategy.DROP_OLDEST)  // Drop ticks on backpressure, note requests are not dropped
-            .publishOn(Schedulers.parallel()) // Parallel for Non-I/O Tasks
-            .zipWith(documentStream
-                .subscribeOn(Schedulers.parallel())  // Parallel for Non-I/O Tasks
-                .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
-                .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
-            )
-            .map(Tuple2::getT2)
-            .publishOn(RestClient.IO_SCHEDULER)
+        return documentStream
+            .map(this::convertDocumentToBulkSection)
+            .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest))
+            .subscribeOn(Schedulers.parallel()) // Process documents in parallel
+            .delayElements(Duration.ofMillis(millisBetweenRequestStarts), Schedulers.single())
+            .limitRate(requestBuffer) // Buffer delayed requests to allow for limited bursting
             .flatMap(
                 bulkSections -> client
                     .sendBulkRequest(indexName,
@@ -59,7 +55,8 @@ public class DocumentReindexer {
                     .doOnError(error -> logger.error("Batch failed", error))
                     // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
                     .onErrorResume(e -> Mono.empty()),
-                maxConcurrentRequests)
+                maxConcurrentRequests
+            )
             .publishOn(Schedulers.parallel()) // Parallel for Non-I/O Tasks after this
             .doOnComplete(() -> logger.debug("All batches processed"))
             .then();

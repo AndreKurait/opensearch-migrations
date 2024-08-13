@@ -48,6 +48,7 @@ import com.rfs.worker.DocumentsRunner;
 import com.rfs.worker.ShardWorkPreparer;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import reactor.core.scheduler.Schedulers;
 
 @Slf4j
 public class RfsMigrateDocuments {
@@ -173,6 +174,12 @@ public class RfsMigrateDocuments {
     }
 
     public static void main(String[] args) throws Exception {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // Shutdown Reactor schedulers
+            Schedulers.resetOnScheduleHooks();
+            log.info("Schedulers have been shut down.");
+        }));
+
         Args arguments = new Args();
         JCommander jCommander = JCommander.newBuilder().addObject(arguments).build();
         jCommander.parse(args);
@@ -245,6 +252,9 @@ public class RfsMigrateDocuments {
                 );
             });
         }
+
+        // In case schedulers haven't shut down, shut down to close any daemon threads
+        Schedulers.shutdownNow();
     }
 
     private static RootDocumentMigrationContext makeRootContext(Args arguments) {
