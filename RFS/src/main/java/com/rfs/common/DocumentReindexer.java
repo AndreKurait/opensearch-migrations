@@ -32,15 +32,16 @@ public class DocumentReindexer {
         IDocumentMigrationContexts.IDocumentReindexContext context
     ) {
         final int requestBuffer = Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100); // After a pause/slowdown, allow up to 30 seconds of bursting or 100 requests
-        return Flux.interval(Duration.ofMillis((long) (1000 / maxRequestsPerSecond)), Schedulers.single())
+        return
+            Flux.interval(Duration.ofMillis((long) (1000 / maxRequestsPerSecond)), Schedulers.newSingle("requestScheduler"))
             .onBackpressureBuffer(requestBuffer, BufferOverflowStrategy.DROP_OLDEST)  // Drop ticks on backpressure, note requests are not dropped
             .zipWith(documentStream
-                .publishOn(Schedulers.single())
+                .subscribeOn(Schedulers.parallel()) // CPU Bound Tasks
                 .map(this::convertDocumentToBulkSection)  // Convert each Document to part of a bulk operation
                 .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest)) // Collect until you hit the batch size or max size
             )
+            .subscribeOn(Schedulers.parallel()) // CPU Bound Tasks
             .map(Tuple2::getT2)
-            .publishOn(Schedulers.parallel())
             .flatMap(
                 bulkSections -> client
                     .sendBulkRequest(indexName,
@@ -54,9 +55,9 @@ public class DocumentReindexer {
                     .doOnSuccess(unused -> logger.debug("Batch succeeded"))
                     .doOnError(error -> logger.error("Batch failed", error))
                     // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
-                    .onErrorResume(e -> Mono.empty())
-                    .subscribeOn(Schedulers.boundedElastic()),
+                    .onErrorResume(e -> Mono.empty()),
                 maxConcurrentRequests)
+            .publishOn(Schedulers.parallel()) // Switch to Standard scheduler after IO operations
             .doOnComplete(() -> logger.debug("All batches processed"))
             .then();
     }
