@@ -11,10 +11,12 @@ import org.apache.lucene.document.Document;
 import org.opensearch.migrations.reindexer.tracing.IDocumentMigrationContexts;
 
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.function.Tuple2;
 
 @RequiredArgsConstructor
 public class DocumentReindexer {
@@ -37,11 +39,16 @@ public class DocumentReindexer {
         return documentStream
             .map(this::convertDocumentToBulkSection)
             .bufferWhile(bufferPredicate(numDocsPerBulkRequest, numBytesPerBulkRequest))
-            .subscribeOn(Schedulers.parallel()) // Process documents in parallel
-            .delayElements(Duration.ofMillis(millisBetweenRequestStarts), requestDelayScheduler)
+            .zipWith(
+                Flux.interval(Duration.ZERO, Duration.ofMillis(millisBetweenRequestStarts), requestDelayScheduler)
+                .onBackpressureBuffer(requestBuffer, BufferOverflowStrategy.DROP_LATEST)
+            )
+            .subscribeOn(Schedulers.parallel()) // Initiate request scheduling in parallel
+            .map(Tuple2::getT1)
+            // .subscribeOn(Schedulers.parallel()) // Process documents in parallel
+            // .delayElements(Duration.ofMillis(millisBetweenRequestStarts), requestDelayScheduler)
             .doFinally(unused -> requestDelayScheduler.dispose()) // Clean up request delay scheduler
-            .limitRate(requestBuffer) // Buffer delayed requests to allow for limited bursting
-            .publishOn(Schedulers.parallel()) // Initiate request scheduling in parallel
+            // .limitRate(requestBuffer) // Buffer delayed requests to allow for limited bursting
             .flatMap(
                 bulkSections -> client
                     .sendBulkRequest(indexName,
