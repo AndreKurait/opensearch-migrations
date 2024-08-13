@@ -31,7 +31,7 @@ public class DocumentReindexer {
         Flux<Document> documentStream,
         IDocumentMigrationContexts.IDocumentReindexContext context
     ) {
-        final int requestBuffer = Math.min(Math.max((int) maxRequestsPerSecond * 30, 10), 100); // After a pause/slowdown, allow up to 30 seconds of bursting or 100 requests
+        final int requestBuffer = Math.min(Math.max((int) maxRequestsPerSecond * 5, 10), 50); // After a pause/slowdown, allow up to 5 seconds of bursting or 50 requests
         return
             Flux.interval(Duration.ofMillis((long) (1000 / maxRequestsPerSecond)), Schedulers.newSingle("requestScheduler"))
             .onBackpressureBuffer(requestBuffer, BufferOverflowStrategy.DROP_OLDEST)  // Drop ticks on backpressure, note requests are not dropped
@@ -47,7 +47,7 @@ public class DocumentReindexer {
                     .sendBulkRequest(indexName,
                         this.convertToBulkRequestBody(bulkSections),
                         context.createBulkRequest()) // Send the request
-                    .doFirst( () ->
+                    .doOnRequest(ignored ->
                         logger.info("{} documents in current bulk request. First doc is size {} bytes",
                             bulkSections.size(),
                             bulkSections.get(0).getBytes(StandardCharsets.UTF_8).length)
