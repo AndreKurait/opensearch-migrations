@@ -163,7 +163,6 @@ public class RestClient {
                 .send(transformedRequest.getBody().map(Unpooled::wrappedBuffer))
                 .responseSingle(
                     (response, bytes) -> bytes.asString()
-                        .publishOn(Schedulers.parallel()) // Switch for non-IO tasks
                         .singleOptional()
                         .map(bodyOp -> new HttpResponse(
                             response.status().code(),
