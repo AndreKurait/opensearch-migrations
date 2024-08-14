@@ -1,10 +1,15 @@
 package com.rfs.common;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.function.Predicate;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+
 import org.apache.lucene.document.Document;
 
 import org.opensearch.migrations.reindexer.tracing.IDocumentMigrationContexts;
@@ -75,19 +80,30 @@ public class DocumentReindexer {
             .then();
     }
 
+    static final byte[] ACTION_ID_PREFIX = "{\"index\":{\"_id\":\"".getBytes(StandardCharsets.UTF_8);
+    static final byte[] ACTION_ID_SUFFIX = "\"}}\n".getBytes(StandardCharsets.UTF_8);
+
     @SneakyThrows
     private String convertDocumentToBulkSection(Document document) {
-        String id = Uid.decodeId(document.getBinaryValue("_id").bytes);
+        byte[] idBytes = Uid.decodeId(document.getBinaryValue("_id").bytes).getBytes(StandardCharsets.UTF_8);
 
-        String action = "{\"index\": {\"_id\": \"" + id + "\"}}";
 
-        // We must ensure the _source document is a "minified" JSON string, otherwise the bulk request will be corrupted.
-        // Specifically, we cannot have any leading or trailing whitespace, and the JSON must be on a single line.
-        String trimmedSource = document.getBinaryValue("_source").utf8ToString().trim();
-        Object jsonObject = objectMapper.readValue(trimmedSource, Object.class);
-        String minifiedSource = objectMapper.writeValueAsString(jsonObject);
+        // Perform a trim, minification of json, and concatenation of action and source efficiently
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            baos.write(ACTION_ID_PREFIX);
+            baos.write(idBytes);
+            baos.write(ACTION_ID_SUFFIX);
 
-        return action + "\n" + minifiedSource;
+            byte[] sourceBytes = document.getBinaryValue("_source").bytes;
+            int start = 0, end = sourceBytes.length - 1;
+            while (start < sourceBytes.length && Character.isWhitespace(sourceBytes[start])) start++;
+            while (end > start && Character.isWhitespace(sourceBytes[end])) end--;
+            JsonNode trimmedSource = objectMapper.readTree(sourceBytes, start, end - start + 1);
+            ObjectWriter writer = objectMapper.writer();
+            writer.writeValue(baos, trimmedSource);
+
+            return baos.toString(StandardCharsets.UTF_8);
+        }
     }
 
     private String convertToBulkRequestBody(List<String> bulkSections) {

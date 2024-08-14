@@ -55,6 +55,36 @@ class DocumentReindexerTest {
     }
 
     @Test
+    void reindex_shouldMinifyDocument() {
+        Flux<Document> documentStream = Flux.range(1, 1)
+            .map(i -> createTestDocumentWithSpacing(String.valueOf(i)));
+
+        when(mockClient.sendBulkRequest(eq("test-index"), anyString(), any()))
+            .thenAnswer(invocation -> {
+                String bulkBody = invocation.getArgument(1);
+                long docCount = bulkBody.lines().filter(line -> line.contains("\"index\":")).count();
+                return Mono.just(new OpenSearchClient.BulkResponse(200, "OK", null,
+                    String.format("{\"took\":1,\"errors\":false,\"items\":[%s]}", "{}".repeat((int)docCount))));
+            });
+
+        StepVerifier.create(documentReindexer.reindex("test-index", documentStream, mockContext))
+            .verifyComplete();
+
+        int expectedBulkRequests = 1;
+        verify(mockClient, times(expectedBulkRequests)).sendBulkRequest(eq("test-index"), anyString(), any());
+
+        ArgumentCaptor<String> bulkRequestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockClient, times(expectedBulkRequests)).sendBulkRequest(eq("test-index"), bulkRequestCaptor.capture(), any());
+
+        List<String> capturedBulkRequests = bulkRequestCaptor.getAllValues();
+        assertEquals(expectedBulkRequests, capturedBulkRequests.size());
+
+        String lastRequest = capturedBulkRequests.get(0);
+        assertEquals("{\"index\":{\"_id\":\"MQAA\"}}\n{\"field\":\"value with spacing\\n\"}\n", lastRequest);
+
+    }
+
+    @Test
     void reindex_shouldBufferByDocumentCount() {
         Flux<Document> documentStream = Flux.range(1, 10)
             .map(i -> createTestDocument(String.valueOf(i)));
@@ -148,6 +178,13 @@ class DocumentReindexerTest {
         Document doc = new Document();
         doc.add(new StringField("_id", new BytesRef(id), Field.Store.YES));
         doc.add(new StringField("_source", new BytesRef("{\"field\":\"value\"}"), Field.Store.YES));
+        return doc;
+    }
+
+    private Document createTestDocumentWithSpacing(String id) {
+        Document doc = new Document();
+        doc.add(new StringField("_id", new BytesRef(id), Field.Store.YES));
+        doc.add(new StringField("_source", new BytesRef("\t {\n \t \"field\" : \"value with spacing\\n\" \n}"), Field.Store.YES));
         return doc;
     }
 
