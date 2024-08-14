@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.function.Predicate;
 
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -86,7 +85,6 @@ public class DocumentReindexer {
     @SneakyThrows
     private String convertDocumentToBulkSection(Document document) {
         byte[] idBytes = Uid.decodeId(document.getBinaryValue("_id").bytes).getBytes(StandardCharsets.UTF_8);
-
 
         // Perform a trim, minification of json, and concatenation of action and source efficiently
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
