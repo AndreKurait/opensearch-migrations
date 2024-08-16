@@ -119,9 +119,12 @@ public class RestClient {
         return asyncRequest(method, path, body, convertedHeaders, context);
     }
 
-
     public Mono<HttpResponse> asyncRequest(HttpMethod method, String path, String body, Map<String, List<String>> additionalHeaders,
                                            @Nullable IRfsContexts.IRequestContext context) {
+        return asyncRequest(method, path, body, additionalHeaders, context, false);
+    }
+    public Mono<HttpResponse> asyncRequest(HttpMethod method, String path, String body, Map<String, List<String>> additionalHeaders,
+                                           @Nullable IRfsContexts.IRequestContext context, boolean compress) {
         assert connectionContext.getUri() != null;
         Map<String, List<String>> headers = new HashMap<>();
         headers.put(USER_AGENT_HEADER_NAME, List.of(USER_AGENT));
@@ -145,6 +148,7 @@ public class RestClient {
             )
             .flatMap(transformedRequest ->
                 client.doOnRequest((r, conn) -> contextCleanupRef.set(addSizeMetricsHandlersAndGetCleanup(context).apply(r, conn)))
+                .compress(compress)
                 .headers(h -> transformedRequest.getHeaders().forEach(h::add))
                 .request(method)
                 .uri("/" + path)
@@ -189,12 +193,20 @@ public class RestClient {
         return asyncRequest(HttpMethod.POST, path, body, null, context);
     }
 
+    public Mono<HttpResponse> postAsync(String path, String body, IRfsContexts.IRequestContext context, boolean compress) {
+        return asyncRequest(HttpMethod.POST, path, body, null, context, compress);
+    }
+
     public HttpResponse post(String path, String body, IRfsContexts.IRequestContext context) {
         return postAsync(path, body, context).block();
     }
 
     public Mono<HttpResponse> putAsync(String path, String body, IRfsContexts.IRequestContext context) {
         return asyncRequest(HttpMethod.PUT, path, body, null, context);
+    }
+
+    public Mono<HttpResponse> putAsync(String path, String body, IRfsContexts.IRequestContext context, boolean compress) {
+        return asyncRequest(HttpMethod.PUT, path, body, null, context, compress);
     }
 
     public HttpResponse put(String path, String body, IRfsContexts.IRequestContext context) {
