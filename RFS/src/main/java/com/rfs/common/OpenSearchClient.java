@@ -293,7 +293,7 @@ public class OpenSearchClient {
                 .addArgument(() -> docsMap.keySet())
                 .log();
             var body = BulkDocSection.convertToBulkRequestBody(docsMap.values());
-            return client.postAsync(targetPath, body, context, true)
+            return client.postAsync(targetPath, body, context, false)
                 .flatMap(response -> {
                     var resp = new BulkResponse(response.statusCode, response.statusText, response.headers, response.body);
                     if (!resp.hasBadStatusCode() && !resp.hasFailedOperations()) {
