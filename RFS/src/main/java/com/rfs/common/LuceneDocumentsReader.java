@@ -81,14 +81,7 @@ public class LuceneDocumentsReader {
                         var liveDocs = leafReader.getLiveDocs();
                         return Flux.range(0, leafReader.maxDoc())
                             .filter(docIdx -> liveDocs == null || liveDocs.get(docIdx)) // Filter for live docs
-                            .flatMap(liveDocIdx -> Mono.justOrEmpty(getDocument(leafReader, liveDocIdx, true))) // Retrieve the document skipping malformed docs
-                            .doFinally(unused -> {
-                                try {
-                                    leafReader.close();
-                                } catch (IOException e) {
-                                    log.error("Unexpected error occurred while closing leaf reader", e);
-                                }
-                            });
+                            .flatMap(liveDocIdx -> Mono.justOrEmpty(getDocument(leafReader, liveDocIdx, true))); // Retrieve the document skipping malformed docs
                     }, false, Schedulers.DEFAULT_BOUNDED_ELASTIC_SIZE / luceneSegmentConcurrency, 100
                 )
                 .sequential() // Merge parallel streams

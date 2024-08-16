@@ -79,6 +79,7 @@ public class DocumentReindexer {
             )
             .doOnComplete(() -> log.debug("All batches processed"))
             .then()
+            .publishOn(Schedulers.single()) // replace with Standard scheduler before disposing
             .doFinally(unused -> {
                 elasticScheduler.dispose();
                 genericScheduler.dispose();
