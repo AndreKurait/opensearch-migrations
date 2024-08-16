@@ -41,7 +41,7 @@ public class OpenSearchClient {
         .maxBackoff(defaultMaxBackoff)
         .filter(throwable -> !(throwable instanceof InvalidResponse)); // Do not retry on this exception
 
-    private static final int bulkMaxRetryAttempts = 10;
+    private static final int bulkMaxRetryAttempts = 5;
     private static final Duration bulkBackoff = Duration.ofSeconds(2);
     private static final Duration bulkMaxBackoff = Duration.ofSeconds(10);
     /** Retries for up 10 minutes */

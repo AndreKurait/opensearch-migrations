@@ -26,8 +26,8 @@ import software.amazon.awssdk.transfer.s3.model.DownloadDirectoryRequest;
 public class S3Repo implements SourceRepo {
     private static final Logger logger = LogManager.getLogger(S3Repo.class);
     private static final double S3_TARGET_THROUGHPUT_GIBPS = 8.0; // Arbitrarily chosen
-    private static final long S3_MAX_MEMORY_BYTES = 5 * 1024L * 1024 * 1024; // Arbitrarily chosen
-    private static final long S3_MINIMUM_PART_SIZE_BYTES = 32L * 1024 * 1024; // Default, but be explicit
+    private static final long S3_MAX_MEMORY_BYTES = 2 * 1024L * 1024 * 1024; // Arbitrarily chosen, 2 GB
+    private static final long S3_MINIMUM_PART_SIZE_BYTES = 32L * 1024 * 1024; // Default 8MB, choosing 4x due to mostly large files
 
     private final Path s3LocalDir;
     private final S3Uri s3RepoUri;
