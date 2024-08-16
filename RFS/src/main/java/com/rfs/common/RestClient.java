@@ -1,5 +1,7 @@
 package com.rfs.common;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -8,12 +10,14 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+import java.util.zip.GZIPOutputStream;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 
 import com.rfs.common.http.ConnectionContext;
 import com.rfs.common.http.HttpResponse;
+import com.rfs.common.http.SigV4AuthTransformer;
 import com.rfs.netty.ReadMeteringHandler;
 import com.rfs.netty.WriteMeteringHandler;
 import com.rfs.tracing.IRfsContexts;
@@ -26,6 +30,7 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import reactor.netty.Connection;
@@ -124,14 +129,23 @@ public class RestClient {
         return asyncRequest(method, path, body, additionalHeaders, context, false);
     }
     public Mono<HttpResponse> asyncRequest(HttpMethod method, String path, String body, Map<String, List<String>> additionalHeaders,
-                                           @Nullable IRfsContexts.IRequestContext context, boolean compress) {
+                                           @Nullable IRfsContexts.IRequestContext context, boolean compressRequestIfAble) {
         assert connectionContext.getUri() != null;
+
+        var compressRequest = compressRequestIfAble && !(connectionContext.getRequestTransformer() instanceof SigV4AuthTransformer);
+        if (compressRequest != compressRequestIfAble) {
+            log.warn("Request compression requested, but will not be performed due to no support for sigv4");
+        }
+
         Map<String, List<String>> headers = new HashMap<>();
         headers.put(USER_AGENT_HEADER_NAME, List.of(USER_AGENT));
         var hostHeaderValue = getHostHeaderValue(connectionContext);
         headers.put(HOST_HEADER_NAME, List.of(hostHeaderValue));
         if (body != null) {
             headers.put(CONTENT_TYPE_HEADER_NAME, List.of(JSON_CONTENT_TYPE));
+            if (compressRequest) {
+                headers.put("Content-Encoding", List.of("gzip"));
+            }
         }
         if (additionalHeaders != null) {
             additionalHeaders.forEach((key, value) -> {
@@ -148,11 +162,13 @@ public class RestClient {
             )
             .flatMap(transformedRequest ->
                 client.doOnRequest((r, conn) -> contextCleanupRef.set(addSizeMetricsHandlersAndGetCleanup(context).apply(r, conn)))
-                .compress(compress)
-                .headers(h -> transformedRequest.getHeaders().forEach(h::add))
+                .headers(h -> {
+                    transformedRequest.getHeaders().forEach(h::add);
+                })
                 .request(method)
                 .uri("/" + path)
-                .send(transformedRequest.getBody().map(Unpooled::wrappedBuffer))
+                .send(transformedRequest.getBody()
+                    .map(byteBuf -> Unpooled.wrappedBuffer(compressRequest ? gzipByteBuffer(byteBuf) : byteBuf)))
                 .responseSingle(
                     (response, bytes) -> bytes.asString()
                         .singleOptional()
@@ -170,6 +186,21 @@ public class RestClient {
                 }
             })
             .doOnTerminate(() -> contextCleanupRef.get().run());
+    }
+
+    @SneakyThrows
+    public static ByteBuffer gzipByteBuffer(ByteBuffer inputBuffer) {
+        // Convert ByteBuffer to byte array
+        byte[] inputBytes = new byte[inputBuffer.remaining()];
+        inputBuffer.get(inputBytes);
+        // Gzip the byte array
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(byteArrayOutputStream)) {
+            gzipOutputStream.write(inputBytes);
+        }
+        // Convert gzipped byte array back to ByteBuffer
+        byte[] compressedBytes = byteArrayOutputStream.toByteArray();
+        return ByteBuffer.wrap(compressedBytes);
     }
 
     private Map<String, String> extractHeaders(HttpHeaders headers) {
