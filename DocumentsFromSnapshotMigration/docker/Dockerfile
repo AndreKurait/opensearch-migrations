@@ -7,7 +7,7 @@ RUN dnf update -y && dnf install -y aws-cli
 # Requires Gradle to genearte runtime jars initially
 COPY ./build/runtimeJars /rfs-app/jars
 WORKDIR /rfs-app
-RUN printf "#!/bin/sh\njava -XX:MaxRAMPercentage=80.0 -cp /rfs-app/jars/*:. \"\$@\" " > /rfs-app/runJavaWithClasspath.sh
+RUN printf "#!/bin/sh\njava -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:+ExitOnOutOfMemoryError -cp /rfs-app/jars/*:. \"\$@\" " > /rfs-app/runJavaWithClasspath.sh
 RUN chmod +x /rfs-app/runJavaWithClasspath.sh
 
 # Copy the entry point script into the container
