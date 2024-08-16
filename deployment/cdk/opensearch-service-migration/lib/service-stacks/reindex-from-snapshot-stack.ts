@@ -98,8 +98,8 @@ export class ReindexFromSnapshotStack extends MigrationServiceCore {
             securityGroups: securityGroups,
             taskRolePolicies: servicePolicies,
             cpuArchitecture: props.fargateCpuArch,
-            taskCpuUnits: 2048,
-            taskMemoryLimitMiB: 4096,
+            taskCpuUnits: 4096,
+            taskMemoryLimitMiB: 16384,
             ephemeralStorageGiB: 200,
             environment: {
                 "RFS_COMMAND": rfsCommand,

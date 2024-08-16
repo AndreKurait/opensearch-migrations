@@ -78,8 +78,15 @@ public class LuceneDocumentsReader {
                         var liveDocs = leafReader.getLiveDocs();
                         return Flux.range(0, leafReader.maxDoc())
                             .filter(docIdx -> liveDocs == null || liveDocs.get(docIdx)) // Filter for live docs
-                            .map(liveDocIdx -> Tuples.of(leafReader, liveDocIdx)); // Build a Tuple2<LeafReader, Integer>
-                    }
+                            .map(liveDocIdx -> Tuples.of(leafReader, liveDocIdx)) // Build a Tuple2<LeafReader, Integer>
+                            .doFinally(unused -> {
+                                try {
+                                    leafReader.close();
+                                } catch (IOException e) {
+                                    log.error("Unexpected error occurred while closing leaf reader", e);
+                                }
+                            });
+                    }, 3, 100
                 )
                 .parallel(luceneReaderThreadCount)
                 .runOn(luceneReaderScheduler)
