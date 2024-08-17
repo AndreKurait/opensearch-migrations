@@ -1,6 +1,7 @@
 package com.rfs.common;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -9,8 +10,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
-import java.util.zip.CRC32;
 import java.util.zip.Deflater;
+import java.util.zip.GZIPOutputStream;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
@@ -196,48 +197,31 @@ public class RestClient {
 
     @SneakyThrows
     public static ByteBuf deflateByteBuf(ByteBuffer inputBuffer) {
-        // Convert ByteBuffer to byte array
-        var originalSize = inputBuffer.remaining();
-        byte[] inputBytes = new byte[inputBuffer.remaining()];
-        inputBuffer.get(inputBytes);
+            // Convert ByteBuffer to byte array
+            var originalSize = inputBuffer.remaining();
+            byte[] inputBytes = new byte[originalSize];
+            inputBuffer.get(inputBytes);
 
-        // Initialize the ByteBuf to write the compressed data
-        ByteBuf byteBuf = Unpooled.buffer(originalSize / 5);
+            // Initialize the ByteBuf to write the compressed data
+            ByteBuf byteBuf = Unpooled.buffer(originalSize / 5);
 
-        // Write GZIP header
-        byteBuf.writeByte(0x1f); // ID1
-        byteBuf.writeByte(0x8b); // ID2
-        byteBuf.writeByte(Deflater.DEFLATED); // Compression method
-        byteBuf.writeByte(0); // Flags
-        byteBuf.writeInt(0); // MTIME (Modification Time)
-        byteBuf.writeByte(0); // Extra flags
-        byteBuf.writeByte(0xff); // Operating system (255 = unknown)
+            // Wrap the ByteBuf output stream in GZIPOutputStream
+            try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                 GZIPOutputStream gzipOutputStream = new MyGZIPOutputStream(byteArrayOutputStream)) {
 
-        // Set up the Deflater
-        Deflater deflater = new Deflater(Deflater.BEST_SPEED, true);
-        deflater.setInput(inputBytes);
-        deflater.finish();
+                // Write the input bytes to the GZIPOutputStream
+                gzipOutputStream.write(inputBytes);
+                gzipOutputStream.finish();
 
-        // Compress the data
-        byte[] buffer = new byte[1024];
-        while (!deflater.finished()) {
-            int count = deflater.deflate(buffer);
-            byteBuf.writeBytes(buffer, 0, count);
-        }
+                // Write the compressed data to the ByteBuf
+                byteBuf.writeBytes(byteArrayOutputStream.toByteArray());
+            }
 
-        // Calculate CRC32 and write it as the trailer
-        CRC32 crc32 = new CRC32();
-        crc32.update(inputBytes);
-        byteBuf.writeIntLE((int) crc32.getValue()); // CRC32
-        byteBuf.writeIntLE(inputBytes.length); // ISIZE (input size modulo 2^32)
+            byteBuf.capacity(byteBuf.writerIndex());
 
-        deflater.end();
+            log.info("Compression Ratio: {}", originalSize / byteBuf.readableBytes());
 
-        byteBuf.capacity(byteBuf.writerIndex());
-
-        log.info("Compression Ratio: {}", originalSize / byteBuf.readableBytes());
-
-        return byteBuf;
+            return byteBuf;
     }
 
     private Map<String, String> extractHeaders(HttpHeaders headers) {
@@ -308,5 +292,12 @@ public class RestClient {
                     removeIfPresent(p, READ_METERING_HANDLER_NAME);
                 };
             };
+    }
+
+    private static class MyGZIPOutputStream extends GZIPOutputStream {
+        public MyGZIPOutputStream(ByteArrayOutputStream byteArrayOutputStream) throws IOException {
+            super(byteArrayOutputStream);
+            def.setLevel(Deflater.BEST_SPEED); // Set the deflation level for best speed
+        }
     }
 }
