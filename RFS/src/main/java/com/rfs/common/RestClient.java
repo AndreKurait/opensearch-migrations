@@ -11,8 +11,6 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
-import java.util.zip.DeflaterOutputStream;
-import java.util.zip.GZIPOutputStream;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
@@ -42,6 +40,7 @@ import reactor.netty.http.client.HttpClientRequest;
 import reactor.netty.resources.ConnectionProvider;
 import reactor.netty.tcp.SslProvider;
 import reactor.util.annotation.Nullable;
+import reactor.util.function.Tuples;
 
 @Slf4j
 public class RestClient {
@@ -163,13 +162,16 @@ public class RestClient {
         return connectionContext.getRequestTransformer().transform(method.name(), path, headers, Mono.justOrEmpty(body)
                 .map(b -> ByteBuffer.wrap(b.getBytes(StandardCharsets.UTF_8)))
             )
+            .map(request -> Tuples.of(request, request.getBody().map(
+                  byteBuffer ->  (compressRequest ? deflateByteBuf(byteBuffer) : Unpooled.wrappedBuffer(byteBuffer)))
+                )
+            )
             .flatMap(transformedRequest ->
                 client.doOnRequest((r, conn) -> contextCleanupRef.set(addSizeMetricsHandlersAndGetCleanup(context).apply(r, conn)))
-                .headers(h -> transformedRequest.getHeaders().forEach(h::add))
+                .headers(h -> transformedRequest.getT1().getHeaders().forEach(h::add))
                 .request(method)
                 .uri("/" + path)
-                .send(transformedRequest.getBody()
-                    .map(byteBuffer -> compressRequest ? deflateByteBuf(byteBuffer) : Unpooled.wrappedBuffer(byteBuffer)))
+                .send(transformedRequest.getT2())
                 .responseSingle(
                     (response, bytes) -> bytes.asString()
                         .singleOptional()
@@ -214,7 +216,7 @@ public class RestClient {
         deflater.finish();
 
         // Compress the data
-        byte[] buffer = new byte[8192];
+        byte[] buffer = new byte[1024];
         while (!deflater.finished()) {
             int count = deflater.deflate(buffer);
             byteBuf.writeBytes(buffer, 0, count);

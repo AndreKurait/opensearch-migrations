@@ -66,7 +66,7 @@ public class LuceneDocumentsReader {
 
     */
     public Flux<Document> readDocuments() {
-        int luceneSegmentConcurrency = 1;
+        int luceneSegmentConcurrency = 5;
         int luceneReaderThreadCount = Schedulers.DEFAULT_BOUNDED_ELASTIC_SIZE;
         // Create elastic scheduler for i/o bound lucene document reading
         Scheduler luceneReaderScheduler = Schedulers.newBoundedElastic(luceneReaderThreadCount, Integer.MAX_VALUE, "luceneReaderScheduler");
@@ -82,7 +82,7 @@ public class LuceneDocumentsReader {
                         return Flux.range(0, leafReader.maxDoc())
                             .filter(docIdx -> liveDocs == null || liveDocs.get(docIdx)) // Filter for live docs
                             .flatMap(liveDocIdx -> Mono.justOrEmpty(getDocument(leafReader, liveDocIdx, true)), // Retrieve the document skipping malformed docs
-                                luceneReaderThreadCount);
+                                luceneReaderThreadCount / 5);
                     }, segmentReader -> {
                         try {
                             IOUtils.close(segmentReader);
