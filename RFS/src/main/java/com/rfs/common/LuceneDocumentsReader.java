@@ -8,12 +8,14 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.SoftDeletesDirectoryReaderWrapper;
-import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.MMapDirectory;
+import org.apache.lucene.store.NativeFSLockFactory;
 import org.apache.lucene.util.BytesRef;
 
 import lombok.Lombok;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.lucene.util.IOUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
@@ -64,34 +66,42 @@ public class LuceneDocumentsReader {
 
     */
     public Flux<Document> readDocuments() {
-        int luceneSegmentConcurrency = 4;
+        int luceneSegmentConcurrency = 1;
         int luceneReaderThreadCount = Schedulers.DEFAULT_BOUNDED_ELASTIC_SIZE;
         // Create elastic scheduler for i/o bound lucene document reading
         Scheduler luceneReaderScheduler = Schedulers.newBoundedElastic(luceneReaderThreadCount, Integer.MAX_VALUE, "luceneReaderScheduler");
 
-        return Flux.using(() -> wrapReader(DirectoryReader.open(FSDirectory.open(indexDirectoryPath)), softDeletesPossible, softDeletesField), reader -> {
+        return Flux.using(() -> wrapReader(DirectoryReader.open(new MMapDirectory(indexDirectoryPath, NativeFSLockFactory.INSTANCE)), softDeletesPossible, softDeletesField), reader -> {
             log.atInfo().log(reader.maxDoc() + " documents found in the current Lucene index");
-
             return Flux.fromIterable(reader.leaves()) // Iterate over each segment
-                .parallel(luceneSegmentConcurrency) // Run Segments in Parallel
-                .runOn(luceneReaderScheduler)
-                .flatMap(leafReaderContext -> {
-                        var leafReader = leafReaderContext.reader();
+                .parallel(luceneSegmentConcurrency, 1) // Run Segments in Parallel on separate flux rails, disable prefetch
+                .runOn(luceneReaderScheduler, 1) // Specify thread to perform document read calls on, disable prefetch
+                .concatMap(leafReaderContext ->
+                    Flux.using(leafReaderContext::reader, leafReader -> {
                         var liveDocs = leafReader.getLiveDocs();
                         return Flux.range(0, leafReader.maxDoc())
                             .filter(docIdx -> liveDocs == null || liveDocs.get(docIdx)) // Filter for live docs
-                            .flatMap(liveDocIdx -> Mono.justOrEmpty(getDocument(leafReader, liveDocIdx, true))); // Retrieve the document skipping malformed docs
-                    }, false, Schedulers.DEFAULT_BOUNDED_ELASTIC_SIZE / luceneSegmentConcurrency, 100
+                            .flatMap(liveDocIdx -> Mono.justOrEmpty(getDocument(leafReader, liveDocIdx, true)), // Retrieve the document skipping malformed docs
+                                luceneReaderThreadCount);
+                    }, segmentReader -> {
+                        try {
+                            IOUtils.close(segmentReader);
+                        } catch (IOException e) {
+                            log.atError().setMessage("Failed to close SegmentReader").setCause(e).log();
+                            throw Lombok.sneakyThrow(e);
+                        }
+                    })
                 )
-                .sequential() // Merge parallel streams
-                .doFinally(unused -> luceneReaderScheduler.dispose());
-        }, reader -> { // Close the DirectoryReader when done
-            try {
-                reader.close();
-            } catch (IOException e) {
-                log.atError().setMessage("Failed to close DirectoryReader").setCause(e).log();
-                throw Lombok.sneakyThrow(e);
-            }
+                .sequential(); // Merge parallel streams
+        }, reader -> {
+//            try {
+////                reader.close();
+//            } catch (IOException e) {
+//                log.atError().setMessage("Failed to close DirectoryReader").setCause(e).log();
+//                throw Lombok.sneakyThrow(e);
+//            }
+            // Close scheduler
+            luceneReaderScheduler.dispose();
         });
     }
 

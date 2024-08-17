@@ -290,10 +290,10 @@ public class OpenSearchClient {
             final String targetPath = indexName + "/_bulk";
             log.atTrace()
                 .setMessage("Creating bulk body with document ids {}")
-                .addArgument(() -> docsMap.keySet())
+                .addArgument(docsMap::keySet)
                 .log();
             var body = BulkDocSection.convertToBulkRequestBody(docsMap.values());
-            return client.postAsync(targetPath, body, context, false)
+            return client.postAsync(targetPath, body, context, true)
                 .flatMap(response -> {
                     var resp = new BulkResponse(response.statusCode, response.statusText, response.headers, response.body);
                     if (!resp.hasBadStatusCode() && !resp.hasFailedOperations()) {

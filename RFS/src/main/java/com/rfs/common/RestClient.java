@@ -1,7 +1,5 @@
 package com.rfs.common;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -10,7 +8,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
-import java.util.zip.GZIPOutputStream;
+import java.util.zip.Deflater;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
@@ -21,6 +19,7 @@ import com.rfs.common.http.SigV4AuthTransformer;
 import com.rfs.netty.ReadMeteringHandler;
 import com.rfs.netty.WriteMeteringHandler;
 import com.rfs.tracing.IRfsContexts;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
@@ -30,7 +29,6 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import reactor.netty.Connection;
@@ -162,13 +160,11 @@ public class RestClient {
             )
             .flatMap(transformedRequest ->
                 client.doOnRequest((r, conn) -> contextCleanupRef.set(addSizeMetricsHandlersAndGetCleanup(context).apply(r, conn)))
-                .headers(h -> {
-                    transformedRequest.getHeaders().forEach(h::add);
-                })
+                .headers(h -> transformedRequest.getHeaders().forEach(h::add))
                 .request(method)
                 .uri("/" + path)
                 .send(transformedRequest.getBody()
-                    .map(byteBuf -> Unpooled.wrappedBuffer(compressRequest ? gzipByteBuffer(byteBuf) : byteBuf)))
+                    .map(byteBuffer -> compressRequest ? deflateByteBuf(byteBuffer) : Unpooled.wrappedBuffer(byteBuffer)))
                 .responseSingle(
                     (response, bytes) -> bytes.asString()
                         .singleOptional()
@@ -188,19 +184,31 @@ public class RestClient {
             .doOnTerminate(() -> contextCleanupRef.get().run());
     }
 
-    @SneakyThrows
-    public static ByteBuffer gzipByteBuffer(ByteBuffer inputBuffer) {
+    public static ByteBuf deflateByteBuf(ByteBuffer inputBuffer) {
         // Convert ByteBuffer to byte array
         byte[] inputBytes = new byte[inputBuffer.remaining()];
         inputBuffer.get(inputBytes);
-        // Gzip the byte array
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(byteArrayOutputStream)) {
-            gzipOutputStream.write(inputBytes);
+
+        // Estimate an initial size for the ByteBuf, you might want to adjust this based on your use case
+        int estimatedSize = inputBytes.length / 10; // Start with 1/10 the size of input
+        ByteBuf byteBuf = Unpooled.buffer(estimatedSize);
+
+        // Set up the Deflater with best speed configuration
+        Deflater deflater = new Deflater(Deflater.BEST_SPEED);
+        deflater.setInput(inputBytes);
+        deflater.finish();
+
+        // Directly deflate the data into the ByteBuf
+        byte[] buffer = new byte[1024];
+        while (!deflater.finished()) {
+            int count = deflater.deflate(buffer);
+            byteBuf.writeBytes(buffer, 0, count);
         }
-        // Convert gzipped byte array back to ByteBuffer
-        byte[] compressedBytes = byteArrayOutputStream.toByteArray();
-        return ByteBuffer.wrap(compressedBytes);
+        deflater.end();
+
+        // Adjust the capacity of ByteBuf to the actual size of the compressed data
+        byteBuf.writerIndex(byteBuf.readableBytes());
+        return byteBuf;
     }
 
     private Map<String, String> extractHeaders(HttpHeaders headers) {

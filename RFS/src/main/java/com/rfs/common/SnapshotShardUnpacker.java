@@ -10,6 +10,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.store.NativeFSLockFactory;
 import org.apache.lucene.util.BytesRef;
 
@@ -38,9 +39,6 @@ public class SnapshotShardUnpacker {
 
     public Path unpack() {
         try {
-            // Some constants
-            NativeFSLockFactory lockFactory = NativeFSLockFactory.INSTANCE;
-
             // Ensure the blob files are prepped, if they need to be
             repoAccessor.prepBlobFiles(shardMetadata);
 
@@ -49,7 +47,7 @@ public class SnapshotShardUnpacker {
                 luceneFilesBasePath + "/" + shardMetadata.getIndexName() + "/" + shardMetadata.getShardId()
             );
             Files.createDirectories(luceneIndexDir);
-            try (FSDirectory primaryDirectory = FSDirectory.open(luceneIndexDir, lockFactory)) {
+            try (MMapDirectory primaryDirectory = new MMapDirectory(luceneIndexDir, NativeFSLockFactory.INSTANCE)) {
                 for (ShardFileInfo fileMetadata : shardMetadata.getFiles()) {
                     logger.info(
                         "Unpacking - Blob Name: {}, Lucene Name: {}",
