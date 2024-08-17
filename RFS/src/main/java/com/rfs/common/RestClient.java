@@ -164,11 +164,10 @@ public class RestClient {
         return connectionContext.getRequestTransformer().transform(method.name(), path, headers, Mono.justOrEmpty(body)
                 .map(b -> ByteBuffer.wrap(b.getBytes(StandardCharsets.UTF_8)))
             )
-            .publishOn(Schedulers.parallel())
-            .map(request -> Tuples.of(request, request.getBody().map(
-                  byteBuffer ->  (compressRequest ? deflateByteBuf(byteBuffer) : Unpooled.wrappedBuffer(byteBuffer)))
-                )
-            )
+            .map(request -> Tuples.of(request, request.getBody()
+                    .publishOn(Schedulers.parallel()).map(
+                  byteBuffer ->  (compressRequest ? deflateByteBuf(byteBuffer) : Unpooled.wrappedBuffer(byteBuffer))
+            )))
             .publishOn(Schedulers.newBoundedElastic(20, 3, "restClientSender"))
             .flatMap(transformedRequest ->
                 client.doOnRequest((r, conn) -> contextCleanupRef.set(addSizeMetricsHandlersAndGetCleanup(context).apply(r, conn)))
