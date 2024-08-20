@@ -74,21 +74,24 @@ public class LuceneDocumentsReader {
         return Flux.using(() -> wrapReader(DirectoryReader.open(FSDirectory.open(indexDirectoryPath)), softDeletesPossible, softDeletesField), reader -> {
             log.atInfo().log(reader.maxDoc() + " documents found in the current Lucene index");
             return Flux.fromIterable(reader.leaves()) // Iterate over each segment
-                .parallel(luceneSegmentsToReadFromAtOnce) // Specify Segment Concurrency
-                .concatMapDelayError(leafReaderContext ->
+                .flatMap(leafReaderContext ->
                     Flux.using(leafReaderContext::reader, segmentReader -> {
                         var liveDocs = segmentReader.getLiveDocs();
                         return Flux.range(0, segmentReader.maxDoc())
-                            .parallel(luceneDocumentsToReadFromAtOnceForEachSegment)
-                            .runOn(luceneReaderScheduler) // Specify thread to use on read calls on, disable prefetch
-                            .concatMapDelayError( // Delay errors to attempt reading all documents before exiting
-                                docIdx -> Mono.justOrEmpty((liveDocs == null || liveDocs.get(docIdx)) ? // Filter for live docs
-                                    getDocument(segmentReader, docIdx, true) : // Get document, returns null to skip malformed docs
-                                    null));
+                            .flatMap(
+                                docIdx -> Mono.fromCallable(
+                                    () -> {
+                                        if (liveDocs == null || liveDocs.get(docIdx)) {
+                                          return getDocument(segmentReader, docIdx, true);
+                                        }
+                                        return null;
+                                    })
+                                    .subscribeOn(luceneReaderScheduler),
+                                luceneDocumentsToReadFromAtOnceForEachSegment);
                     }, segmentReader -> {
                         // NO-OP, closed by top level reader.close()
-                    })
-                );
+                    }).subscribeOn(luceneReaderScheduler),
+                    luceneSegmentsToReadFromAtOnce);
         }, reader -> {
             try {
                 reader.close();
