@@ -2,8 +2,13 @@ package com.rfs.common;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.concurrent.Callable;
 import java.util.function.Function;
 
+import java.util.function.Supplier;
+import java.util.logging.Level;
+import javax.print.Doc;
+import lombok.SneakyThrows;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
@@ -79,30 +84,27 @@ public class LuceneDocumentsReader {
      */
     public Flux<Document> readDocuments() {
         int luceneSegmentsToReadFromAtOnce = 5; // Arbitrary value
-        int luceneDocumentsToReadFromAtOnceForEachSegment = Schedulers.DEFAULT_BOUNDED_ELASTIC_SIZE / luceneSegmentsToReadFromAtOnce;
 
-        int luceneReaderThreadCount = luceneSegmentsToReadFromAtOnce * luceneDocumentsToReadFromAtOnceForEachSegment;
+        int luceneDocumentsToReadFromAtOnce = 1;
         // Create elastic scheduler for i/o bound lucene document reading
-        Scheduler luceneReaderScheduler = Schedulers.newBoundedElastic(luceneReaderThreadCount, Integer.MAX_VALUE, "luceneReaderScheduler");
+        Scheduler luceneReaderScheduler = Schedulers.newBoundedElastic(Schedulers.DEFAULT_BOUNDED_ELASTIC_SIZE, Integer.MAX_VALUE, "luceneReaderScheduler");
 
-        return Flux.using(() -> wrapReader(DirectoryReader.open(FSDirectory.open(indexDirectoryPath)), softDeletesPossible, softDeletesField), reader -> {
-            log.atInfo().log(reader.maxDoc() + " documents found in the current Lucene index");
+        return Flux.using(() -> wrapReader(getReader(), softDeletesPossible, softDeletesField), reader -> {
+            log.atInfo().log(reader.maxDoc() + " documents found in the current Lucene index across " + reader.leaves().size() + " segments.");
             return Flux.fromIterable(reader.leaves()) // Iterate over each segment
-                .parallel(luceneSegmentsToReadFromAtOnce) // Specify Segment Concurrency
-                .concatMapDelayError(leafReaderContext ->
-                    Flux.using(leafReaderContext::reader, segmentReader -> {
+                .publishOn(Schedulers.boundedElastic())
+                .flatMap(leafReaderContext -> {
+                    @SuppressWarnings("resource") // segmentReader will be closed by parent DirectoryReader
+                    var segmentReader = leafReaderContext.reader();
                         var liveDocs = segmentReader.getLiveDocs();
                         return Flux.range(0, segmentReader.maxDoc())
-                            .parallel(luceneDocumentsToReadFromAtOnceForEachSegment)
-                            .runOn(luceneReaderScheduler) // Specify thread to use on read calls on, disable prefetch
-                            .concatMapDelayError( // Delay errors to attempt reading all documents before exiting
-                                docIdx -> Mono.justOrEmpty((liveDocs == null || liveDocs.get(docIdx)) ? // Filter for live docs
+                            .map(docIdx -> (
+                                (Callable<Document>) () -> ((liveDocs == null || liveDocs.get(docIdx)) ? // Filter for live docs
                                     getDocument(segmentReader, docIdx, true) : // Get document, returns null to skip malformed docs
-                                    null));
-                    }, segmentReader -> {
-                        // NO-OP, closed by top level reader.close()
-                    })
-                );
+                                    null)));
+                }, luceneSegmentsToReadFromAtOnce)
+                .publishOn(Schedulers.boundedElastic()) // Scheduler to read documents on
+                .flatMap(Mono::fromCallable, luceneDocumentsToReadFromAtOnce); // Don't need to worry about prefetch before this step as documents aren't realized
         }, reader -> {
             try {
                 reader.close();
@@ -113,6 +115,11 @@ public class LuceneDocumentsReader {
             // Close scheduler
             luceneReaderScheduler.dispose();
         });
+    }
+
+    @SneakyThrows
+    protected DirectoryReader getReader() {
+        return DirectoryReader.open(FSDirectory.open(indexDirectoryPath));
     }
 
     protected DirectoryReader wrapReader(DirectoryReader reader, boolean softDeletesEnabled, String softDeletesField) throws IOException {
@@ -130,7 +137,7 @@ public class LuceneDocumentsReader {
             try {
                 var idValue = document.getBinaryValue("_id");
                 if (idValue == null) {
-                    log.atError().setMessage("Document with index" + docId + " does not have an id. Skipping").log();
+                    log.atError().setMessage("Document with index " + docId + " does not have an id. Skipping").log();
                     return null;  // Skip documents with missing id
                 }
                 id = Uid.decodeId(idValue.bytes);

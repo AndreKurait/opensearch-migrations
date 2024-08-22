@@ -20,6 +20,9 @@ import reactor.core.scheduler.Schedulers;
 @RequiredArgsConstructor
 public class DocumentReindexer {
 
+  public static int DOCS_TO_BUFFER_BEFORE_PROCESSING = 1;
+  public static int BULK_REQUESTS_TO_BUFFER_BEFORE_OUTGOING = 1;
+
   protected final OpenSearchClient client;
   private final int maxDocsPerBulkRequest;
   private final long maxBytesPerBulkRequest;
@@ -32,7 +35,8 @@ public class DocumentReindexer {
     var elasticScheduler = Schedulers.newBoundedElastic(maxConcurrentWorkItems, Integer.MAX_VALUE, "documentReindexerElastic");
 
     return Flux.using(() -> documentStream, docs ->
-            docs.publishOn(genericScheduler)
+            docs
+                .publishOn(Schedulers.parallel(), DOCS_TO_BUFFER_BEFORE_PROCESSING)
                 .map(BulkDocSection::new)
                 .bufferUntil(new Predicate<>() { // Group BulkDocSections up to smaller of maxDocsPerBulkRequest and maxBytesPerBulkRequest
                   private int currentItemCount = 0;
@@ -56,18 +60,18 @@ public class DocumentReindexer {
                     return false;
                   }
                 }, true)
-                .parallel(maxConcurrentWorkItems, // Number of parallel workers, tested in reindex_shouldRespectMaxConcurrentRequests
-                    maxConcurrentWorkItems // Limit prefetch for memory pressure
-                ).runOn(elasticScheduler, 1) // Use elasticScheduler for I/O bound request sending
-                .concatMapDelayError( // Delay errors to attempt putting all documents before exiting
+                .publishOn(genericScheduler, BULK_REQUESTS_TO_BUFFER_BEFORE_OUTGOING)
+                .flatMap(
                     bulkDocs -> client.sendBulkRequest(indexName, bulkDocs, context.createBulkRequest()) // Send the request
-                        .publishOn(elasticScheduler) // Continue to use same elasticScheduler
+                        .subscribeOn(Schedulers.newBoundedElastic(10000, 10000, "test")) // Continue to use same elasticScheduler
                         .doFirst(() -> log.atInfo().log("{} documents in current bulk request.", bulkDocs.size()))
                         .doOnSuccess(unused -> log.atDebug().log("Batch succeeded"))
                         .doOnError(error -> log.atError().log("Batch failed {}", error))
                         // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
-                        .onErrorResume(e -> Mono.empty())
-                ), unused -> {
+                        .onErrorResume(e -> Mono.empty()),
+                    maxConcurrentWorkItems) // Prefetch doesn't matter here as publisher is mono (only 1 value)
+                .subscribeOn(Schedulers.newBoundedElastic(10000, 10000, "mytest"))
+            , unused -> {
           // Cleanup Schedulers
           elasticScheduler.dispose();
           genericScheduler.dispose();
