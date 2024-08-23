@@ -50,7 +50,7 @@ public class RootOtelContext implements IRootOtelContext {
         final var metricReader = PeriodicMetricReader.builder(
                 OtlpGrpcMetricExporter.builder()
                     .setEndpoint(collectorEndpoint)
-                    .setAggregationTemporalitySelector(AggregationTemporalitySelector.alwaysCumulative())
+                    .setAggregationTemporalitySelector(AggregationTemporalitySelector.deltaPreferred())
                     .build()
             ).setInterval(Duration.ofSeconds(60)) // Adjusted to 60 seconds
             .build();
