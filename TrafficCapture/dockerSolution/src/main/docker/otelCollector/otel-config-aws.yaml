@@ -4,7 +4,7 @@ receivers:
       grpc:
 processors:
   batch:
-    timeout: 10s
+    timeout: 60s
     send_batch_size: 8192
     send_batch_max_size: 10000
 extensions:
@@ -12,6 +12,10 @@ extensions:
 exporters:
   awsemf:
     namespace: 'OpenSearchMigrations'
+    metric_declarations:
+      - dimensions: [[OTelLib]]
+        metric_name_selectors:
+          - ".*"
   awsxray:
     index_all_attributes: true
 service:
