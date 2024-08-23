@@ -44,7 +44,7 @@ public class DocumentReindexer {
         // Use parallel scheduler for send subscription due on non-blocking io client
         var scheduler = Schedulers.newParallel("DocumentBatchReindexer");
         var bulkDocsBatches = batchDocsBySizeOrCount(docs);
-        var bulkDocsToBuffer = 50; // Arbitrary, takes up 500MB at default settings
+        var bulkDocsToBuffer = 25; // Arbitrary, takes up 250MB at default settings
 
         return bulkDocsBatches
             .limitRate(bulkDocsToBuffer, 1) // Bulk Doc Buffer, Keep Full

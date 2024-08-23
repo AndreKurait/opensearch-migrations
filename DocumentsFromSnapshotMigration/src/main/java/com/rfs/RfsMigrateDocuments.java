@@ -130,8 +130,8 @@ public class RfsMigrateDocuments {
         @Parameter(required = false,
             names = "--max-connections",
             description = "Optional.  The maximum number of connections to simultaneously " +
-                "used to communicate to the target, default 10")
-        int maxConnections = 10;
+                "used to communicate to the target, default 15")
+        int maxConnections = 15;
     }
 
     public static class NoWorkLeftException extends Exception {

@@ -8,7 +8,7 @@ The snapshot the application extracts the documents from can be local or in S3. 
 
 ## How to use the tool
 
-You can kick off the locally tool using Gradle.
+You can kick off locally using Gradle.
 
 ### S3 Snapshot
 
@@ -73,4 +73,4 @@ To see the default shard size, use the `--help` CLI option:
 | --target-insecure                 | Flag to allow untrusted SSL certificates for target cluster                                                                                              |
 | --documents-per-bulk-request      | Optional. The number of documents to be included within each bulk request sent. Default: no max (controlled by documents size)                           |
 | --documents-size-per-bulk-request | Optional. The maximum aggregate document size to be used in bulk requests in bytes. Default: 10 MiB                                                      |
-| --max-connections                 | Optional. The maximum number of connections to simultaneously used to communicate to the target. Default: 20                                             |
+| --max-connections                 | Optional. The maximum number of connections to simultaneously used to communicate to the target. Default: 15                                             |

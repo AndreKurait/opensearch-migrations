@@ -144,7 +144,7 @@ public class PerformanceVerificationTest {
         assertEquals(expectedSentDocs, sentDocs, "Expected sent docs to equal maxDocsPerBulkRequest * maxConcurrentWorkItems");
 
         int expectedConcurrentDocReads = 100;
-        int expectedBulkDocsBuffered = 50;
+        int expectedBulkDocsBuffered = 25;
         int docsFromBuffers = expectedBulkDocsBuffered * maxDocsPerBulkRequest;
         int numberOfSingleBufferSteps = 2; // calls like publishOn(scheduler, 1) holds a 1 item buffer
         int strictExpectedBufferedDocs = docsFromBuffers + expectedConcurrentDocReads + numberOfSingleBufferSteps;
