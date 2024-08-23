@@ -1,5 +1,6 @@
 package org.opensearch.migrations.tracing;
 
+import io.opentelemetry.sdk.metrics.export.AggregationTemporalitySelector;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -45,14 +46,14 @@ public class RootOtelContext implements IRootOtelContext {
         final var spanProcessor = BatchSpanProcessor.builder(
             OtlpGrpcSpanExporter.builder().setEndpoint(collectorEndpoint).setTimeout(2, TimeUnit.SECONDS).build()
         ).build();
+        // Set up Metric Reader for metrics with cumulative temporality and 60 seconds interval
         final var metricReader = PeriodicMetricReader.builder(
-            OtlpGrpcMetricExporter.builder()
-                .setEndpoint(collectorEndpoint)
-                // see https://opentelemetry.io/docs/specs/otel/metrics/sdk_exporters/prometheus/
-                // "A Prometheus Exporter MUST only support Cumulative Temporality."
-                // .setAggregationTemporalitySelector(AggregationTemporalitySelector.deltaPreferred())
-                .build()
-        ).setInterval(Duration.ofMillis(1000)).build();
+                OtlpGrpcMetricExporter.builder()
+                    .setEndpoint(collectorEndpoint)
+                    .setAggregationTemporalitySelector(AggregationTemporalitySelector.alwaysCumulative())
+                    .build()
+            ).setInterval(Duration.ofSeconds(60)) // Adjusted to 60 seconds
+            .build();
 
         var openTelemetrySdk = OpenTelemetrySdk.builder()
             .setTracerProvider(
