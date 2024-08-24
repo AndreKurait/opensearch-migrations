@@ -1,22 +1,29 @@
 package com.rfs.common;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+import java.util.zip.Deflater;
+import java.util.zip.GZIPOutputStream;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 
 import com.rfs.common.http.ConnectionContext;
 import com.rfs.common.http.HttpResponse;
+import com.rfs.common.http.SigV4AuthTransformer;
 import com.rfs.netty.ReadMeteringHandler;
 import com.rfs.netty.WriteMeteringHandler;
 import com.rfs.tracing.IRfsContexts;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
@@ -26,14 +33,18 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 import reactor.netty.Connection;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientRequest;
 import reactor.netty.resources.ConnectionProvider;
 import reactor.netty.tcp.SslProvider;
 import reactor.util.annotation.Nullable;
+import reactor.util.function.Tuples;
 
 @Slf4j
 public class RestClient {
@@ -49,6 +60,19 @@ public class RestClient {
 
     private static final String USER_AGENT = "RfsWorker-1.0";
     private static final String JSON_CONTENT_TYPE = "application/json";
+
+    // Declare Shared Schedulers, use one for IO and another for nonIO tasks
+    private static final Scheduler REST_CLIENT_IO_SCHEDULER = Schedulers.newBoundedElastic(
+        Schedulers.DEFAULT_BOUNDED_ELASTIC_SIZE, // Default Elastic Thread Count
+        Integer.MAX_VALUE, // No Limit on Queued tasks
+        "restClientIO");
+    private static final Scheduler REST_CLIENT_NON_IO_SCHEDULER = Schedulers.newParallel("restClientNonIO");
+
+    static {
+        // Cleanup Schedulers
+        Runtime.getRuntime().addShutdownHook(new Thread(REST_CLIENT_IO_SCHEDULER::dispose));
+        Runtime.getRuntime().addShutdownHook(new Thread(REST_CLIENT_NON_IO_SCHEDULER::dispose));
+    }
 
     public RestClient(ConnectionContext connectionContext) {
         this(connectionContext, 0);
@@ -119,16 +143,28 @@ public class RestClient {
         return asyncRequest(method, path, body, convertedHeaders, context);
     }
 
-
     public Mono<HttpResponse> asyncRequest(HttpMethod method, String path, String body, Map<String, List<String>> additionalHeaders,
                                            @Nullable IRfsContexts.IRequestContext context) {
+        return asyncRequest(method, path, body, additionalHeaders, context, false);
+    }
+    public Mono<HttpResponse> asyncRequest(HttpMethod method, String path, String body, Map<String, List<String>> additionalHeaders,
+                                           @Nullable IRfsContexts.IRequestContext context, boolean compressRequestIfAble) {
         assert connectionContext.getUri() != null;
+
+        var compressRequest = compressRequestIfAble && !(connectionContext.getRequestTransformer() instanceof SigV4AuthTransformer);
+        if (compressRequest != compressRequestIfAble) {
+            log.warn("Request compression requested, but will not be performed due to no support for sigv4");
+        }
+
         Map<String, List<String>> headers = new HashMap<>();
         headers.put(USER_AGENT_HEADER_NAME, List.of(USER_AGENT));
         var hostHeaderValue = getHostHeaderValue(connectionContext);
         headers.put(HOST_HEADER_NAME, List.of(hostHeaderValue));
         if (body != null) {
             headers.put(CONTENT_TYPE_HEADER_NAME, List.of(JSON_CONTENT_TYPE));
+            if (compressRequest) {
+                headers.put("Content-Encoding", List.of("gzip"));
+            }
         }
         if (additionalHeaders != null) {
             additionalHeaders.forEach((key, value) -> {
@@ -140,15 +176,22 @@ public class RestClient {
                 });
         }
         var contextCleanupRef = new AtomicReference<Runnable>(() -> {});
+        boolean compressResponse = compressRequest;
         return connectionContext.getRequestTransformer().transform(method.name(), path, headers, Mono.justOrEmpty(body)
-                .map(b -> ByteBuffer.wrap(b.getBytes(StandardCharsets.UTF_8)))
-            )
+                .publishOn(REST_CLIENT_NON_IO_SCHEDULER) // Perform Body Processing on non io scheduler
+                            .map(b -> ByteBuffer.wrap(b.getBytes(StandardCharsets.UTF_8)))
+                )
+            .subscribeOn(REST_CLIENT_NON_IO_SCHEDULER) // Perform Request Transformation on non io scheduler
+            .map(request -> Tuples.of(request, request.getBody().map(
+                  byteBuffer ->  (compressRequest ? deflateByteBuf(byteBuffer) : Unpooled.wrappedBuffer(byteBuffer))
+            )))
             .flatMap(transformedRequest ->
-                client.doOnRequest((r, conn) -> contextCleanupRef.set(addSizeMetricsHandlersAndGetCleanup(context).apply(r, conn)))
-                .headers(h -> transformedRequest.getHeaders().forEach(h::add))
+                client.compress(compressResponse)
+                .doOnRequest((r, conn) -> contextCleanupRef.set(addSizeMetricsHandlersAndGetCleanup(context).apply(r, conn)))
+                .headers(h -> transformedRequest.getT1().getHeaders().forEach(h::add))
                 .request(method)
                 .uri("/" + path)
-                .send(transformedRequest.getBody().map(Unpooled::wrappedBuffer))
+                .send(transformedRequest.getT2())
                 .responseSingle(
                     (response, bytes) -> bytes.asString()
                         .singleOptional()
@@ -166,6 +209,38 @@ public class RestClient {
                 }
             })
             .doOnTerminate(() -> contextCleanupRef.get().run());
+    }
+
+    public static final AtomicInteger compressionRatioLowerBound = new AtomicInteger(100);
+    @SneakyThrows
+    public static ByteBuf deflateByteBuf(ByteBuffer inputBuffer) {
+            // Convert ByteBuffer to byte array
+            var originalSize = inputBuffer.remaining();
+            byte[] inputBytes = new byte[originalSize];
+            inputBuffer.get(inputBytes);
+
+            // Initialize the ByteBuf to write the compressed data
+            ByteBuf byteBuf = Unpooled.buffer(originalSize / compressionRatioLowerBound.get());
+
+            // Wrap the ByteBuf output stream in GZIPOutputStream
+            try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                 GZIPOutputStream gzipOutputStream = new MyGZIPOutputStream(byteArrayOutputStream)) {
+
+                // Write the input bytes to the GZIPOutputStream
+                gzipOutputStream.write(inputBytes);
+                gzipOutputStream.finish();
+
+                // Write the compressed data to the ByteBuf
+                byteBuf.writeBytes(byteArrayOutputStream.toByteArray());
+            }
+
+            byteBuf.capacity(byteBuf.writerIndex());
+
+            final int compressionRatio = originalSize / byteBuf.readableBytes();
+            log.info("Compression Ratio: {}", compressionRatio);
+            compressionRatioLowerBound.getAndAccumulate(compressionRatio, Math::min);
+
+            return byteBuf;
     }
 
     private Map<String, String> extractHeaders(HttpHeaders headers) {
@@ -189,12 +264,20 @@ public class RestClient {
         return asyncRequest(HttpMethod.POST, path, body, null, context);
     }
 
+    public Mono<HttpResponse> postAsync(String path, String body, IRfsContexts.IRequestContext context, boolean compress) {
+        return asyncRequest(HttpMethod.POST, path, body, null, context, compress);
+    }
+
     public HttpResponse post(String path, String body, IRfsContexts.IRequestContext context) {
         return postAsync(path, body, context).block();
     }
 
     public Mono<HttpResponse> putAsync(String path, String body, IRfsContexts.IRequestContext context) {
         return asyncRequest(HttpMethod.PUT, path, body, null, context);
+    }
+
+    public Mono<HttpResponse> putAsync(String path, String body, IRfsContexts.IRequestContext context, boolean compress) {
+        return asyncRequest(HttpMethod.PUT, path, body, null, context, compress);
     }
 
     public HttpResponse put(String path, String body, IRfsContexts.IRequestContext context) {
@@ -228,5 +311,13 @@ public class RestClient {
                     removeIfPresent(p, READ_METERING_HANDLER_NAME);
                 };
             };
+    }
+
+    private static class MyGZIPOutputStream extends GZIPOutputStream {
+        public MyGZIPOutputStream(ByteArrayOutputStream byteArrayOutputStream) throws IOException {
+            super(byteArrayOutputStream);
+            def.setLevel(Deflater.BEST_SPEED); // Set the deflation level for best speed
+            def.deflate(new byte[0]);
+        }
     }
 }
