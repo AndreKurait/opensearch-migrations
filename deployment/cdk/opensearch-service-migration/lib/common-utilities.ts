@@ -68,7 +68,7 @@ export function parseArgsToDict(argString: string | undefined): Record<string, s
 export function createOpenSearchIAMAccessPolicy(partition: string, region: string, accountId: string): PolicyStatement {
     return new PolicyStatement({
         effect: Effect.ALLOW,
-        resources: [`arn:${partition}:es:${region}:${accountId}:domain/*`],
+        resources: [`*`], // domain may exist cross-account
         actions: [
             "es:ESHttp*"
         ]
@@ -78,7 +78,7 @@ export function createOpenSearchIAMAccessPolicy(partition: string, region: strin
 export function createOpenSearchServerlessIAMAccessPolicy(partition: string, region: string, accountId: string): PolicyStatement {
     return new PolicyStatement({
         effect: Effect.ALLOW,
-        resources: [`arn:${partition}:aoss:${region}:${accountId}:collection/*`],
+        resources: [`*`],  // domain may exist cross-account
         actions: [
             "aoss:APIAccessAll"
         ]

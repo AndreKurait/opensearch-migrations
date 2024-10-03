@@ -8,8 +8,6 @@ import {MigrationAssistanceStack} from "./migration-assistance-stack";
 import {MigrationConsoleStack} from "./service-stacks/migration-console-stack";
 import {determineStreamingSourceType, StreamingSourceType} from "./streaming-source-type";
 import {
-    ClusterAuth,
-    ClusterNoAuth,
     parseClusterDefinition,
     validateFargateCpuArch
 } from "./common-utilities";
