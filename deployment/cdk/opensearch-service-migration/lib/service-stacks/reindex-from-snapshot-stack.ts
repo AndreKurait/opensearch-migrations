@@ -1,6 +1,6 @@
 import {StackPropsExt} from "../stack-composer";
 import {Size} from "aws-cdk-lib/core";
-import {IVpc, SecurityGroup, EbsDeviceVolumeType} from "aws-cdk-lib/aws-ec2";
+import {IVpc, EbsDeviceVolumeType, ISecurityGroup} from "aws-cdk-lib/aws-ec2";
 import {
     CpuArchitecture,
     ServiceManagedVolume,
@@ -12,16 +12,16 @@ import {join} from "path";
 import {MigrationServiceCore} from "./migration-service-core";
 import {Effect, PolicyStatement} from "aws-cdk-lib/aws-iam";
 import {
-    MigrationSSMParameter,
     createOpenSearchIAMAccessPolicy,
     createOpenSearchServerlessIAMAccessPolicy,
     getSecretAccessPolicy,
-    getMigrationStringParameterValue,
     ClusterAuth, parseArgsToDict, appendArgIfNotInExtraArgs
 } from "../common-utilities";
 import { RFSBackfillYaml, SnapshotYaml } from "../migration-services-yaml";
 import { OtelCollectorSidecar } from "./migration-otel-collector-sidecar";
 import { SharedLogFileSystem } from "../components/shared-log-file-system";
+import {Bucket, IBucket} from "aws-cdk-lib/aws-s3";
+import {IFileSystem} from "aws-cdk-lib/aws-efs";
 
 
 export interface ReindexFromSnapshotProps extends StackPropsExt {
@@ -31,8 +31,11 @@ export interface ReindexFromSnapshotProps extends StackPropsExt {
     readonly otelCollectorEnabled: boolean,
     readonly clusterAuthDetails: ClusterAuth
     readonly sourceClusterVersion?: string,
-    readonly maxShardSizeGiB?: number
-
+    readonly maxShardSizeGiB?: number,
+    readonly securityGroups: ISecurityGroup[],
+    readonly s3SnapshotBucket: IBucket,
+    readonly osClusterEndpoint: string,
+    readonly logEfs: IFileSystem,
 }
 
 export class ReindexFromSnapshotStack extends MigrationServiceCore {
@@ -42,26 +45,8 @@ export class ReindexFromSnapshotStack extends MigrationServiceCore {
     constructor(scope: Construct, id: string, props: ReindexFromSnapshotProps) {
         super(scope, id, props)
 
-        let securityGroups = [
-            SecurityGroup.fromSecurityGroupId(this, "serviceSG", getMigrationStringParameterValue(this, {
-                ...props,
-                parameter: MigrationSSMParameter.SERVICE_SECURITY_GROUP_ID,
-            })),
-            SecurityGroup.fromSecurityGroupId(this, "defaultDomainAccessSG", getMigrationStringParameterValue(this, {
-                ...props,
-                parameter: MigrationSSMParameter.OS_ACCESS_SECURITY_GROUP_ID,
-            })),
-            SecurityGroup.fromSecurityGroupId(this, "sharedLogsAccessSG", getMigrationStringParameterValue(this, {
-                ...props,
-                parameter: MigrationSSMParameter.SHARED_LOGS_SECURITY_GROUP_ID,
-            })),
-        ]
+        const artifactS3Arn = props.s3SnapshotBucket.bucketArn;
 
-        const artifactS3Arn = getMigrationStringParameterValue(this, {
-            parameter: MigrationSSMParameter.ARTIFACT_S3_ARN,
-            stage: props.stage,
-            defaultDeployId: props.defaultDeployId
-        });
         const artifactS3AnyObjectPath = `${artifactS3Arn}/*`
         const artifactS3PublishPolicy = new PolicyStatement({
             effect: Effect.ALLOW,
@@ -71,10 +56,8 @@ export class ReindexFromSnapshotStack extends MigrationServiceCore {
             ]
         })
 
-        const osClusterEndpoint = getMigrationStringParameterValue(this, {
-            ...props,
-            parameter: MigrationSSMParameter.OS_CLUSTER_ENDPOINT,
-        });
+        const osClusterEndpoint = props.osClusterEndpoint;
+
         const s3Uri = `s3://migration-artifacts-${this.account}-${props.stage}-${this.region}/rfs-snapshot-repo`;
         let command = "/rfs-app/runJavaWithClasspath.sh org.opensearch.migrations.RfsMigrateDocuments"
         const extraArgsDict = parseArgsToDict(props.extraArgs)
@@ -114,7 +97,7 @@ export class ReindexFromSnapshotStack extends MigrationServiceCore {
         }
         command = props.extraArgs?.trim() ? command.concat(` ${props.extraArgs?.trim()}`) : command
 
-        const sharedLogFileSystem = new SharedLogFileSystem(this, props.stage, props.defaultDeployId);
+        const sharedLogFileSystem = new SharedLogFileSystem(this, props.stage, props.defaultDeployId, props.logEfs);
         const openSearchPolicy = createOpenSearchIAMAccessPolicy(this.partition, this.region, this.account);
         const openSearchServerlessPolicy = createOpenSearchServerlessIAMAccessPolicy(this.partition, this.region, this.account);
         let servicePolicies = [sharedLogFileSystem.asPolicyStatement(), artifactS3PublishPolicy, openSearchPolicy, openSearchServerlessPolicy];
@@ -169,7 +152,6 @@ export class ReindexFromSnapshotStack extends MigrationServiceCore {
             taskInstanceCount: 0,
             dockerDirectoryPath: join(__dirname, "../../../../../", "DocumentsFromSnapshotMigration/docker"),
             dockerImageCommand: ['/bin/sh', '-c', "/rfs-app/entrypoint.sh"],
-            securityGroups: securityGroups,
             volumes: volumes,
             mountPoints: mountPoints,
             taskRolePolicies: servicePolicies,

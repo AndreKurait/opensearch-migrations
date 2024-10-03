@@ -1,26 +1,16 @@
 import {Construct} from "constructs";
-import {Duration, Stack, StackProps} from "aws-cdk-lib";
+import {Stack, StackProps} from "aws-cdk-lib";
 import {readFileSync} from 'fs';
-import {OpenSearchDomainStack} from "./opensearch-domain-stack";
 import {EngineVersion, TLSSecurityPolicy} from "aws-cdk-lib/aws-opensearchservice";
 import * as defaultValuesJson from "../default-values.json"
 import {NetworkStack} from "./network-stack";
 import {MigrationAssistanceStack} from "./migration-assistance-stack";
 import {MigrationConsoleStack} from "./service-stacks/migration-console-stack";
-import {CaptureProxyESStack} from "./service-stacks/capture-proxy-es-stack";
-import {TrafficReplayerStack} from "./service-stacks/traffic-replayer-stack";
-import {CaptureProxyStack} from "./service-stacks/capture-proxy-stack";
-import {ElasticsearchStack} from "./service-stacks/elasticsearch-stack";
-import {KafkaStack} from "./service-stacks/kafka-stack";
-import {Application} from "@aws-cdk/aws-servicecatalogappregistry-alpha";
-import {OpenSearchContainerStack} from "./service-stacks/opensearch-container-stack";
 import {determineStreamingSourceType, StreamingSourceType} from "./streaming-source-type";
 import {
     ClusterAuth,
     ClusterNoAuth,
-    MigrationSSMParameter,
     parseClusterDefinition,
-    parseRemovalPolicy,
     validateFargateCpuArch
 } from "./common-utilities";
 import {ReindexFromSnapshotStack} from "./service-stacks/reindex-from-snapshot-stack";
@@ -40,13 +30,6 @@ export interface StackComposerProps extends StackProps {
 
 export class StackComposer {
     public stacks: Stack[] = [];
-
-    private addStacksToAppRegistry(appRegistryAppARN: string, allStacks: Stack[]) {
-        for (let stack of allStacks) {
-            const appRegistryApp = Application.fromApplicationArn(stack, 'AppRegistryApplicationImport', appRegistryAppARN)
-            appRegistryApp.associateApplicationWithStack(stack)
-        }
-    }
 
     private getContextForType(optionName: string, expectedType: string, defaultValues: { [x: string]: (any); }, contextJSON: { [x: string]: (any); }): any {
         const option = contextJSON[optionName]
@@ -152,36 +135,10 @@ export class StackComposer {
 
         const domainName = this.getContextForType('domainName', 'string', defaultValues, contextJSON)
         const engineVersion = this.getContextForType('engineVersion', 'string', defaultValues, contextJSON)
-        const domainAZCount = this.getContextForType('domainAZCount', 'number', defaultValues, contextJSON)
-        const dataNodeType = this.getContextForType('dataNodeType', 'string', defaultValues, contextJSON)
-        const dataNodeCount = this.getContextForType('dataNodeCount', 'number', defaultValues, contextJSON)
-        const dedicatedManagerNodeType = this.getContextForType('dedicatedManagerNodeType', 'string', defaultValues, contextJSON)
-        const dedicatedManagerNodeCount = this.getContextForType('dedicatedManagerNodeCount', 'number', defaultValues, contextJSON)
-        const warmNodeType = this.getContextForType('warmNodeType', 'string', defaultValues, contextJSON)
-        const warmNodeCount = this.getContextForType('warmNodeCount', 'number', defaultValues, contextJSON)
-        const useUnsignedBasicAuth = this.getContextForType('useUnsignedBasicAuth', 'boolean', defaultValues, contextJSON)
-        const fineGrainedManagerUserARN = this.getContextForType('fineGrainedManagerUserARN', 'string', defaultValues, contextJSON)
         const fineGrainedManagerUserName = this.getContextForType('fineGrainedManagerUserName', 'string', defaultValues, contextJSON)
         const fineGrainedManagerUserSecretManagerKeyARN = this.getContextForType('fineGrainedManagerUserSecretManagerKeyARN', 'string', defaultValues, contextJSON)
-        const enableDemoAdmin = this.getContextForType('enableDemoAdmin', 'boolean', defaultValues, contextJSON)
-        const enforceHTTPS = this.getContextForType('enforceHTTPS', 'boolean', defaultValues, contextJSON)
-        const ebsEnabled = this.getContextForType('ebsEnabled', 'boolean', defaultValues, contextJSON)
-        const ebsIops = this.getContextForType('ebsIops', 'number', defaultValues, contextJSON)
-        const ebsVolumeTypeName = this.getContextForType('ebsVolumeType', 'string', defaultValues, contextJSON)
-        const ebsVolumeSize = this.getContextForType('ebsVolumeSize', 'number', defaultValues, contextJSON)
-        const encryptionAtRestEnabled = this.getContextForType('encryptionAtRestEnabled', 'boolean', defaultValues, contextJSON)
-        const encryptionAtRestKmsKeyARN = this.getContextForType("encryptionAtRestKmsKeyARN", 'string', defaultValues, contextJSON)
-        const loggingAppLogEnabled = this.getContextForType('loggingAppLogEnabled', 'boolean', defaultValues, contextJSON)
-        const loggingAppLogGroupARN = this.getContextForType('loggingAppLogGroupARN', 'string', defaultValues, contextJSON)
-        const noneToNodeEncryptionEnabled = this.getContextForType('nodeToNodeEncryptionEnabled', 'boolean', defaultValues, contextJSON)
         const vpcId = this.getContextForType('vpcId', 'string', defaultValues, contextJSON)
-        const vpcEnabled = this.getContextForType('vpcEnabled', 'boolean', defaultValues, contextJSON)
-        const vpcSecurityGroupIds = this.getContextForType('vpcSecurityGroupIds', 'object', defaultValues, contextJSON)
-        const vpcSubnetIds = this.getContextForType('vpcSubnetIds', 'object', defaultValues, contextJSON)
         const vpcAZCount = this.getContextForType('vpcAZCount', 'number', defaultValues, contextJSON)
-        const openAccessPolicyEnabled = this.getContextForType('openAccessPolicyEnabled', 'boolean', defaultValues, contextJSON)
-        const accessPolicyJson = this.getContextForType('accessPolicies', 'object', defaultValues, contextJSON)
-        const migrationAssistanceEnabled = this.getContextForType('migrationAssistanceEnabled', 'boolean', defaultValues, contextJSON)
         const mskARN = this.getContextForType('mskARN', 'string', defaultValues, contextJSON)
         const mskBrokersPerAZCount = this.getContextForType('mskBrokersPerAZCount', 'number', defaultValues, contextJSON)
         const mskSubnetIds = this.getContextForType('mskSubnetIds', 'object', defaultValues, contextJSON)
@@ -191,19 +148,13 @@ export class StackComposer {
         const addOnMigrationDeployId = this.getContextForType('addOnMigrationDeployId', 'string', defaultValues, contextJSON)
         const defaultFargateCpuArch = this.getContextForType('defaultFargateCpuArch', 'string', defaultValues, contextJSON)
         const captureProxyESServiceEnabled = this.getContextForType('captureProxyESServiceEnabled', 'boolean', defaultValues, contextJSON)
-        const captureProxyESExtraArgs = this.getContextForType('captureProxyESExtraArgs', 'string', defaultValues, contextJSON)
         const migrationConsoleServiceEnabled = this.getContextForType('migrationConsoleServiceEnabled', 'boolean', defaultValues, contextJSON)
         const migrationConsoleEnableOSI = this.getContextForType('migrationConsoleEnableOSI', 'boolean', defaultValues, contextJSON)
         const migrationAPIEnabled = this.getContextForType('migrationAPIEnabled', 'boolean', defaultValues, contextJSON)
         const migrationAPIAllowedHosts = this.getContextForType('migrationAPIAllowedHosts', 'string', defaultValues, contextJSON)
         const trafficReplayerServiceEnabled = this.getContextForType('trafficReplayerServiceEnabled', 'boolean', defaultValues, contextJSON)
-        const trafficReplayerMaxUptime = this.getContextForType('trafficReplayerMaxUptime', 'string', defaultValues, contextJSON);
-        const trafficReplayerGroupId = this.getContextForType('trafficReplayerGroupId', 'string', defaultValues, contextJSON)
-        const trafficReplayerUserAgentSuffix = this.getContextForType('trafficReplayerUserAgentSuffix', 'string', defaultValues, contextJSON)
-        const trafficReplayerExtraArgs = this.getContextForType('trafficReplayerExtraArgs', 'string', defaultValues, contextJSON)
         const captureProxyServiceEnabled = this.getContextForType('captureProxyServiceEnabled', 'boolean', defaultValues, contextJSON)
         const targetClusterProxyServiceEnabled = this.getContextForType('targetClusterProxyServiceEnabled', 'boolean', defaultValues, contextJSON)
-        const captureProxyExtraArgs = this.getContextForType('captureProxyExtraArgs', 'string', defaultValues, contextJSON)
         const elasticsearchServiceEnabled = this.getContextForType('elasticsearchServiceEnabled', 'boolean', defaultValues, contextJSON)
         const kafkaBrokerServiceEnabled = this.getContextForType('kafkaBrokerServiceEnabled', 'boolean', defaultValues, contextJSON)
         const osContainerServiceEnabled = this.getContextForType('osContainerServiceEnabled', 'boolean', defaultValues, contextJSON)
@@ -213,6 +164,7 @@ export class StackComposer {
         const reindexFromSnapshotMaxShardSizeGiB = this.getContextForType('reindexFromSnapshotMaxShardSizeGiB', 'number', defaultValues, contextJSON)
         const albAcmCertArn = this.getContextForType('albAcmCertArn', 'string', defaultValues, contextJSON);
         const managedServiceSourceSnapshotEnabled = this.getContextForType('managedServiceSourceSnapshotEnabled', 'boolean', defaultValues, contextJSON)
+        const includeNatGateway = this.getContextForType('includeNatGateway', 'boolean', defaultValues, contextJSON)
 
         // We're in a transition state from an older model with limited, individually defined fields and heading towards objects
         // that fully define the source and target cluster configurations. For the time being, we're supporting both.
@@ -256,7 +208,7 @@ export class StackComposer {
             }
             targetClusterDefinition = {"endpoint": targetClusterEndpointField, "auth": auth}
         }
-        const targetCluster = usePreexistingTargetCluster ? parseClusterDefinition(targetClusterDefinition) : undefined
+        const targetCluster = parseClusterDefinition(targetClusterDefinition)
 
         // Ensure that target cluster username and password are not defined in multiple places
         if (targetCluster && (fineGrainedManagerUserName || fineGrainedManagerUserSecretManagerKeyARN)) {
@@ -312,17 +264,6 @@ export class StackComposer {
             throw new Error("Provided tlsSecurityPolicy does not match a selectable option, for reference https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_opensearchservice.TLSSecurityPolicy.html")
         }
 
-        const domainRemovalPolicyName = this.getContextForType('domainRemovalPolicy', 'string', defaultValues, contextJSON)
-        const domainRemovalPolicy = parseRemovalPolicy("domainRemovalPolicy", domainRemovalPolicyName)
-
-        let trafficReplayerCustomUserAgent
-        if (props.migrationsUserAgent && trafficReplayerUserAgentSuffix) {
-            trafficReplayerCustomUserAgent = `${props.migrationsUserAgent};${trafficReplayerUserAgentSuffix}`
-        }
-        else {
-            trafficReplayerCustomUserAgent = trafficReplayerUserAgentSuffix ?? props.migrationsUserAgent
-        }
-
         if (sourceClusterDisabled && (sourceCluster || captureProxyESServiceEnabled || elasticsearchServiceEnabled || captureProxyServiceEnabled)) {
             throw new Error("A source cluster must be specified by one of: [sourceCluster, captureProxyESServiceEnabled, elasticsearchServiceEnabled, captureProxyServiceEnabled]");
         }
@@ -331,30 +272,29 @@ export class StackComposer {
 
         // If enabled re-use existing VPC and/or associated resources or create new
         let networkStack: NetworkStack|undefined
-        if (vpcEnabled || addOnMigrationDeployId) {
-            networkStack = new NetworkStack(scope, `networkStack-${deployId}`, {
-                vpcId: vpcId,
-                vpcAZCount: vpcAZCount,
-                targetClusterEndpoint: preexistingOrContainerTargetEndpoint,
-                stackName: `OSMigrations-${stage}-${region}-${deployId}-NetworkInfra`,
-                description: "This stack contains resources to create/manage networking for an OpenSearch Service domain",
-                stage: stage,
-                defaultDeployId: defaultDeployId,
-                addOnMigrationDeployId: addOnMigrationDeployId,
-                albAcmCertArn: albAcmCertArn,
-                elasticsearchServiceEnabled,
-                captureProxyESServiceEnabled,
-                captureProxyServiceEnabled,
-                targetClusterProxyServiceEnabled,
-                migrationAPIEnabled,
-                sourceClusterDisabled,
-                sourceClusterEndpoint,
-                targetClusterUsername: targetCluster ? targetClusterAuth?.basicAuth?.username : fineGrainedManagerUserName,
-                targetClusterPasswordSecretArn: targetCluster ? targetClusterAuth?.basicAuth?.password_from_secret_arn : fineGrainedManagerUserSecretManagerKeyARN,
-                env: props.env,
-            })
-            this.stacks.push(networkStack)
-        }
+        networkStack = new NetworkStack(scope, `networkStack-${deployId}`, {
+            vpcId: vpcId,
+            vpcAZCount: vpcAZCount,
+            targetClusterEndpoint: preexistingOrContainerTargetEndpoint,
+            stackName: `OSMigrations-${stage}-${region}-${deployId}-NetworkInfra`,
+            description: "This stack contains resources to create/manage networking for an OpenSearch Service domain",
+            stage: stage,
+            defaultDeployId: defaultDeployId,
+            addOnMigrationDeployId: addOnMigrationDeployId,
+            albAcmCertArn: albAcmCertArn,
+            elasticsearchServiceEnabled,
+            captureProxyESServiceEnabled,
+            captureProxyServiceEnabled,
+            targetClusterProxyServiceEnabled,
+            migrationAPIEnabled,
+            sourceClusterDisabled,
+            sourceClusterEndpoint,
+            targetClusterUsername: targetCluster ? targetClusterAuth?.basicAuth?.username : fineGrainedManagerUserName,
+            targetClusterPasswordSecretArn: targetCluster ? targetClusterAuth?.basicAuth?.password_from_secret_arn : fineGrainedManagerUserSecretManagerKeyARN,
+            env: props.env,
+            includeNatGateway
+        })
+        this.stacks.push(networkStack)
         let servicesYaml = new ServicesYaml();
 
         if (props.migrationsUserAgent) {
@@ -362,114 +302,31 @@ export class StackComposer {
             servicesYaml.client_options.user_agent_extra = props.migrationsUserAgent
         }
 
-        // There is an assumption here that for any deployment we will always have a target cluster, whether that be a
-        // created Domain like below or an imported one
-        let openSearchStack
-        if (!preexistingOrContainerTargetEndpoint) {
-            openSearchStack = new OpenSearchDomainStack(scope, `openSearchDomainStack-${deployId}`, {
-                version: engineVersionValue,
-                domainName: clusterDomainName,
-                dataNodeInstanceType: dataNodeType,
-                dataNodes: dataNodeCount,
-                dedicatedManagerNodeType: dedicatedManagerNodeType,
-                dedicatedManagerNodeCount: dedicatedManagerNodeCount,
-                warmInstanceType: warmNodeType,
-                warmNodes: warmNodeCount,
-                accessPolicyJson: accessPolicyJson,
-                openAccessPolicyEnabled: openAccessPolicyEnabled,
-                useUnsignedBasicAuth: useUnsignedBasicAuth,
-                fineGrainedManagerUserARN: fineGrainedManagerUserARN,
-                fineGrainedManagerUserName: fineGrainedManagerUserName,
-                fineGrainedManagerUserSecretManagerKeyARN: fineGrainedManagerUserSecretManagerKeyARN,
-                enableDemoAdmin: enableDemoAdmin,
-                enforceHTTPS: enforceHTTPS,
-                tlsSecurityPolicy: tlsSecurityPolicy,
-                ebsEnabled: ebsEnabled,
-                ebsIops: ebsIops,
-                ebsVolumeSize: ebsVolumeSize,
-                ebsVolumeTypeName: ebsVolumeTypeName,
-                encryptionAtRestEnabled: encryptionAtRestEnabled,
-                encryptionAtRestKmsKeyARN: encryptionAtRestKmsKeyARN,
-                appLogEnabled: loggingAppLogEnabled,
-                appLogGroup: loggingAppLogGroupARN,
-                nodeToNodeEncryptionEnabled: noneToNodeEncryptionEnabled,
-                vpc: networkStack ? networkStack.vpc : undefined,
-                vpcSubnetIds: vpcSubnetIds,
-                vpcSecurityGroupIds: vpcSecurityGroupIds,
-                domainAZCount: domainAZCount,
-                domainRemovalPolicy: domainRemovalPolicy,
-                stackName: `OSMigrations-${stage}-${region}-${deployId}-OpenSearchDomain`,
-                description: "This stack contains resources to create/manage an OpenSearch Service domain",
-                stage: stage,
-                defaultDeployId: defaultDeployId,
-                addOnMigrationDeployId: addOnMigrationDeployId,
-                env: props.env
-            });
-            this.addDependentStacks(openSearchStack, [networkStack])
-            this.stacks.push(openSearchStack)
-            servicesYaml.target_cluster = openSearchStack.targetClusterYaml;
-        } else if (targetCluster) {
-            servicesYaml.target_cluster = targetCluster
-        }
+        servicesYaml.target_cluster = targetCluster
 
-        let migrationStack
-        if (migrationAssistanceEnabled && networkStack && !addOnMigrationDeployId) {
-            migrationStack = new MigrationAssistanceStack(scope, "migrationInfraStack", {
-                vpc: networkStack.vpc,
-                streamingSourceType: streamingSourceType,
-                mskImportARN: mskARN,
-                mskBrokersPerAZCount: mskBrokersPerAZCount,
-                mskSubnetIds: mskSubnetIds,
-                mskAZCount: mskAZCount,
-                replayerOutputEFSRemovalPolicy: replayerOutputEFSRemovalPolicy,
-                artifactBucketRemovalPolicy: artifactBucketRemovalPolicy,
-                stackName: `OSMigrations-${stage}-${region}-MigrationInfra`,
-                description: "This stack contains resources to assist migrating an OpenSearch Service domain",
-                stage: stage,
-                defaultDeployId: defaultDeployId,
-                env: props.env
-            })
-            this.addDependentStacks(migrationStack, [networkStack])
-            this.stacks.push(migrationStack)
-            servicesYaml.kafka = migrationStack.kafkaYaml;
-        }
+        let migrationStack = new MigrationAssistanceStack(scope, "migrationInfraStack", {
+            vpc: networkStack.vpc,
+            streamingSourceType: streamingSourceType,
+            mskImportARN: mskARN,
+            mskBrokersPerAZCount: mskBrokersPerAZCount,
+            mskSubnetIds: mskSubnetIds,
+            mskAZCount: mskAZCount,
+            replayerOutputEFSRemovalPolicy: replayerOutputEFSRemovalPolicy,
+            artifactBucketRemovalPolicy: artifactBucketRemovalPolicy,
+            stackName: `OSMigrations-${stage}-${region}-MigrationInfra`,
+            description: "This stack contains resources to assist migrating an OpenSearch Service domain",
+            stage: stage,
+            defaultDeployId: defaultDeployId,
+            env: props.env
+        })
+        this.addDependentStacks(migrationStack, [networkStack])
+        this.stacks.push(migrationStack)
+        servicesYaml.kafka = migrationStack.kafkaYaml;
 
-        let osContainerStack
-        if (osContainerServiceEnabled && networkStack && migrationStack) {
-            osContainerStack = new OpenSearchContainerStack(scope, `opensearch-container-${deployId}`, {
-                vpc: networkStack.vpc,
-                stackName: `OSMigrations-${stage}-${region}-${deployId}-OpenSearchContainer`,
-                description: "This stack contains resources for the OpenSearch Container ECS service",
-                stage: stage,
-                defaultDeployId: defaultDeployId,
-                fargateCpuArch: fargateCpuArch,
-                addOnMigrationDeployId: addOnMigrationDeployId,
-                enableDemoAdmin: true,
-                env: props.env
-            })
-            this.addDependentStacks(osContainerStack, [migrationStack])
-            this.stacks.push(osContainerStack)
-            servicesYaml.target_cluster = new ClusterYaml({
-                endpoint: preexistingOrContainerTargetEndpoint ?? "",
-                auth: new ClusterAuth({noAuth: new ClusterNoAuth()})
-            })
-        }
-
-        let kafkaBrokerStack
-        if (kafkaBrokerServiceEnabled && networkStack && migrationStack) {
-            kafkaBrokerStack = new KafkaStack(scope, "kafka", {
-                vpc: networkStack.vpc,
-                stackName: `OSMigrations-${stage}-${region}-KafkaBroker`,
-                description: "This stack contains resources for the Kafka Broker ECS service",
-                stage: stage,
-                defaultDeployId: defaultDeployId,
-                fargateCpuArch: fargateCpuArch,
-                env: props.env
-            })
-            this.addDependentStacks(kafkaBrokerStack, [migrationStack])
-            this.stacks.push(kafkaBrokerStack)
-            servicesYaml.kafka = kafkaBrokerStack.kafkaYaml;
-        }
+        servicesYaml.target_cluster = new ClusterYaml({
+            endpoint: preexistingOrContainerTargetEndpoint ?? "",
+            auth: new ClusterAuth({noAuth: new ClusterNoAuth()})
+        })
 
         let reindexFromSnapshotStack
         if (reindexFromSnapshotServiceEnabled && networkStack && migrationStack) {
@@ -485,120 +342,17 @@ export class StackComposer {
                 defaultDeployId: defaultDeployId,
                 fargateCpuArch: fargateCpuArch,
                 env: props.env,
-                maxShardSizeGiB: reindexFromSnapshotMaxShardSizeGiB
-            })
-            this.addDependentStacks(reindexFromSnapshotStack, [migrationStack, openSearchStack, osContainerStack])
+                maxShardSizeGiB: reindexFromSnapshotMaxShardSizeGiB,
+                securityGroups: [networkStack.osClusterAccessSG, migrationStack.serviceSecurityGroup, migrationStack.sharedLogsSG],
+                osClusterEndpoint: networkStack.osClusterEndpoint,
+                s3SnapshotBucket: migrationStack.artifactBucket,
+                logEfs: migrationStack.sharedLogsEFS
+        })
+            this.addDependentStacks(reindexFromSnapshotStack, [migrationStack])
             this.stacks.push(reindexFromSnapshotStack)
             servicesYaml.backfill = reindexFromSnapshotStack.rfsBackfillYaml;
             servicesYaml.snapshot = reindexFromSnapshotStack.rfsSnapshotYaml;
 
-        }
-
-        let captureProxyESStack
-        if (captureProxyESServiceEnabled && networkStack && migrationStack) {
-            captureProxyESStack = new CaptureProxyESStack(scope, "capture-proxy-es", {
-                vpc: networkStack.vpc,
-                otelCollectorEnabled: otelCollectorEnabled,
-                streamingSourceType: streamingSourceType,
-                extraArgs: captureProxyESExtraArgs,
-                stackName: `OSMigrations-${stage}-${region}-CaptureProxyES`,
-                description: "This stack contains resources for the Capture Proxy/Elasticsearch ECS service",
-                stage: stage,
-                defaultDeployId: defaultDeployId,
-                fargateCpuArch: fargateCpuArch,
-                targetGroups: [networkStack.albSourceProxyTG, networkStack.albSourceClusterTG],
-                env: props.env
-            })
-            this.addDependentStacks(captureProxyESStack, [migrationStack, kafkaBrokerStack])
-            this.stacks.push(captureProxyESStack)
-        }
-
-        let trafficReplayerStack
-        if ((trafficReplayerServiceEnabled && networkStack && migrationStack) || (addOnMigrationDeployId && networkStack)) {
-            trafficReplayerStack = new TrafficReplayerStack(scope, `traffic-replayer-${deployId}`, {
-                vpc: networkStack.vpc,
-                clusterAuthDetails: servicesYaml.target_cluster.auth,
-                addOnMigrationDeployId: addOnMigrationDeployId,
-                customKafkaGroupId: trafficReplayerGroupId,
-                userAgentSuffix: trafficReplayerCustomUserAgent,
-                extraArgs: trafficReplayerExtraArgs,
-                otelCollectorEnabled: otelCollectorEnabled,
-                streamingSourceType: streamingSourceType,
-                stackName: `OSMigrations-${stage}-${region}-${deployId}-TrafficReplayer`,
-                description: "This stack contains resources for the Traffic Replayer ECS service",
-                stage: stage,
-                defaultDeployId: defaultDeployId,
-                fargateCpuArch: fargateCpuArch,
-                maxUptime: trafficReplayerMaxUptime ? Duration.parse(trafficReplayerMaxUptime) : undefined,
-                env: props.env
-            })
-            this.addDependentStacks(trafficReplayerStack, [networkStack, migrationStack,kafkaBrokerStack,
-                openSearchStack, osContainerStack])
-            this.stacks.push(trafficReplayerStack)
-            servicesYaml.replayer = trafficReplayerStack.replayerYaml;
-        }
-
-        let elasticsearchStack
-        if (elasticsearchServiceEnabled && networkStack && migrationStack) {
-            elasticsearchStack = new ElasticsearchStack(scope, "elasticsearch", {
-                vpc: networkStack.vpc,
-                stackName: `OSMigrations-${stage}-${region}-Elasticsearch`,
-                description: "This stack contains resources for a testing mock Elasticsearch single node cluster ECS service",
-                stage: stage,
-                defaultDeployId: defaultDeployId,
-                fargateCpuArch: fargateCpuArch,
-                targetGroups: [networkStack.albSourceClusterTG],
-                env: props.env
-            })
-            this.addDependentStacks(elasticsearchStack, [migrationStack])
-            this.stacks.push(elasticsearchStack)
-        }
-
-        let captureProxyStack
-        if (captureProxyServiceEnabled && networkStack && migrationStack) {
-            captureProxyStack = new CaptureProxyStack(scope, "capture-proxy", {
-                vpc: networkStack.vpc,
-                destinationConfig: {
-                    endpointMigrationSSMParameter: MigrationSSMParameter.SOURCE_CLUSTER_ENDPOINT,
-                },
-                otelCollectorEnabled: otelCollectorEnabled,
-                streamingSourceType: streamingSourceType,
-                extraArgs: captureProxyExtraArgs,
-                stackName: `OSMigrations-${stage}-${region}-CaptureProxy`,
-                description: "This stack contains resources for the Capture Proxy ECS service",
-                stage: stage,
-                defaultDeployId: defaultDeployId,
-                fargateCpuArch: fargateCpuArch,
-                targetGroups: [networkStack.albSourceProxyTG],
-                env: props.env
-            })
-            this.addDependentStacks(captureProxyStack, [elasticsearchStack, migrationStack,
-                kafkaBrokerStack])
-            this.stacks.push(captureProxyStack)
-        }
-
-        let targetClusterProxyStack
-        if (targetClusterProxyServiceEnabled && networkStack && migrationStack) {
-            targetClusterProxyStack = new CaptureProxyStack(scope, "target-cluster-proxy", {
-                serviceName: "target-cluster-proxy",
-                vpc: networkStack.vpc,
-                destinationConfig: {
-                    endpointMigrationSSMParameter: MigrationSSMParameter.OS_CLUSTER_ENDPOINT,
-                    securityGroupMigrationSSMParameter: MigrationSSMParameter.OS_ACCESS_SECURITY_GROUP_ID,
-                },
-                otelCollectorEnabled: false,
-                streamingSourceType: StreamingSourceType.DISABLED,
-                extraArgs: "--noCapture",
-                stackName: `OSMigrations-${stage}-${region}-TargetClusterProxy`,
-                description: "This stack contains resources for the Target Cluster Proxy ECS service",
-                stage: stage,
-                defaultDeployId: defaultDeployId,
-                fargateCpuArch: fargateCpuArch,
-                targetGroups: [networkStack.albTargetProxyTG],
-                env: props.env,
-            })
-            this.addDependentStacks(targetClusterProxyStack, [migrationStack])
-            this.stacks.push(targetClusterProxyStack)
         }
 
         let migrationConsoleStack
@@ -619,17 +373,16 @@ export class StackComposer {
                 fargateCpuArch: fargateCpuArch,
                 otelCollectorEnabled,
                 managedServiceSourceSnapshotEnabled,
-                env: props.env
+                env: props.env,
+                securityGroups: [networkStack.osClusterAccessSG, migrationStack.serviceSecurityGroup, migrationStack.sharedLogsSG],
+                osClusterEndpoint: networkStack.osClusterEndpoint,
+                artifactS3: migrationStack.artifactBucket,
+                logEfs: migrationStack.sharedLogsEFS
             })
             // To enable the Migration Console to make requests to other service endpoints with services,
             // it must be deployed after any connected services
-            this.addDependentStacks(migrationConsoleStack, [captureProxyESStack, captureProxyStack, elasticsearchStack,
-                openSearchStack, osContainerStack, migrationStack, kafkaBrokerStack])
+            this.addDependentStacks(migrationConsoleStack, [migrationStack])
             this.stacks.push(migrationConsoleStack)
-        }
-
-        if (props.migrationsAppRegistryARN) {
-            this.addStacksToAppRegistry(props.migrationsAppRegistryARN, this.stacks)
         }
     }
 }

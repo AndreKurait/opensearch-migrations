@@ -1,26 +1,24 @@
 import {StackPropsExt} from "../stack-composer";
-import {IVpc, SecurityGroup} from "aws-cdk-lib/aws-ec2";
+import {ISecurityGroup, IVpc} from "aws-cdk-lib/aws-ec2";
 import {CpuArchitecture, PortMapping, Protocol} from "aws-cdk-lib/aws-ecs";
 import {Construct} from "constructs";
 import {join} from "path";
-import {Effect, PolicyStatement, Role, ServicePrincipal} from "aws-cdk-lib/aws-iam";
+import {Effect, PolicyStatement} from "aws-cdk-lib/aws-iam";
 import {
-    createMigrationStringParameter,
     createOpenSearchIAMAccessPolicy,
     createOpenSearchServerlessIAMAccessPolicy,
     getSecretAccessPolicy,
-    getMigrationStringParameterValue,
     hashStringSHA256,
-    MigrationSSMParameter,
     createSnapshotOnAOSRole
 } from "../common-utilities";
 import {StreamingSourceType} from "../streaming-source-type";
-import {LogGroup, RetentionDays} from "aws-cdk-lib/aws-logs";
-import {Fn, RemovalPolicy} from "aws-cdk-lib";
+import {Fn} from "aws-cdk-lib";
 import {ClusterYaml, MetadataMigrationYaml, ServicesYaml} from "../migration-services-yaml";
 import {ELBTargetGroup, MigrationServiceCore} from "./migration-service-core";
 import { OtelCollectorSidecar } from "./migration-otel-collector-sidecar";
 import { SharedLogFileSystem } from "../components/shared-log-file-system";
+import {IBucket} from "aws-cdk-lib/aws-s3";
+import {IFileSystem} from "aws-cdk-lib/aws-efs";
 
 export interface MigrationConsoleProps extends StackPropsExt {
     readonly migrationsSolutionVersion: string,
@@ -35,6 +33,10 @@ export interface MigrationConsoleProps extends StackPropsExt {
     readonly otelCollectorEnabled?: boolean,
     readonly sourceCluster?: ClusterYaml,
     readonly managedServiceSourceSnapshotEnabled?: boolean
+    readonly securityGroups: ISecurityGroup[],
+    readonly osClusterEndpoint: string,
+    readonly artifactS3: IBucket,
+    readonly logEfs: IFileSystem,
 }
 
 export class MigrationConsoleStack extends MigrationServiceCore {
@@ -42,63 +44,6 @@ export class MigrationConsoleStack extends MigrationServiceCore {
     getHostname(url: string): string {
         // https://alb.migration.dev.local:8000 -> alb.migration.dev.local
         return Fn.select(0, Fn.split(':', Fn.select(2, Fn.split('/', url))));
-    }
-
-    createMSKAdminIAMPolicies(stage: string, deployId: string): PolicyStatement[] {
-        const mskClusterARN = getMigrationStringParameterValue(this, {
-            parameter: MigrationSSMParameter.MSK_CLUSTER_ARN,
-            stage,
-            defaultDeployId: deployId,
-        });
-        const mskClusterName = getMigrationStringParameterValue(this, {
-            parameter: MigrationSSMParameter.MSK_CLUSTER_NAME,
-            stage,
-            defaultDeployId: deployId,
-        });
-        const mskClusterAdminPolicy = new PolicyStatement({
-            effect: Effect.ALLOW,
-            resources: [mskClusterARN],
-            actions: [
-                "kafka-cluster:*"
-            ]
-        })
-        const mskClusterAllTopicArn = `arn:${this.partition}:kafka:${this.region}:${this.account}:topic/${mskClusterName}/*`
-        const mskTopicAdminPolicy = new PolicyStatement({
-            effect: Effect.ALLOW,
-            resources: [mskClusterAllTopicArn],
-            actions: [
-                "kafka-cluster:*"
-            ]
-        })
-        const mskClusterAllGroupArn = `arn:${this.partition}:kafka:${this.region}:${this.account}:group/${mskClusterName}/*`
-        const mskConsumerGroupAdminPolicy = new PolicyStatement({
-            effect: Effect.ALLOW,
-            resources: [mskClusterAllGroupArn],
-            actions: [
-                "kafka-cluster:*"
-            ]
-        })
-        return [mskClusterAdminPolicy, mskTopicAdminPolicy, mskConsumerGroupAdminPolicy]
-    }
-
-    configureOpenSearchIngestionPipelineRole(stage: string, deployId: string) {
-        const osiPipelineRole = new Role(this, 'osisPipelineRole', {
-            assumedBy: new ServicePrincipal('osis-pipelines.amazonaws.com'),
-            description: 'OpenSearch Ingestion Pipeline role for OpenSearch Migrations'
-        });
-        // Add policy to allow access to Opensearch domains
-        osiPipelineRole.addToPolicy(new PolicyStatement({
-            effect: Effect.ALLOW,
-            actions: ["es:DescribeDomain", "es:ESHttp*"],
-            resources: [`arn:${this.partition}:es:${this.region}:${this.account}:domain/*`]
-        }))
-
-        createMigrationStringParameter(this, osiPipelineRole.roleArn, {
-            parameter: MigrationSSMParameter.OSI_PIPELINE_ROLE_ARN,
-            stage,
-            defaultDeployId: deployId,
-        });
-        return osiPipelineRole.roleArn;
     }
 
     createOpenSearchIngestionManagementPolicy(pipelineRoleArn: string): PolicyStatement[] {
@@ -133,32 +78,12 @@ export class MigrationConsoleStack extends MigrationServiceCore {
     constructor(scope: Construct, id: string, props: MigrationConsoleProps) {
         super(scope, id, props)
 
-        let securityGroups = [
-            { id: "serviceSG", param: MigrationSSMParameter.SERVICE_SECURITY_GROUP_ID },
-            { id: "trafficStreamSourceAccessSG", param: MigrationSSMParameter.TRAFFIC_STREAM_SOURCE_ACCESS_SECURITY_GROUP_ID },
-            { id: "defaultDomainAccessSG", param: MigrationSSMParameter.OS_ACCESS_SECURITY_GROUP_ID },
-            { id: "sharedLogsAccessSG", param: MigrationSSMParameter.SHARED_LOGS_SECURITY_GROUP_ID }
-        ].map(({ id, param }) =>
-            SecurityGroup.fromSecurityGroupId(this, id, getMigrationStringParameterValue(this, {
-                ...props,
-                parameter: param,
-            }))
-        );
-
         let servicePortMappings: PortMapping[]|undefined
         let imageCommand: string[]|undefined
 
-        const osClusterEndpoint = getMigrationStringParameterValue(this, {
-            ...props,
-            parameter: MigrationSSMParameter.OS_CLUSTER_ENDPOINT,
-        });
-        const brokerEndpoints = props.streamingSourceType != StreamingSourceType.DISABLED ?
-            getMigrationStringParameterValue(this, {
-                ...props,
-                parameter: MigrationSSMParameter.KAFKA_BROKERS,
-            }) : "";
+        const brokerEndpoints = "";
 
-        const sharedLogFileSystem = new SharedLogFileSystem(this, props.stage, props.defaultDeployId);
+        const sharedLogFileSystem = new SharedLogFileSystem(this, props.stage, props.defaultDeployId, props.logEfs);
 
 
         const ecsClusterArn = `arn:${this.partition}:ecs:${this.region}:${this.account}:service/migration-${props.stage}-ecs-cluster`
@@ -191,10 +116,8 @@ export class MigrationConsoleStack extends MigrationServiceCore {
             ]
         })
 
-        const artifactS3Arn = getMigrationStringParameterValue(this, {
-            ...props,
-            parameter: MigrationSSMParameter.ARTIFACT_S3_ARN,
-        });
+        const artifactS3Arn = props.artifactS3.bucketArn
+
         const artifactS3AnyObjectPath = `${artifactS3Arn}/*`;
         const artifactS3PublishPolicy = new PolicyStatement({
             effect: Effect.ALLOW,
@@ -211,15 +134,6 @@ export class MigrationConsoleStack extends MigrationServiceCore {
             actions: [
                 "ec2:DescribeSubnets",
                 "ec2:DescribeRouteTables"
-            ]
-        })
-
-        // Allow Console to retrieve SSM Parameters
-        const getSSMParamsPolicy = new PolicyStatement({
-            effect: Effect.ALLOW,
-            resources: [`arn:${this.partition}:ssm:${this.region}:${this.account}:parameter/migration/${props.stage}/${props.defaultDeployId}/*`],
-            actions: [
-                "ssm:GetParameters"
             ]
         })
 
@@ -254,16 +168,12 @@ export class MigrationConsoleStack extends MigrationServiceCore {
             }
         }
 
-        const parameter = createMigrationStringParameter(this, servicesYaml.stringify(), {
-            ...props,
-            parameter: MigrationSSMParameter.SERVICES_YAML_FILE,
-        });
         const environment: { [key: string]: string; } = {
-            "MIGRATION_DOMAIN_ENDPOINT": osClusterEndpoint,
+            "MIGRATION_DOMAIN_ENDPOINT": props.osClusterEndpoint,
             "MIGRATION_KAFKA_BROKER_ENDPOINTS": brokerEndpoints,
             "MIGRATION_STAGE": props.stage,
             "MIGRATION_SOLUTION_VERSION": props.migrationsSolutionVersion,
-            "MIGRATION_SERVICES_YAML_PARAMETER": parameter.parameterName,
+            "MIGRATION_SERVICES_YAML": servicesYaml.stringify(),
             "MIGRATION_SERVICES_YAML_HASH": hashStringSHA256(servicesYaml.stringify()),
             "SHARED_LOGS_DIR_PATH": `${sharedLogFileSystem.mountPointPath}/migration-console-${props.defaultDeployId}`,
         }
@@ -271,15 +181,11 @@ export class MigrationConsoleStack extends MigrationServiceCore {
         const openSearchPolicy = createOpenSearchIAMAccessPolicy(this.partition, this.region, this.account)
         const openSearchServerlessPolicy = createOpenSearchServerlessIAMAccessPolicy(this.partition, this.region, this.account)
         let servicePolicies = [sharedLogFileSystem.asPolicyStatement(), openSearchPolicy, openSearchServerlessPolicy, ecsUpdateServicePolicy, clusterTasksPolicy,
-            listTasksPolicy, artifactS3PublishPolicy, describeVPCPolicy, getSSMParamsPolicy, getMetricsPolicy,
+            listTasksPolicy, artifactS3PublishPolicy, describeVPCPolicy, getMetricsPolicy,
             // only add secrets policies if they're non-null
             ...(getTargetSecretsPolicy ? [getTargetSecretsPolicy] : []),
             ...(getSourceSecretsPolicy ? [getSourceSecretsPolicy] : [])
         ]
-        if (props.streamingSourceType === StreamingSourceType.AWS_MSK) {
-            const mskAdminPolicies = this.createMSKAdminIAMPolicies(props.stage, props.defaultDeployId)
-            servicePolicies = servicePolicies.concat(mskAdminPolicies)
-        }
 
         if (props.migrationAPIEnabled) {
             servicePortMappings = [{
@@ -296,25 +202,10 @@ export class MigrationConsoleStack extends MigrationServiceCore {
             environment["API_ALLOWED_HOSTS"] = props.migrationAPIAllowedHosts ? `${defaultAllowedHosts},${props.migrationAPIAllowedHosts}` : defaultAllowedHosts
         }
 
-        if (props.migrationConsoleEnableOSI) {
-            const pipelineRoleArn = this.configureOpenSearchIngestionPipelineRole(props.stage, props.defaultDeployId)
-            servicePolicies.push(...this.createOpenSearchIngestionManagementPolicy(pipelineRoleArn))
-            const osiLogGroup = new LogGroup(this, 'OSILogGroup',  {
-                retention: RetentionDays.ONE_MONTH,
-                removalPolicy: RemovalPolicy.DESTROY,
-                // Naming requirement from OSI
-                logGroupName: `/aws/vendedlogs/osi-${props.stage}-${props.defaultDeployId}`
-            });
-            createMigrationStringParameter(this, osiLogGroup.logGroupName, {
-                ...props,
-                parameter: MigrationSSMParameter.OSI_PIPELINE_LOG_GROUP_NAME,
-            });
-        }
 
         this.createService({
             serviceName: "migration-console",
             dockerDirectoryPath: join(__dirname, "../../../../../", "TrafficCapture/dockerSolution/src/main/docker/migrationConsole"),
-            securityGroups: securityGroups,
             portMappings: servicePortMappings,
             dockerImageCommand: imageCommand,
             volumes: [sharedLogFileSystem.asVolume()],

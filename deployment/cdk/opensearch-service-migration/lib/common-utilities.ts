@@ -2,7 +2,6 @@ import {Effect, PolicyStatement, Role, ServicePrincipal} from "aws-cdk-lib/aws-i
 import {Construct} from "constructs";
 import {CpuArchitecture} from "aws-cdk-lib/aws-ecs";
 import {RemovalPolicy, Stack} from "aws-cdk-lib";
-import { IStringParameter, StringParameter } from "aws-cdk-lib/aws-ssm";
 import * as forge from 'node-forge';
 import { ClusterYaml } from "./migration-services-yaml";
 
@@ -86,60 +85,6 @@ export function createOpenSearchServerlessIAMAccessPolicy(partition: string, reg
     })
 }
 
-export function createMSKConsumerIAMPolicies(scope: Construct, partition: string, region: string, accountId: string, stage: string, deployId: string): PolicyStatement[] {
-    const mskClusterARN = getMigrationStringParameterValue(scope, { parameter: MigrationSSMParameter.MSK_CLUSTER_ARN, stage, defaultDeployId: deployId });
-    const mskClusterName = getMigrationStringParameterValue(scope, { parameter: MigrationSSMParameter.MSK_CLUSTER_NAME, stage, defaultDeployId: deployId });
-    const mskClusterConnectPolicy = new PolicyStatement({
-        effect: Effect.ALLOW,
-        resources: [mskClusterARN],
-        actions: [
-            "kafka-cluster:Connect"
-        ]
-    })
-    const mskClusterAllTopicArn = `arn:${partition}:kafka:${region}:${accountId}:topic/${mskClusterName}/*`
-    const mskTopicConsumerPolicy = new PolicyStatement({
-        effect: Effect.ALLOW,
-        resources: [mskClusterAllTopicArn],
-        actions: [
-            "kafka-cluster:DescribeTopic",
-            "kafka-cluster:ReadData"
-        ]
-    })
-    const mskClusterAllGroupArn = `arn:${partition}:kafka:${region}:${accountId}:group/${mskClusterName}/*`
-    const mskConsumerGroupPolicy = new PolicyStatement({
-        effect: Effect.ALLOW,
-        resources: [mskClusterAllGroupArn],
-        actions: [
-            "kafka-cluster:AlterGroup",
-            "kafka-cluster:DescribeGroup"
-        ]
-    })
-    return [mskClusterConnectPolicy, mskTopicConsumerPolicy, mskConsumerGroupPolicy]
-
-}
-
-export function createMSKProducerIAMPolicies(scope: Construct, partition: string, region: string, accountId: string, stage: string, deployId: string): PolicyStatement[] {
-    const mskClusterARN = getMigrationStringParameterValue(scope, { parameter: MigrationSSMParameter.MSK_CLUSTER_ARN, stage, defaultDeployId: deployId });
-    const mskClusterName = getMigrationStringParameterValue(scope, { parameter: MigrationSSMParameter.MSK_CLUSTER_NAME, stage, defaultDeployId: deployId });
-    const mskClusterConnectPolicy = new PolicyStatement({
-        effect: Effect.ALLOW,
-        resources: [mskClusterARN],
-        actions: [
-            "kafka-cluster:Connect"
-        ]
-    })
-    const mskClusterAllTopicArn = `arn:${partition}:kafka:${region}:${accountId}:topic/${mskClusterName}/*`
-    const mskTopicProducerPolicy = new PolicyStatement({
-        effect: Effect.ALLOW,
-        resources: [mskClusterAllTopicArn],
-        actions: [
-            "kafka-cluster:CreateTopic",
-            "kafka-cluster:DescribeTopic",
-            "kafka-cluster:WriteData"
-        ]
-    })
-    return [mskClusterConnectPolicy, mskTopicProducerPolicy]
-}
 
 export function createAwsDistroForOtelPushInstrumentationPolicy(): PolicyStatement {
     // see https://aws-otel.github.io/docs/setup/permissions
@@ -242,63 +187,6 @@ export function hashStringSHA256(message: string): string {
     md.update(message);
     return md.digest().toHex();
 }
-
-export interface MigrationSSMConfig {
-    parameter: MigrationSSMParameter,
-    stage: string,
-    defaultDeployId: string
-}
-
-export function createMigrationStringParameter(scope: Construct, stringValue: string, props: MigrationSSMConfig) {
-    return new StringParameter(scope, `SSMParameter${props.parameter.charAt(0).toUpperCase() + props.parameter.slice(1)}`, {
-        parameterName: getMigrationStringParameterName(props),
-        stringValue: stringValue,
-        description: `Opensearch migration SSM parameter for ${props.parameter} with stage ${props.stage} and deploy id ${props.defaultDeployId}`,
-    });
-}
-
-export function getMigrationStringParameter(scope: Construct, props: MigrationSSMConfig): IStringParameter {
-    return StringParameter.fromStringParameterName(scope, `SSMParameter${props.parameter.charAt(0).toUpperCase() + props.parameter.slice(1)}`,
-        getMigrationStringParameterName(props));
-}
-
-export function getMigrationStringParameterValue(scope: Construct, props: MigrationSSMConfig): string {
-    return StringParameter.valueForTypedStringParameterV2(scope, getMigrationStringParameterName(props));
-}
-
-export function getCustomStringParameterValue(scope: Construct, parameterName: string): string {
-    return StringParameter.valueForTypedStringParameterV2(scope, parameterName);
-}
-
-export function getMigrationStringParameterName(props: MigrationSSMConfig): string {
-    return `/migration/${props.stage}/${props.defaultDeployId}/${props.parameter}`;
-}
-
-export enum MigrationSSMParameter {
-    SOURCE_PROXY_URL = 'albSourceProxyUrl',
-    SOURCE_PROXY_URL_ALIAS = 'albSourceProxyUrlAlias',
-    TARGET_PROXY_URL = 'albTargetProxyUrl',
-    TARGET_PROXY_URL_ALIAS = 'albTargetProxyUrlAlias',
-    MIGRATION_LISTENER_URL = 'albMigrationListenerUrl',
-    MIGRATION_LISTENER_URL_ALIAS = 'albMigrationListenerUrlAlias',
-    ARTIFACT_S3_ARN = 'artifactS3Arn',
-    KAFKA_BROKERS = 'kafkaBrokers',
-    MSK_CLUSTER_ARN = 'mskClusterARN',
-    MSK_CLUSTER_NAME = 'mskClusterName',
-    OS_ACCESS_SECURITY_GROUP_ID = 'osAccessSecurityGroupId',
-    OS_CLUSTER_ENDPOINT = 'osClusterEndpoint',
-    OS_USER_AND_SECRET_ARN = 'osUserAndSecretArn',
-    OSI_PIPELINE_LOG_GROUP_NAME = 'osiPipelineLogGroupName',
-    OSI_PIPELINE_ROLE_ARN = 'osiPipelineRoleArn',
-    SHARED_LOGS_SECURITY_GROUP_ID = 'sharedLogsSecurityGroupId',
-    SHARED_LOGS_EFS_ID = 'sharedLogsEfsId',
-    SOURCE_CLUSTER_ENDPOINT = 'sourceClusterEndpoint',
-    SERVICE_SECURITY_GROUP_ID = 'serviceSecurityGroupId',
-    SERVICES_YAML_FILE = 'servicesYamlFile',
-    TRAFFIC_STREAM_SOURCE_ACCESS_SECURITY_GROUP_ID = 'trafficStreamSourceAccessSecurityGroupId',
-    VPC_ID = 'vpcId',
-}
-
 
 export class ClusterNoAuth {}
 

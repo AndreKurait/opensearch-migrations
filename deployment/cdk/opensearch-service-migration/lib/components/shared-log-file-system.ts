@@ -1,7 +1,7 @@
 import { MountPoint, Volume } from 'aws-cdk-lib/aws-ecs';
 import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { MigrationSSMParameter, getMigrationStringParameterValue } from '../common-utilities';
 import { MigrationServiceCore } from '../service-stacks';
+import {IFileSystem} from "aws-cdk-lib/aws-efs";
 
 
 export class SharedLogFileSystem {
@@ -9,12 +9,8 @@ export class SharedLogFileSystem {
     readonly volumeId: string;
     readonly volumeName = "sharedLogsVolume";
     public readonly mountPointPath = "/shared-logs-output";
-    constructor(private stack: MigrationServiceCore, stage: string, defaultDeployId: string) {
-        this.volumeId = getMigrationStringParameterValue(stack, {
-            stage,
-            defaultDeployId,
-            parameter: MigrationSSMParameter.SHARED_LOGS_EFS_ID,
-        })
+    constructor(private stack: MigrationServiceCore, stage: string, defaultDeployId: string, efs: IFileSystem ) {
+        this.volumeId = efs.fileSystemId
     }
 
     asVolume(): Volume {
