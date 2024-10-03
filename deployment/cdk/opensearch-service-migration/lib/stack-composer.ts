@@ -323,11 +323,6 @@ export class StackComposer {
         this.stacks.push(migrationStack)
         servicesYaml.kafka = migrationStack.kafkaYaml;
 
-        servicesYaml.target_cluster = new ClusterYaml({
-            endpoint: preexistingOrContainerTargetEndpoint ?? "",
-            auth: new ClusterAuth({noAuth: new ClusterNoAuth()})
-        })
-
         let reindexFromSnapshotStack
         if (reindexFromSnapshotServiceEnabled && networkStack && migrationStack) {
             reindexFromSnapshotStack = new ReindexFromSnapshotStack(scope, "reindexFromSnapshotStack", {
