@@ -54,7 +54,7 @@ RUN echo '. /etc/profile.d/bash_completion.sh' >> ~/.bashrc && \
 # Set ENV to control startup script in /bin/sh mode
 ENV ENV=/root/.bashrc
 
-CMD /root/loadServicesFromParameterStore.sh && tail -f /dev/null
+CMD /root/loadServicesFromParameterStoreOrEnv.sh && tail -f /dev/null
 
 # Experimental console API, uncomment to use in addition to uncomment port mapping in docker-compose.yml
 #CMD /root/loadServicesFromParameterStoreOrEnv.sh && pipenv run python /root/console_api/manage.py runserver_plus 0.0.0.0:8000 --cert-file cert.crt
