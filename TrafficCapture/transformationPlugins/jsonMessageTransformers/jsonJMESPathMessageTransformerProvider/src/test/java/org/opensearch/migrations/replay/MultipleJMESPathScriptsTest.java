@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.opensearch.migrations.transform.TransformationLoader;
 
 public class MultipleJMESPathScriptsTest {
     private static final String EXCISE_SCRIPT =

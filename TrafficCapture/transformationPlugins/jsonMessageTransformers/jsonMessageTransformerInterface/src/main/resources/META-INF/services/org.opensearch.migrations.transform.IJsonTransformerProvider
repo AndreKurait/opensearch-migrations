@@ -1,1 +1,1 @@
-org.opensearch.migrations.transform.NoopTransformerProvider
+org.opensearch.migrations.transform.JsonConditionalTransformerProvider

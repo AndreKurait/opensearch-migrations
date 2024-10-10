@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.opensearch.migrations.transform.TransformationLoader;
 
 public class TransformationLoaderTest {
     private static final ObjectMapper mapper = new ObjectMapper();

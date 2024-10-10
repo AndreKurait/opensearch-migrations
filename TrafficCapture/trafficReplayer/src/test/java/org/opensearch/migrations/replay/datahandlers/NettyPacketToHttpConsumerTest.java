@@ -23,7 +23,7 @@ import org.opensearch.migrations.replay.ReplayEngineFactory;
 import org.opensearch.migrations.replay.ReplayUtils;
 import org.opensearch.migrations.replay.RequestTransformerAndSender;
 import org.opensearch.migrations.replay.TimeShifter;
-import org.opensearch.migrations.replay.TransformationLoader;
+import org.opensearch.migrations.transform.TransformationLoader;
 import org.opensearch.migrations.replay.datatypes.ConnectionReplaySession;
 import org.opensearch.migrations.replay.http.retries.NoRetryEvaluatorFactory;
 import org.opensearch.migrations.replay.traffic.source.BufferedFlowController;

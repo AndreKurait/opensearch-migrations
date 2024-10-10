@@ -17,7 +17,7 @@ import java.util.stream.Stream;
 
 import org.opensearch.migrations.replay.RootReplayerConstructorExtensions;
 import org.opensearch.migrations.replay.TimeShifter;
-import org.opensearch.migrations.replay.TransformationLoader;
+import org.opensearch.migrations.transform.TransformationLoader;
 import org.opensearch.migrations.replay.traffic.source.ArrayCursorTrafficCaptureSource;
 import org.opensearch.migrations.replay.traffic.source.ArrayCursorTrafficSourceContext;
 import org.opensearch.migrations.replay.traffic.source.BlockingTrafficSource;

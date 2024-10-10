@@ -15,7 +15,7 @@ import java.util.stream.Stream;
 import org.opensearch.migrations.replay.AggregatedRawResponse;
 import org.opensearch.migrations.replay.TestCapturePacketToHttpHandler;
 import org.opensearch.migrations.replay.TestUtils;
-import org.opensearch.migrations.replay.TransformationLoader;
+import org.opensearch.migrations.transform.TransformationLoader;
 import org.opensearch.migrations.replay.datatypes.HttpRequestTransformationStatus;
 import org.opensearch.migrations.replay.util.TrackedFuture;
 import org.opensearch.migrations.testutils.WrapWithNettyLeakDetection;

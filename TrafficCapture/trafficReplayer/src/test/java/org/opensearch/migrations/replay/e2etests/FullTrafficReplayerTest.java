@@ -22,7 +22,7 @@ import org.opensearch.migrations.replay.SourceTargetCaptureTuple;
 import org.opensearch.migrations.replay.TestHttpServerContext;
 import org.opensearch.migrations.replay.TimeShifter;
 import org.opensearch.migrations.replay.TrafficReplayerTopLevel;
-import org.opensearch.migrations.replay.TransformationLoader;
+import org.opensearch.migrations.transform.TransformationLoader;
 import org.opensearch.migrations.replay.datatypes.ITrafficStreamKey;
 import org.opensearch.migrations.replay.datatypes.PojoTrafficStreamAndKey;
 import org.opensearch.migrations.replay.datatypes.PojoTrafficStreamKeyAndContext;

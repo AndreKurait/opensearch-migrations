@@ -22,7 +22,7 @@ import org.opensearch.migrations.replay.SourceTargetCaptureTuple;
 import org.opensearch.migrations.replay.TimeShifter;
 import org.opensearch.migrations.replay.TrafficReplayer;
 import org.opensearch.migrations.replay.TrafficReplayerTopLevel;
-import org.opensearch.migrations.replay.TransformationLoader;
+import org.opensearch.migrations.transform.TransformationLoader;
 import org.opensearch.migrations.replay.datatypes.ISourceTrafficChannelKey;
 import org.opensearch.migrations.replay.tracing.IRootReplayerContext;
 import org.opensearch.migrations.replay.traffic.source.BlockingTrafficSource;

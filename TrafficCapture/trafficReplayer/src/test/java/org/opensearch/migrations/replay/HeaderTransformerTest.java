@@ -20,6 +20,7 @@ import org.opensearch.migrations.transform.StaticAuthTransformerFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.opensearch.migrations.transform.TransformationLoader;
 
 @Slf4j
 @WrapWithNettyLeakDetection(repetitions = 2)

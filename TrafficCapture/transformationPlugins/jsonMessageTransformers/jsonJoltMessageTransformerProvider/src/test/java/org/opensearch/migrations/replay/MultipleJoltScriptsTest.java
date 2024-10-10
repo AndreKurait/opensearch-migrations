@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.opensearch.migrations.transform.TransformationLoader;
 
 public class MultipleJoltScriptsTest {
 
@@ -36,7 +37,10 @@ public class MultipleJoltScriptsTest {
     @Test
     public void testAddGzipAndCustom() throws Exception {
         final var addGzip = "["
-            + "{\"JsonJoltTransformerProvider\": { \"canned\": \"ADD_GZIP\" }},"
+            + "{\"JsonConditionalTransformerProvider\": ["
+            + "   [{\"JsonJMESPathPreconditionProvider\": { \"script\": \"" + "URI == '/testindex/_search'" + "\"}}],"
+            + "   [{\"JsonJoltTransformerProvider\": { \"canned\": \"ADD_GZIP\" }}]"
+            + "]},"
             + "{ \"JsonJoltTransformerProvider\":"
             + "  {\"script\": \n"
             + "    { \"operation\": \"modify-overwrite-beta\", \"spec\": "
