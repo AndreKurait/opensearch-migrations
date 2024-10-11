@@ -25,6 +25,7 @@ dependencies {
 
 def dockerFilesForExternalServices = [
         "elasticsearchWithSearchGuard": "elasticsearch_searchguard",
+        "captureProxyBase": "capture_proxy_base",
         "elasticsearchTestConsole": "elasticsearch_client_test_console",
         "migrationConsole": "migration_console",
         "otelCollector": "otel_collector",
@@ -45,10 +46,10 @@ dockerFilesForExternalServices.each { projectName, dockerImageName ->
                     ), projectName, "src/main/docker/${escapedProjectName}")
 
 
-            def parentCopyTask = project.tasks.create("copyArtifact_${projectName}")
+            def parentCopyTask = project.tasks.create("copyArtifact_${dockerImageName}")
             dependencies.forEach { d -> parentCopyTask.dependsOn(d) }
 
-            dependsOn "copyArtifact_${escapedProjectName}"
+            dependsOn "copyArtifact_${dockerImageName}"
             dependsOn "buildDockerImage_elasticsearchTestConsole"
         }
         def hash = calculateDockerHash(projectName)
@@ -91,23 +92,25 @@ static def List<Task> stageConsoleDependenciesFromApplications(Project dockerBui
 }
 
 def javaContainerServices = [
-        ":TrafficCapture:trafficCaptureProxyServer": "capture_proxy",
-        ":TrafficCapture:trafficReplayer": "traffic_replayer"
+        "capture_proxy": ":TrafficCapture:trafficCaptureProxyServer",
+        "capture_proxy_es": ":TrafficCapture:trafficCaptureProxyServer",
+        "traffic_replayer": ":TrafficCapture:trafficReplayer"
 ]
 def baseImageProjectOverrides = [
-        "trafficCaptureProxyServer": "elasticsearchWithSearchGuard"
+        "capture_proxy": "captureProxyBase",
+        "capture_proxy_es": "elasticsearchWithSearchGuard",
 ]
-javaContainerServices.each { projectName, dockerImageName ->
+javaContainerServices.each { dockerImageName, projectName ->
     def artifactProject = project(projectName);
-    CommonUtils.copyArtifactFromProjectToProjectsDockerStaging(project as Project, artifactProject)
-    CommonUtils.createDockerfile(project, artifactProject, baseImageProjectOverrides, dockerFilesForExternalServices)
+    CommonUtils.copyArtifactFromProjectToProjectsDockerStaging(project as Project, artifactProject, dockerImageName)
+    CommonUtils.createDockerfile(project, artifactProject, baseImageProjectOverrides[dockerImageName], dockerFilesForExternalServices, dockerImageName)
 }
 
-javaContainerServices.forEach { projectName, dockerImageName ->
+javaContainerServices.forEach { dockerImageName, projectName ->
     def escapedProjectName = project(projectName).name;
-    def dockerBuildDir = "build/docker/${escapedProjectName}"
-    task "buildDockerImage_${escapedProjectName}"(type: DockerBuildImage) {
-        dependsOn "createDockerfile_${escapedProjectName}"
+    def dockerBuildDir = "build/docker/${dockerImageName}_${escapedProjectName}"
+    task "buildDockerImage_${dockerImageName}"(type: DockerBuildImage) {
+        dependsOn "createDockerfile_${dockerImageName}"
         inputDir = project.file("${dockerBuildDir}")
         images.add("migrations/${dockerImageName}:${version}")
         images.add("migrations/${dockerImageName}:latest")
@@ -130,9 +133,9 @@ task buildDockerImages {
     dependsOn buildDockerImage_migrationConsole
     dependsOn buildDockerImage_otelCollector
     dependsOn buildDockerImage_grafana
-
-    dependsOn buildDockerImage_trafficCaptureProxyServer
-    dependsOn buildDockerImage_trafficReplayer
+    dependsOn buildDockerImage_traffic_replayer
+    dependsOn buildDockerImage_capture_proxy
+    dependsOn buildDockerImage_capture_proxy_es
 }
 
 tasks.getByName('composeUp')
