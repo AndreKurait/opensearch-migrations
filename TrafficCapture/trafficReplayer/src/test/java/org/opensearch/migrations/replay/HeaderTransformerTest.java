@@ -16,11 +16,11 @@ import org.opensearch.migrations.replay.util.TrackedFuture;
 import org.opensearch.migrations.testutils.WrapWithNettyLeakDetection;
 import org.opensearch.migrations.tracing.InstrumentationTest;
 import org.opensearch.migrations.transform.StaticAuthTransformerFactory;
+import org.opensearch.migrations.transform.TransformationLoader;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.opensearch.migrations.transform.TransformationLoader;
 
 @Slf4j
 @WrapWithNettyLeakDetection(repetitions = 2)

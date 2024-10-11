@@ -2,8 +2,10 @@ package org.opensearch.migrations.transform;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import lombok.SneakyThrows;
+
 import org.opensearch.migrations.transform.JsonCompositePrecondition.CompositeOperation;
+
+import lombok.SneakyThrows;
 
 public class JsonConditionalTransformerProvider implements IJsonTransformerProvider {
 

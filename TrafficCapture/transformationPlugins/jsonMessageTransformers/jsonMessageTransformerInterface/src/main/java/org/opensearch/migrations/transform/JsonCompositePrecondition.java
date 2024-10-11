@@ -3,6 +3,7 @@ package org.opensearch.migrations.transform;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
+
 import lombok.NonNull;
 
 public class JsonCompositePrecondition implements IJsonPrecondition {

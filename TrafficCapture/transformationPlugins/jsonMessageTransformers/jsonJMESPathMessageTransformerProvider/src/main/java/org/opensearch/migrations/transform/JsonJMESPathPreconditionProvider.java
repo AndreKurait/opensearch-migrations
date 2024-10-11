@@ -1,11 +1,13 @@
 package org.opensearch.migrations.transform;
 
-import io.burt.jmespath.BaseRuntime;
-import io.burt.jmespath.jcf.JcfRuntime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
 import org.opensearch.migrations.transform.JsonCompositePrecondition.CompositeOperation;
+
+import io.burt.jmespath.BaseRuntime;
+import io.burt.jmespath.jcf.JcfRuntime;
 
 public class JsonJMESPathPreconditionProvider implements IJsonPreconditionProvider {
 

@@ -31,6 +31,7 @@ import org.opensearch.migrations.trafficcapture.protos.ReadObservation;
 import org.opensearch.migrations.trafficcapture.protos.TrafficObservation;
 import org.opensearch.migrations.trafficcapture.protos.TrafficStream;
 import org.opensearch.migrations.trafficcapture.protos.WriteObservation;
+import org.opensearch.migrations.transform.TransformationLoader;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Timestamp;
@@ -39,7 +40,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.opensearch.migrations.transform.TransformationLoader;
 import org.slf4j.event.Level;
 
 @Slf4j
