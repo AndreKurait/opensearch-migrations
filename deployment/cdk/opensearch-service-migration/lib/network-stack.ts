@@ -1,7 +1,7 @@
 import {
     GatewayVpcEndpointAwsService,
     InterfaceVpcEndpointAwsService,
-    IpAddresses, IVpc, Port, SecurityGroup,
+    IpAddresses, IpProtocol, IVpc, Port, SecurityGroup,
     SubnetType,
     Vpc
 } from "aws-cdk-lib/aws-ec2";
@@ -75,6 +75,13 @@ export class NetworkStack extends Stack {
                 subnetType: SubnetType.PRIVATE_WITH_EGRESS,
                 onePerAz: true
             }).subnetIds
+            if (uniqueAzPrivateSubnets.length < 2) {
+                CdkLogger.warn(`Not enough AZs (${uniqueAzPrivateSubnets.length} unique AZs detected) used for private subnets with egress to meet 2 or 3 AZ requirement. Falling back to isolated subnets.`)
+                uniqueAzPrivateSubnets = vpc.selectSubnets({
+                    subnetType: SubnetType.PRIVATE_ISOLATED,
+                    onePerAz: true
+                }).subnetIds
+            }
         }
         CdkLogger.info(`Detected VPC with ${vpc.privateSubnets.length} private subnets, ${vpc.publicSubnets.length} public subnets, and ${vpc.isolatedSubnets.length} isolated subnets`)
         if (uniqueAzPrivateSubnets.length < 2) {
@@ -148,26 +155,29 @@ export class NetworkStack extends Stack {
             if (zoneCount && zoneCount !== 2 && zoneCount !== 3) {
                 throw new Error(`Required vpcAZCount is 2 or 3 but received: ${zoneCount}`)
             }
+            const deployNatGateway = false;
             this.vpc = new Vpc(this, 'domainVPC', {
                 // IP space should be customized for use cases that have specific IP range needs
-                ipAddresses: IpAddresses.cidr('10.0.0.0/16'),
+                ipAddresses: IpAddresses.cidr(Vpc.DEFAULT_CIDR_RANGE),
+                ipProtocol: IpProtocol.DUAL_STACK,
                 maxAzs: zoneCount ?? 2,
                 subnetConfiguration: [
-                    // Outbound internet access for private subnets require a NAT Gateway which must live in
+                    // Outbound internet access over IPv4 for private subnets require a NAT Gateway which must live in
                     // a public subnet
-                    {
+                    deployNatGateway ? {
                         name: 'public-subnet',
                         subnetType: SubnetType.PUBLIC,
                         cidrMask: 24,
-                    },
+                    } : undefined,
                     // Nodes will live in these subnets
+                    // Egress Only Internet Gateway for IPv6 public access
                     {
                         name: 'private-subnet',
                         subnetType: SubnetType.PRIVATE_WITH_EGRESS,
                         cidrMask: 24,
                     },
-                ],
-                natGateways: 0,
+                ].filter(subnet => subnet !== undefined),
+                natGateways: deployNatGateway ? zoneCount : 0,
             });
             // Only create interface endpoints if VPC not imported
             this.createVpcEndpoints(this.vpc);
