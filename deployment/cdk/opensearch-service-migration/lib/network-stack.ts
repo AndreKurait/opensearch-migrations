@@ -2,6 +2,7 @@ import {
     GatewayVpcEndpointAwsService,
     InterfaceVpcEndpointAwsService,
     IpAddresses, IpProtocol, IVpc, Port, SecurityGroup,
+    SubnetConfiguration,
     SubnetType,
     Vpc
 } from "aws-cdk-lib/aws-ec2";
@@ -176,7 +177,7 @@ export class NetworkStack extends Stack {
                         subnetType: SubnetType.PRIVATE_WITH_EGRESS,
                         cidrMask: 24,
                     },
-                ].filter(subnet => subnet !== undefined),
+                ].filter(subnet => subnet !== undefined) as SubnetConfiguration[],
                 natGateways: deployNatGateway ? zoneCount : 0,
             });
             // Only create interface endpoints if VPC not imported
