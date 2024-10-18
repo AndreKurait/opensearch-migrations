@@ -63,6 +63,7 @@ class CommonUtils {
                 if (!dockerFileTree.files) {
                     throw new GradleException("File tree for ${dependentDockerImageProjectName} does not exist or is empty")
                 }
+                inputs.dir(dockerFileTree) // Declare as task input to monitor for changes and rebuild if they change
                 def hashNonce = CommonUtils.calculateDockerHash(dockerFileTree)
                 from "migrations/${baseImageProjectOverride}:${hashNonce}"
                 def dependencyName = "buildDockerImage_${baseImageProjectOverride}";

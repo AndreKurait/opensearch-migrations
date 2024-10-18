@@ -40,6 +40,7 @@ dockerFilesForExternalServices.each { dockerImageName, projectName ->
             inputDir = syncTask.destinationDir
         } else {
             inputDir = project.file("src/main/docker/${escapedProjectName}")
+            inputs.dir(inputDir) // Declare inputDir as task input to monitor for changes
         }
         def hashNonce = CommonUtils.calculateDockerHash(project.fileTree(inputDir))
         images.add("migrations/${dockerImageName}:$hashNonce")
@@ -74,6 +75,8 @@ static Sync getMigrationConsoleSyncTask(Project project, String dockerImageName,
         }
 
         from "src/main/docker/${escapedProjectName}"
+        // Declare source files as inputs to rebuild image if they change
+        inputs.dir("src/main/docker/${escapedProjectName}")
     }
 
     // Collect assemble tasks from libraries and applications

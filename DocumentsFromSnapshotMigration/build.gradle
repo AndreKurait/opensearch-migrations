@@ -113,6 +113,7 @@ for (dockerService in dockerServices) {
             dependsOn dep
         }
         inputDir = project.file(dockerService.inputDir)
+        inputs.dir(inputDir) // Declare inputDir as task input to monitor for changes
         // platform.set("linux/amd64")
         buildArgs = dockerService.buildArgs
         images.add("migrations/${dockerService.dockerImageName}:${hash}")
