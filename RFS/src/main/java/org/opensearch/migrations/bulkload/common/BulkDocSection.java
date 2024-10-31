@@ -18,8 +18,6 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -46,12 +44,6 @@ public class BulkDocSection {
             .registerModule(new SimpleModule()
                     .addSerializer(BulkIndex.class, new BulkIndex.BulkIndexRequestSerializer()));
     private static final String NEWLINE = "\n";
-
-    private static final LoadingCache<Map<String, Object>, String> SOURCE_DOC_BYTES_CACHE = Caffeine.newBuilder()
-            .maximumWeight(500L*1000*1000) // 0.5 GB
-            .weigher((k, v) -> ((String) v).length())
-            .weakKeys()
-            .build(OBJECT_MAPPER::writeValueAsString);
 
     @EqualsAndHashCode.Include
     @Getter
@@ -167,10 +159,7 @@ public class BulkDocSection {
                 gen.writeStartObject();
                 gen.writePOJOField(BULK_INDEX_COMMAND, value.metadata);
                 gen.writeEndObject();
-//                gen.writePOJO(value.sourceDoc);
-                String sourceDocString = SOURCE_DOC_BYTES_CACHE.get(value.sourceDoc);
-                gen.writeRawValue(sourceDocString);
-//                gen.writeRawValue(OBJECT_MAPPER.writeValueAsString(value.sourceDoc));
+                gen.writePOJO(value.sourceDoc);
             }
         }
     }
