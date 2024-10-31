@@ -1,8 +1,12 @@
 package org.opensearch.migrations.bulkload.common;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -12,10 +16,14 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.SneakyThrows;
+import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
@@ -31,6 +39,12 @@ public class BulkDocSection {
             .registerModule(new SimpleModule()
                     .addSerializer(BulkIndex.class, new BulkIndex.BulkIndexRequestSerializer()));
     private static final String NEWLINE = "\n";
+
+    private static final LoadingCache<Map<String, Object>, String> SOURCE_DOC_BYTES_CACHE = Caffeine.newBuilder()
+            .maximumWeight(100*1024*1024L) // 100 MB
+            .weigher((k, v) -> ((String) v).length())
+            .weakKeys()
+            .build(OBJECT_MAPPER::writeValueAsString);
 
     @EqualsAndHashCode.Include
     @Getter
@@ -67,11 +81,38 @@ public class BulkDocSection {
         }
     }
 
-    public String asString() {
-        try {
-            return BULK_INDEX_MAPPER.writeValueAsString(this.bulkIndex);
+    public long getSerializedLength() {
+        try (var countingNullOutputStream = new OutputStream() {
+            long length = 0;
+            @Override
+            public void write(int b) {
+                length += String.valueOf(b).length();
+            }
+
+            @Override
+            public void write(byte[] b, int off, int len) {
+                Objects.checkFromIndexSize(off, len, b.length);
+                length += len;
+            }
+        }) {
+            BULK_INDEX_MAPPER.writeValue(countingNullOutputStream, bulkIndex);
+            return countingNullOutputStream.length;
         } catch (IOException e) {
-            throw new SerializationException("Failed to write bulk index from string: " + e.getMessage());
+            log.atError().setMessage("Failed to get bulk index length").setCause(e).log();
+            throw new SerializationException("Failed to get bulk index length " + this.bulkIndex +
+                    " from string: " + e.getMessage());
+        }
+    }
+
+
+    public String asString() {
+        try(var outputStream = new ByteArrayOutputStream()) {
+            BULK_INDEX_MAPPER.writeValue(outputStream, this.bulkIndex);
+            outputStream.flush();
+            return outputStream.toString(StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new SerializationException("Failed to write bulk index " + this.bulkIndex +
+                    " from string: " + e.getMessage());
         }
     }
 
@@ -87,15 +128,19 @@ public class BulkDocSection {
 
     @NoArgsConstructor(force = true) // For Jackson
     @AllArgsConstructor
+    @ToString
+    @EqualsAndHashCode
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private static class BulkIndex {
         @JsonProperty("index")
         private final Metadata metadata;
+        @ToString.Exclude
         @JsonProperty("source")
         private final Map<String, Object> sourceDoc;
 
         @NoArgsConstructor(force = true) // For Jackson
         @AllArgsConstructor
+        @ToString
         @JsonInclude(JsonInclude.Include.NON_NULL)
         private static class Metadata {
             @JsonProperty("_id")
@@ -108,23 +153,26 @@ public class BulkDocSection {
 
         public static class BulkIndexRequestSerializer extends JsonSerializer<BulkIndex> {
             public static final String BULK_INDEX_COMMAND = "index";
+            @SneakyThrows
             @Override
-            public void serialize(BulkIndex value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+            public void serialize(BulkIndex value, JsonGenerator gen, SerializerProvider serializers) {
                 gen.setRootValueSeparator(new SerializedString(NEWLINE));
                 gen.writeStartObject();
-                gen.writeObjectField(BULK_INDEX_COMMAND, value.metadata);
+                gen.writePOJOField(BULK_INDEX_COMMAND, value.metadata);
                 gen.writeEndObject();
-                gen.writeObject(value.sourceDoc);
+                String sourceDocString = SOURCE_DOC_BYTES_CACHE.get(value.sourceDoc);
+                gen.writeRawValue(sourceDocString);
             }
         }
     }
 
     public static class BulkIndexRequestBulkDocSectionCollectionSerializer extends JsonSerializer<Collection<BulkDocSection>> {
+        private static final BulkIndex.BulkIndexRequestSerializer INSTANCE = new BulkIndex.BulkIndexRequestSerializer();
         @Override
         public void serialize(Collection<BulkDocSection> collection, JsonGenerator gen, SerializerProvider serializers) throws IOException {
             gen.setRootValueSeparator(new SerializedString(NEWLINE));
             for (BulkDocSection item : collection) {
-                gen.writeObject(item.asString());
+                INSTANCE.serialize(item.bulkIndex, gen, serializers);
             }
         }
     }

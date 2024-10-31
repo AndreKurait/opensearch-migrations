@@ -114,6 +114,8 @@ class DocumentReindexerTest {
 
         for (var bulkDocSections : capturedBulkRequests) {
             assertEquals(1, bulkDocSections.size());
+            // Check length calculation
+            assertEquals(bulkDocSections.get(0).getSerializedLength(), bulkDocSections.get(0).asString().length());
         }
     }
 

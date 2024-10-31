@@ -23,6 +23,8 @@ dependencies {
     runtimeOnly project(':transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider')
     runtimeOnly project(':transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider')
 
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+
     implementation group: 'org.jcommander', name: 'jcommander'
     implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind'
     implementation group: 'com.fasterxml.jackson.core', name: 'jackson-annotations'
