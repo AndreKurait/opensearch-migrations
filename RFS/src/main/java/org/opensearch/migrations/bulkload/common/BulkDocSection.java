@@ -160,8 +160,9 @@ public class BulkDocSection {
                 gen.writeStartObject();
                 gen.writePOJOField(BULK_INDEX_COMMAND, value.metadata);
                 gen.writeEndObject();
-                String sourceDocString = SOURCE_DOC_BYTES_CACHE.get(value.sourceDoc);
-                gen.writeRawValue(sourceDocString);
+                gen.writePOJO(value.sourceDoc);
+//                String sourceDocString = SOURCE_DOC_BYTES_CACHE.get(value.sourceDoc);
+//                gen.writeRawValue(sourceDocString);
             }
         }
     }
