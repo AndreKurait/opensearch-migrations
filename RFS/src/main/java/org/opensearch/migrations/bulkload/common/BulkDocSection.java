@@ -1,8 +1,10 @@
 package org.opensearch.migrations.bulkload.common;
 
 import java.io.ByteArrayOutputStream;
+import java.io.CharArrayWriter;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
@@ -10,8 +12,12 @@ import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.StreamReadConstraints;
+import com.fasterxml.jackson.core.io.SegmentedStringWriter;
 import com.fasterxml.jackson.core.io.SerializedString;
+import com.fasterxml.jackson.core.util.BufferRecycler;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
@@ -29,7 +35,13 @@ import lombok.extern.slf4j.Slf4j;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Slf4j
 public class BulkDocSection {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonFactory JSON_FACTORY = JsonFactory.builder()
+            .streamReadConstraints(StreamReadConstraints.builder()
+                    .maxStringLength(100_000_000) // 100 MB
+                    .build())
+            .build();
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper(JSON_FACTORY);
     @SuppressWarnings("unchecked")
     private static final ObjectMapper BULK_DOC_COLLECTION_MAPPER = OBJECT_MAPPER.copy()
             .registerModule(new SimpleModule()
@@ -41,7 +53,7 @@ public class BulkDocSection {
     private static final String NEWLINE = "\n";
 
     private static final LoadingCache<Map<String, Object>, String> SOURCE_DOC_BYTES_CACHE = Caffeine.newBuilder()
-            .maximumWeight(100*1024*1024L) // 100 MB
+            .maximumWeight(500L*1000*1000) // 0.5 GB
             .weigher((k, v) -> ((String) v).length())
             .weakKeys()
             .build(OBJECT_MAPPER::writeValueAsString);
@@ -74,8 +86,9 @@ public class BulkDocSection {
     }
 
     public static String convertToBulkRequestBody(Collection<BulkDocSection> bulkSections) {
-        try {
-            return BULK_DOC_COLLECTION_MAPPER.writeValueAsString(bulkSections);
+        try (SegmentedStringWriter writer = new SegmentedStringWriter(new BufferRecycler())) {
+            BULK_DOC_COLLECTION_MAPPER.writeValue(writer, bulkSections);
+            return writer.getAndClear();
         } catch (IOException e) {
             throw new SerializationException("Failed to serialize ingestion request: "+ e.getMessage());
         }
@@ -106,10 +119,9 @@ public class BulkDocSection {
 
 
     public String asString() {
-        try(var outputStream = new ByteArrayOutputStream()) {
-            BULK_INDEX_MAPPER.writeValue(outputStream, this.bulkIndex);
-            outputStream.flush();
-            return outputStream.toString(StandardCharsets.UTF_8);
+        try (SegmentedStringWriter writer = new SegmentedStringWriter(new BufferRecycler())) {
+            BULK_INDEX_MAPPER.writeValue(writer, this.bulkIndex);
+            return writer.getAndClear();
         } catch (IOException e) {
             throw new SerializationException("Failed to write bulk index " + this.bulkIndex +
                     " from string: " + e.getMessage());
