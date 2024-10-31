@@ -1,11 +1,7 @@
 package org.opensearch.migrations.bulkload.common;
 
-import java.io.ByteArrayOutputStream;
-import java.io.CharArrayWriter;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
@@ -43,11 +39,10 @@ public class BulkDocSection {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper(JSON_FACTORY);
     @SuppressWarnings("unchecked")
-    private static final ObjectMapper BULK_DOC_COLLECTION_MAPPER = OBJECT_MAPPER.copy()
+    private static final ObjectMapper BULK_INDEX_REQUEST_MAPPER = OBJECT_MAPPER.copy()
             .registerModule(new SimpleModule()
                     .addSerializer((Class<Collection<BulkDocSection>>) (Class<?>) Collection.class,
-                            new BulkIndexRequestBulkDocSectionCollectionSerializer()));
-    private static final ObjectMapper BULK_INDEX_MAPPER = OBJECT_MAPPER.copy()
+                            new BulkIndexRequestBulkDocSectionCollectionSerializer()))
             .registerModule(new SimpleModule()
                     .addSerializer(BulkIndex.class, new BulkIndex.BulkIndexRequestSerializer()));
     private static final String NEWLINE = "\n";
@@ -87,7 +82,7 @@ public class BulkDocSection {
 
     public static String convertToBulkRequestBody(Collection<BulkDocSection> bulkSections) {
         try (SegmentedStringWriter writer = new SegmentedStringWriter(new BufferRecycler())) {
-            BULK_DOC_COLLECTION_MAPPER.writeValue(writer, bulkSections);
+            BULK_INDEX_REQUEST_MAPPER.writeValue(writer, bulkSections);
             return writer.getAndClear();
         } catch (IOException e) {
             throw new SerializationException("Failed to serialize ingestion request: "+ e.getMessage());
@@ -108,7 +103,7 @@ public class BulkDocSection {
                 length += len;
             }
         }) {
-            BULK_INDEX_MAPPER.writeValue(countingNullOutputStream, bulkIndex);
+            BULK_INDEX_REQUEST_MAPPER.writeValue(countingNullOutputStream, this.bulkIndex);
             return countingNullOutputStream.length;
         } catch (IOException e) {
             log.atError().setMessage("Failed to get bulk index length").setCause(e).log();
@@ -120,7 +115,7 @@ public class BulkDocSection {
 
     public String asString() {
         try (SegmentedStringWriter writer = new SegmentedStringWriter(new BufferRecycler())) {
-            BULK_INDEX_MAPPER.writeValue(writer, this.bulkIndex);
+            BULK_INDEX_REQUEST_MAPPER.writeValue(writer, this.bulkIndex);
             return writer.getAndClear();
         } catch (IOException e) {
             throw new SerializationException("Failed to write bulk index " + this.bulkIndex +
@@ -172,9 +167,9 @@ public class BulkDocSection {
                 gen.writeStartObject();
                 gen.writePOJOField(BULK_INDEX_COMMAND, value.metadata);
                 gen.writeEndObject();
-                gen.writePOJO(value.sourceDoc);
+//                gen.writePOJO(value.sourceDoc);
 //                String sourceDocString = SOURCE_DOC_BYTES_CACHE.get(value.sourceDoc);
-//                gen.writeRawValue(sourceDocString);
+                gen.writeRawValue(OBJECT_MAPPER.writeValueAsString(value.sourceDoc));
             }
         }
     }
