@@ -174,6 +174,7 @@ public class BulkDocSection {
             for (BulkDocSection item : collection) {
                 INSTANCE.serialize(item.bulkIndex, gen, serializers);
             }
+            gen.writeRaw(NEWLINE);
         }
     }
 
