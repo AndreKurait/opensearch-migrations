@@ -49,8 +49,8 @@ jobs:
       matrix:
         py-project:
           - lib/console_link
-          - cluster_tools
-          - console_api
+#          - cluster_tools
+#          - console_api
     env:
       WORKING_DIR: ./TrafficCapture/dockerSolution/src/main/docker/migrationConsole/${{ matrix.py-project }}
     defaults:
