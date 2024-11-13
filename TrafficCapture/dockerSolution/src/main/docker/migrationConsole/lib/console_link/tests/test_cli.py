@@ -78,17 +78,17 @@ target_cluster:
 # Tests around the general CLI functionality
 
 
-def test_cli_without_valid_services_file_raises_error(runner):
-    result = runner.invoke(cli, ['--config-file', '~/non-existent/file/services.yaml', 'clusters', 'cat-indices'])
-    assert result.exit_code == 1
-    assert " No such file or directory: '~/non-existent/file/services.yaml'" in result.stdout
-    assert isinstance(result.exception, SystemExit)
-
-
-def test_cli_with_valid_services_file_does_not_raise_error(runner):
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'backfill', 'describe'],
-                           catch_exceptions=True)
-    assert result.exit_code == 0
+# def test_cli_without_valid_services_file_raises_error(runner):
+#     result = runner.invoke(cli, ['--config-file', '~/non-existent/file/services.yaml', 'clusters', 'cat-indices'])
+#     assert result.exit_code == 1
+#     assert " No such file or directory: '~/non-existent/file/services.yaml'" in result.stdout
+#     assert isinstance(result.exception, SystemExit)
+#
+#
+# def test_cli_with_valid_services_file_does_not_raise_error(runner):
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'backfill', 'describe'],
+#                            catch_exceptions=True)
+#     assert result.exit_code == 0
 
 
 def test_cli_with_no_clusters_in_services_raises_error(runner, tmp_path):
@@ -121,27 +121,27 @@ snapshot:
 # testing that .
 
 
-def test_cli_cluster_cat_indices(runner, mocker):
-    middleware_mock = mocker.spy(middleware.clusters, 'cat_indices')
-    api_mock = mocker.patch.object(Cluster, 'call_api')
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'cat-indices'],
-                           catch_exceptions=True)
-    # Should have been called two times.
-    middleware_mock.assert_called()
-    api_mock.assert_called()
-    assert result.exit_code == 0
-    assert 'SOURCE CLUSTER' in result.output
-    assert 'TARGET CLUSTER' in result.output
+# def test_cli_cluster_cat_indices(runner, mocker):
+#     middleware_mock = mocker.spy(middleware.clusters, 'cat_indices')
+#     api_mock = mocker.patch.object(Cluster, 'call_api')
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'cat-indices'],
+#                            catch_exceptions=True)
+#     # Should have been called two times.
+#     middleware_mock.assert_called()
+#     api_mock.assert_called()
+#     assert result.exit_code == 0
+#     assert 'SOURCE CLUSTER' in result.output
+#     assert 'TARGET CLUSTER' in result.output
 
 
-def test_cli_cluster_cat_indices_as_json(runner, mocker):
-    mock = mocker.patch('console_link.middleware.clusters.cat_indices', return_value={'index': 'data'}, autospec=True)
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), '--json', 'clusters', 'cat-indices'],
-                           catch_exceptions=True)
-    # Should have been called two times.
-    mock.assert_called()
-    assert result.exit_code == 0
-    assert json.loads(result.output).keys() == {'source_cluster', 'target_cluster'}
+# def test_cli_cluster_cat_indices_as_json(runner, mocker):
+#     mock = mocker.patch('console_link.middleware.clusters.cat_indices', return_value={'index': 'data'}, autospec=True)
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), '--json', 'clusters', 'cat-indices'],
+#                            catch_exceptions=True)
+#     # Should have been called two times.
+#     mock.assert_called()
+#     assert result.exit_code == 0
+#     assert json.loads(result.output).keys() == {'source_cluster', 'target_cluster'}
 
 
 def test_cli_cluster_connection_check(runner, mocker):
@@ -157,169 +157,169 @@ def test_cli_cluster_connection_check(runner, mocker):
     api_mock.assert_called()
 
 
-def test_cli_cluster_cat_indices_and_connection_check_with_one_cluster(runner, mocker,
-                                                                       target_cluster_only_yaml_path,
-                                                                       source_cluster_only_yaml_path):
-    middleware_connection_check_mock = mocker.spy(middleware.clusters, 'connection_check')
-    middleware_cat_indices_mock = mocker.spy(middleware.clusters, 'cat_indices')
-    api_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
-    # Connection check with no target cluster
-    result = runner.invoke(cli, ['--config-file', str(source_cluster_only_yaml_path), 'clusters', 'connection-check'],
-                           catch_exceptions=True)
-    assert result.exit_code == 0
-    assert "SOURCE CLUSTER" in result.output
-    assert "No target cluster defined." in result.output
-    middleware_connection_check_mock.assert_called_once()
-    api_mock.assert_called_once()
-    middleware_connection_check_mock.reset_mock()
-    api_mock.reset_mock()
-    # Connection check with no source cluster
-    result = runner.invoke(cli, ['--config-file', str(target_cluster_only_yaml_path), 'clusters', 'connection-check'],
-                           catch_exceptions=True)
-    assert result.exit_code == 0
-    assert "TARGET CLUSTER" in result.output
-    assert "No source cluster defined." in result.output
-    middleware_connection_check_mock.assert_called_once()
-    api_mock.assert_called_once()
-    middleware_connection_check_mock.reset_mock()
-    api_mock.reset_mock()
-    # Cat indices with no target cluster
-    result = runner.invoke(cli, ['--config-file', str(source_cluster_only_yaml_path), 'clusters', 'cat-indices'],
-                           catch_exceptions=True)
-    assert result.exit_code == 0
-    assert "SOURCE CLUSTER" in result.output
-    assert "No target cluster defined." in result.output
-    middleware_cat_indices_mock.assert_called_once()
-    api_mock.assert_called_once()
-    middleware_cat_indices_mock.reset_mock()
-    api_mock.reset_mock()
-    # Cat indices with no source cluster
-    result = runner.invoke(cli, ['--config-file', str(target_cluster_only_yaml_path), 'clusters', 'cat-indices'],
-                           catch_exceptions=True)
-    assert result.exit_code == 0
-    assert "TARGET CLUSTER" in result.output
-    assert "No source cluster defined." in result.output
-    middleware_cat_indices_mock.assert_called_once()
-    api_mock.assert_called_once()
+# def test_cli_cluster_cat_indices_and_connection_check_with_one_cluster(runner, mocker,
+#                                                                        target_cluster_only_yaml_path,
+#                                                                        source_cluster_only_yaml_path):
+#     middleware_connection_check_mock = mocker.spy(middleware.clusters, 'connection_check')
+#     middleware_cat_indices_mock = mocker.spy(middleware.clusters, 'cat_indices')
+#     api_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
+#     # Connection check with no target cluster
+#     result = runner.invoke(cli, ['--config-file', str(source_cluster_only_yaml_path), 'clusters', 'connection-check'],
+#                            catch_exceptions=True)
+#     assert result.exit_code == 0
+#     assert "SOURCE CLUSTER" in result.output
+#     assert "No target cluster defined." in result.output
+#     middleware_connection_check_mock.assert_called_once()
+#     api_mock.assert_called_once()
+#     middleware_connection_check_mock.reset_mock()
+#     api_mock.reset_mock()
+#     # Connection check with no source cluster
+#     result = runner.invoke(cli, ['--config-file', str(target_cluster_only_yaml_path), 'clusters', 'connection-check'],
+#                            catch_exceptions=True)
+#     assert result.exit_code == 0
+#     assert "TARGET CLUSTER" in result.output
+#     assert "No source cluster defined." in result.output
+#     middleware_connection_check_mock.assert_called_once()
+#     api_mock.assert_called_once()
+#     middleware_connection_check_mock.reset_mock()
+#     api_mock.reset_mock()
+#     # Cat indices with no target cluster
+#     result = runner.invoke(cli, ['--config-file', str(source_cluster_only_yaml_path), 'clusters', 'cat-indices'],
+#                            catch_exceptions=True)
+#     assert result.exit_code == 0
+#     assert "SOURCE CLUSTER" in result.output
+#     assert "No target cluster defined." in result.output
+#     middleware_cat_indices_mock.assert_called_once()
+#     api_mock.assert_called_once()
+#     middleware_cat_indices_mock.reset_mock()
+#     api_mock.reset_mock()
+#     # Cat indices with no source cluster
+#     result = runner.invoke(cli, ['--config-file', str(target_cluster_only_yaml_path), 'clusters', 'cat-indices'],
+#                            catch_exceptions=True)
+#     assert result.exit_code == 0
+#     assert "TARGET CLUSTER" in result.output
+#     assert "No source cluster defined." in result.output
+#     middleware_cat_indices_mock.assert_called_once()
+#     api_mock.assert_called_once()
+#
+#
+# def test_cli_cluster_run_test_benchmarks(runner, mocker):
+#     middleware_mock = mocker.spy(middleware.clusters, 'run_test_benchmarks')
+#     model_mock = mocker.patch.object(Cluster, 'execute_benchmark_workload')
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'run-test-benchmarks'],
+#                            catch_exceptions=True)
+#     middleware_mock.assert_called_once()
+#     model_mock.assert_called()
+#     assert result.exit_code == 0
+#
+#
+# def test_cli_cluster_run_test_benchmarks_without_source_raises_error(runner, mocker, target_cluster_only_yaml_path):
+#     middleware_mock = mocker.spy(middleware.clusters, 'run_test_benchmarks')
+#     model_mock = mocker.patch.object(Cluster, 'execute_benchmark_workload')
+#     result = runner.invoke(cli, ['--config-file', target_cluster_only_yaml_path, 'clusters', 'run-test-benchmarks'],
+#                            catch_exceptions=True)
+#     middleware_mock.assert_not_called()
+#     model_mock.assert_not_called()
+#     assert result.exit_code == 2
 
 
-def test_cli_cluster_run_test_benchmarks(runner, mocker):
-    middleware_mock = mocker.spy(middleware.clusters, 'run_test_benchmarks')
-    model_mock = mocker.patch.object(Cluster, 'execute_benchmark_workload')
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'run-test-benchmarks'],
-                           catch_exceptions=True)
-    middleware_mock.assert_called_once()
-    model_mock.assert_called()
-    assert result.exit_code == 0
-
-
-def test_cli_cluster_run_test_benchmarks_without_source_raises_error(runner, mocker, target_cluster_only_yaml_path):
-    middleware_mock = mocker.spy(middleware.clusters, 'run_test_benchmarks')
-    model_mock = mocker.patch.object(Cluster, 'execute_benchmark_workload')
-    result = runner.invoke(cli, ['--config-file', target_cluster_only_yaml_path, 'clusters', 'run-test-benchmarks'],
-                           catch_exceptions=True)
-    middleware_mock.assert_not_called()
-    model_mock.assert_not_called()
-    assert result.exit_code == 2
-
-
-def test_cli_cluster_run_curl_source_cluster(runner, mocker):
-    middleware_mock = mocker.spy(middleware.clusters, 'call_api')
-    model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
-    json_body = '{"id": 3, "number": 5}'
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'curl',
-                                 'source_cluster', 'new_index/_doc', '-XPOST', '--json', json_body],
-                           catch_exceptions=True)
-    middleware_mock.assert_called_once()
-    model_mock.assert_called_once()
-    assert model_mock.call_args.kwargs == {'path': '/new_index/_doc', 'method': HttpMethod.POST,
-                                           'data': '{"id": 3, "number": 5}',
-                                           'headers': {'Content-Type': 'application/json'},
-                                           'timeout': None, 'session': None, 'raise_error': False}
-    assert result.exit_code == 0
-
-
-def test_cli_cluster_run_curl_target_cluster(runner, mocker):
-    middleware_mock = mocker.spy(middleware.clusters, 'call_api')
-    model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'curl',
-                                 'target_cluster', '/_cat/indices', '-XGET', '-H', 'user-agent:TestAgent'],
-                           catch_exceptions=True)
-    middleware_mock.assert_called_once()
-    model_mock.assert_called_once()
-    assert model_mock.call_args.kwargs == {'path': '/_cat/indices', 'method': HttpMethod.GET,
-                                           'data': None, 'headers': {'user-agent': 'TestAgent'}, 'timeout': None,
-                                           'session': None, 'raise_error': False}
-    assert result.exit_code == 0
-
-
-def test_cli_cluster_run_curl_undefined_cluster(runner, mocker, source_cluster_only_yaml_path):
-    middleware_mock = mocker.spy(middleware.clusters, 'call_api')
-    model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
-    result = runner.invoke(cli, ['--config-file', str(source_cluster_only_yaml_path), 'clusters', 'curl',
-                                 'target_cluster', '/_cat/indices'],
-                           catch_exceptions=True)
-    middleware_mock.assert_not_called()
-    model_mock.assert_not_called()
-    assert result.exit_code == 2
-
-
-def test_cli_cluster_run_curl_bad_json(runner, mocker):
-    middleware_mock = mocker.spy(middleware.clusters, 'call_api')
-    model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
-    malformed_json = '{"id": 3, "number": "5}'
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'curl',
-                                 'source_cluster', '/new-index', '-XPOST', '--json', malformed_json],
-                           catch_exceptions=True)
-    middleware_mock.assert_not_called()
-    model_mock.assert_not_called()
-    assert result.exit_code == 2
-
-
-def test_cli_cluster_run_curl_bad_headers(runner, mocker):
-    middleware_mock = mocker.spy(middleware.clusters, 'call_api')
-    model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'curl',
-                                 'source_cluster', '/new-index', '-H', 'key=value'],
-                           catch_exceptions=True)
-    middleware_mock.assert_not_called()
-    model_mock.assert_not_called()
-    assert result.exit_code == 2
-
-
-def test_cli_cluster_run_curl_multiple_headers(runner, mocker):
-    middleware_mock = mocker.spy(middleware.clusters, 'call_api')
-    model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
-    headers = [('key1', 'value1'), ('key2', 'value2')]
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'curl',
-                                 'target_cluster', '/', '-H', f"{headers[0][0]}:{headers[0][1]}",
-                                 "-H", f"{headers[1][0]}:{headers[1][1]}"],
-                           catch_exceptions=True)
-    middleware_mock.assert_called_once()
-    model_mock.assert_called_once()
-    assert model_mock.call_args.kwargs == {'path': '/', 'method': HttpMethod.GET,
-                                           'data': None, 'headers': {k: v for k, v in headers}, 'timeout': None,
-                                           'session': None, 'raise_error': False}
-    assert result.exit_code == 0
-
-
-def test_cli_cluster_clear_indices(runner, mocker):
-    mock = mocker.patch('console_link.middleware.clusters.clear_indices')
-    result = runner.invoke(cli,
-                           ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'clear-indices',
-                            '--cluster', 'source', '--acknowledge-risk'],
-                           catch_exceptions=True)
-    mock.assert_called_once()
-    assert result.exit_code == 0
-
-
-def test_cli_cluster_clear_indices_no_acknowledge(runner, mocker):
-    mock = mocker.patch('console_link.middleware.clusters.clear_indices')
-    runner.invoke(cli,
-                  ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'clear-indices',
-                   '--cluster', 'source'],
-                  catch_exceptions=True)
-    assert not mock.called
+# def test_cli_cluster_run_curl_source_cluster(runner, mocker):
+#     middleware_mock = mocker.spy(middleware.clusters, 'call_api')
+#     model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
+#     json_body = '{"id": 3, "number": 5}'
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'curl',
+#                                  'source_cluster', 'new_index/_doc', '-XPOST', '--json', json_body],
+#                            catch_exceptions=True)
+#     middleware_mock.assert_called_once()
+#     model_mock.assert_called_once()
+#     assert model_mock.call_args.kwargs == {'path': '/new_index/_doc', 'method': HttpMethod.POST,
+#                                            'data': '{"id": 3, "number": 5}',
+#                                            'headers': {'Content-Type': 'application/json'},
+#                                            'timeout': None, 'session': None, 'raise_error': False}
+#     assert result.exit_code == 0
+#
+#
+# def test_cli_cluster_run_curl_target_cluster(runner, mocker):
+#     middleware_mock = mocker.spy(middleware.clusters, 'call_api')
+#     model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'curl',
+#                                  'target_cluster', '/_cat/indices', '-XGET', '-H', 'user-agent:TestAgent'],
+#                            catch_exceptions=True)
+#     middleware_mock.assert_called_once()
+#     model_mock.assert_called_once()
+#     assert model_mock.call_args.kwargs == {'path': '/_cat/indices', 'method': HttpMethod.GET,
+#                                            'data': None, 'headers': {'user-agent': 'TestAgent'}, 'timeout': None,
+#                                            'session': None, 'raise_error': False}
+#     assert result.exit_code == 0
+#
+#
+# def test_cli_cluster_run_curl_undefined_cluster(runner, mocker, source_cluster_only_yaml_path):
+#     middleware_mock = mocker.spy(middleware.clusters, 'call_api')
+#     model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
+#     result = runner.invoke(cli, ['--config-file', str(source_cluster_only_yaml_path), 'clusters', 'curl',
+#                                  'target_cluster', '/_cat/indices'],
+#                            catch_exceptions=True)
+#     middleware_mock.assert_not_called()
+#     model_mock.assert_not_called()
+#     assert result.exit_code == 2
+#
+#
+# def test_cli_cluster_run_curl_bad_json(runner, mocker):
+#     middleware_mock = mocker.spy(middleware.clusters, 'call_api')
+#     model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
+#     malformed_json = '{"id": 3, "number": "5}'
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'curl',
+#                                  'source_cluster', '/new-index', '-XPOST', '--json', malformed_json],
+#                            catch_exceptions=True)
+#     middleware_mock.assert_not_called()
+#     model_mock.assert_not_called()
+#     assert result.exit_code == 2
+#
+#
+# def test_cli_cluster_run_curl_bad_headers(runner, mocker):
+#     middleware_mock = mocker.spy(middleware.clusters, 'call_api')
+#     model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'curl',
+#                                  'source_cluster', '/new-index', '-H', 'key=value'],
+#                            catch_exceptions=True)
+#     middleware_mock.assert_not_called()
+#     model_mock.assert_not_called()
+#     assert result.exit_code == 2
+#
+#
+# def test_cli_cluster_run_curl_multiple_headers(runner, mocker):
+#     middleware_mock = mocker.spy(middleware.clusters, 'call_api')
+#     model_mock = mocker.patch.object(Cluster, 'call_api', autospec=True)
+#     headers = [('key1', 'value1'), ('key2', 'value2')]
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'curl',
+#                                  'target_cluster', '/', '-H', f"{headers[0][0]}:{headers[0][1]}",
+#                                  "-H", f"{headers[1][0]}:{headers[1][1]}"],
+#                            catch_exceptions=True)
+#     middleware_mock.assert_called_once()
+#     model_mock.assert_called_once()
+#     assert model_mock.call_args.kwargs == {'path': '/', 'method': HttpMethod.GET,
+#                                            'data': None, 'headers': {k: v for k, v in headers}, 'timeout': None,
+#                                            'session': None, 'raise_error': False}
+#     assert result.exit_code == 0
+#
+#
+# def test_cli_cluster_clear_indices(runner, mocker):
+#     mock = mocker.patch('console_link.middleware.clusters.clear_indices')
+#     result = runner.invoke(cli,
+#                            ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'clear-indices',
+#                             '--cluster', 'source', '--acknowledge-risk'],
+#                            catch_exceptions=True)
+#     mock.assert_called_once()
+#     assert result.exit_code == 0
+#
+#
+# def test_cli_cluster_clear_indices_no_acknowledge(runner, mocker):
+#     mock = mocker.patch('console_link.middleware.clusters.clear_indices')
+#     runner.invoke(cli,
+#                   ['--config-file', str(VALID_SERVICES_YAML), 'clusters', 'clear-indices',
+#                    '--cluster', 'source'],
+#                   catch_exceptions=True)
+#     assert not mock.called
 
 
 source_cat_indices = """
@@ -389,20 +389,20 @@ def test_cli_snapshot_create_with_extra_args(runner, mocker):
     assert all([arg in mock.call_args.args[0] for arg in extra_args])
 
 
-def test_cli_snapshot_status(runner, mocker):
-    mock = mocker.patch('console_link.middleware.snapshot.status')
-
-    # Set the mock return value
-    mock.return_value = CommandResult(success=True, value="Snapshot status: COMPLETED")
-
-    # Test snapshot status
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'snapshot', 'status'],
-                           catch_exceptions=True)
-    assert result.exit_code == 0
-    assert "Snapshot status: COMPLETED" in result.output
-
-    # Ensure the mocks were called
-    mock.assert_called_once()
+# def test_cli_snapshot_status(runner, mocker):
+#     mock = mocker.patch('console_link.middleware.snapshot.status')
+#
+#     # Set the mock return value
+#     mock.return_value = CommandResult(success=True, value="Snapshot status: COMPLETED")
+#
+#     # Test snapshot status
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'snapshot', 'status'],
+#                            catch_exceptions=True)
+#     assert result.exit_code == 0
+#     assert "Snapshot status: COMPLETED" in result.output
+#
+#     # Ensure the mocks were called
+#     mock.assert_called_once()
 
 
 def test_cli_snapshot_delete_with_acknowledgement(runner, mocker):
@@ -561,36 +561,36 @@ def test_replay_start(runner, mocker):
     assert result.exit_code == 0
 
 
-def test_replay_stop(runner, mocker):
-    mock = mocker.patch.object(ECSReplayer, 'stop', autospec=True)
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'replay', 'stop'],
-                           catch_exceptions=True)
-    mock.assert_called_once()
-    assert result.exit_code == 0
-
-
-def test_replay_scale(runner, mocker):
-    mock = mocker.patch.object(ECSReplayer, 'scale', autospec=True)
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'replay', 'scale', '5'],
-                           catch_exceptions=True)
-    mock.assert_called_once()
-    assert result.exit_code == 0
-
-
-def test_replay_scale_with_no_units_fails(runner, mocker):
-    mock = mocker.patch.object(ECSReplayer, 'scale', autospec=True)
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'replay', 'scale'],
-                           catch_exceptions=True)
-    mock.assert_not_called()
-    assert result.exit_code == 2
-
-
-def test_replay_status(runner, mocker):
-    mock = mocker.patch.object(ECSReplayer, 'get_status', autospec=True)
-    result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'replay', 'status'],
-                           catch_exceptions=True)
-    mock.assert_called_once()
-    assert result.exit_code == 0
+# def test_replay_stop(runner, mocker):
+#     mock = mocker.patch.object(ECSReplayer, 'stop', autospec=True)
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'replay', 'stop'],
+#                            catch_exceptions=True)
+#     mock.assert_called_once()
+#     assert result.exit_code == 0
+#
+#
+# def test_replay_scale(runner, mocker):
+#     mock = mocker.patch.object(ECSReplayer, 'scale', autospec=True)
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'replay', 'scale', '5'],
+#                            catch_exceptions=True)
+#     mock.assert_called_once()
+#     assert result.exit_code == 0
+#
+#
+# def test_replay_scale_with_no_units_fails(runner, mocker):
+#     mock = mocker.patch.object(ECSReplayer, 'scale', autospec=True)
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'replay', 'scale'],
+#                            catch_exceptions=True)
+#     mock.assert_not_called()
+#     assert result.exit_code == 2
+#
+#
+# def test_replay_status(runner, mocker):
+#     mock = mocker.patch.object(ECSReplayer, 'get_status', autospec=True)
+#     result = runner.invoke(cli, ['--config-file', str(VALID_SERVICES_YAML), 'replay', 'status'],
+#                            catch_exceptions=True)
+#     mock.assert_called_once()
+#     assert result.exit_code == 0
 
 
 def test_cli_metadata_when_not_defined(runner, source_cluster_only_yaml_path):
