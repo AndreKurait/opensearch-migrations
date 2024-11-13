@@ -19,6 +19,8 @@ jobs:
         with:
           pattern: coverage-reports-*
           path: ./coverage-reports
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Upload coverage report
         if: '!cancelled()'
