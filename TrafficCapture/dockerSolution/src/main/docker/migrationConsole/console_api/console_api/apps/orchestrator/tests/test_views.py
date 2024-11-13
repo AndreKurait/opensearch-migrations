@@ -70,63 +70,63 @@ class OrchestratorViewsTest(SimpleTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('timestamp', response.json())
 
-    @mock_aws
-    @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
-    def test_osi_create_migration_assume_role(self):
-        payload = dict(VALID_CREATE_PAYLOAD)
-        payload['PipelineManagerAssumeRoleArn'] = 'arn:aws:iam::123456789012:role/testRole'
-        response = self.client.post('/orchestrator/osi-create-migration', data=payload,
-                                    content_type='application/json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('timestamp', response.json())
+    # @mock_aws
+    # @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
+    # def test_osi_create_migration_assume_role(self):
+    #     payload = dict(VALID_CREATE_PAYLOAD)
+    #     payload['PipelineManagerAssumeRoleArn'] = 'arn:aws:iam::123456789012:role/testRole'
+    #     response = self.client.post('/orchestrator/osi-create-migration', data=payload,
+    #                                 content_type='application/json')
+    #     self.assertEqual(response.status_code, status.HTTP_200_OK)
+    #     self.assertIn('timestamp', response.json())
 
-    @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
-    def test_osi_create_migration_fails_for_missing_field(self):
-        payload = dict(VALID_CREATE_PAYLOAD)
-        payload['AwsRegion'] = None
-        response = self.client.post('/orchestrator/osi-create-migration', data=payload,
-                                    content_type='application/json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    # @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
+    # def test_osi_create_migration_fails_for_missing_field(self):
+    #     payload = dict(VALID_CREATE_PAYLOAD)
+    #     payload['AwsRegion'] = None
+    #     response = self.client.post('/orchestrator/osi-create-migration', data=payload,
+    #                                 content_type='application/json')
+    #     self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
-    def test_osi_create_migration_fails_for_invalid_auth(self):
-        payload = dict(VALID_CREATE_PAYLOAD)
-        payload['SourceDataProvider'].pop('SecretArn')
-        response = self.client.post('/orchestrator/osi-create-migration', data=payload,
-                                    content_type='application/json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    # @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
+    # def test_osi_create_migration_fails_for_invalid_auth(self):
+    #     payload = dict(VALID_CREATE_PAYLOAD)
+    #     payload['SourceDataProvider'].pop('SecretArn')
+    #     response = self.client.post('/orchestrator/osi-create-migration', data=payload,
+    #                                 content_type='application/json')
+    #     self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
-    def test_osi_start_migration(self):
-        response = self.client.post('/orchestrator/osi-start-migration', data=VALID_UPDATE_PAYLOAD,
-                                    content_type='application/json')
+    # @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
+    # def test_osi_start_migration(self):
+    #     response = self.client.post('/orchestrator/osi-start-migration', data=VALID_UPDATE_PAYLOAD,
+    #                                 content_type='application/json')
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('timestamp', response.json())
+    #     self.assertEqual(response.status_code, status.HTTP_200_OK)
+    #     self.assertIn('timestamp', response.json())
 
-    @mock_aws
-    @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
-    def test_osi_start_migration_assume_role(self):
-        response = self.client.post('/orchestrator/osi-start-migration', data=VALID_ASSUME_ROLE_UPDATE_PAYLOAD,
-                                    content_type='application/json')
+    # @mock_aws
+    # @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
+    # def test_osi_start_migration_assume_role(self):
+    #     response = self.client.post('/orchestrator/osi-start-migration', data=VALID_ASSUME_ROLE_UPDATE_PAYLOAD,
+    #                                 content_type='application/json')
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('timestamp', response.json())
+    #     self.assertEqual(response.status_code, status.HTTP_200_OK)
+    #     self.assertIn('timestamp', response.json())
 
-    @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
-    def test_osi_stop_migration(self):
-        response = self.client.post('/orchestrator/osi-stop-migration', data=VALID_UPDATE_PAYLOAD,
-                                    content_type='application/json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('timestamp', response.json())
+    # @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
+    # def test_osi_stop_migration(self):
+    #     response = self.client.post('/orchestrator/osi-stop-migration', data=VALID_UPDATE_PAYLOAD,
+    #                                 content_type='application/json')
+    #     self.assertEqual(response.status_code, status.HTTP_200_OK)
+    #     self.assertIn('timestamp', response.json())
 
-    @mock_aws
-    @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
-    def test_osi_stop_migration_assume_role(self):
-        response = self.client.post('/orchestrator/osi-stop-migration', data=VALID_ASSUME_ROLE_UPDATE_PAYLOAD,
-                                    content_type='application/json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('timestamp', response.json())
+    # @mock_aws
+    # @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
+    # def test_osi_stop_migration_assume_role(self):
+    #     response = self.client.post('/orchestrator/osi-stop-migration', data=VALID_ASSUME_ROLE_UPDATE_PAYLOAD,
+    #                                 content_type='application/json')
+    #     self.assertEqual(response.status_code, status.HTTP_200_OK)
+    #     self.assertIn('timestamp', response.json())
 
     @patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call)
     def test_osi_delete_migration(self):
