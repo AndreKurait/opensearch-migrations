@@ -28,7 +28,7 @@ jobs:
         with:
           override_commit: ${{ github.event.workflow_run.head_sha }}
           override_pr: ${{ github.event.workflow_run.pull_requests[0].number }}
-          override_branch: ${{ github.event.workflow_run.pull_requests[0].head.ref }}
+          override_branch: ${{ github.event.workflow_run.pull_requests[0].base.ref }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: /**/coverage-reports/**/*.*
           flags: unittests
