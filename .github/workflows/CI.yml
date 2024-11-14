@@ -81,7 +81,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create JSON Artifact
+        env:
+          GH: ${{ github }}
         run: |
+          echo "Creating codecov_info.json: ${{ env.GH }}"
           echo '{' > codecov_info.json
           echo '  "pr_number": "${{ github.event.pull_request.number }}",' >> codecov_info.json
           echo '  "commit": "${{ github.sha }}",' >> codecov_info.json
