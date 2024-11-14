@@ -85,9 +85,9 @@ jobs:
           echo '{' > codecov_info.json
           echo '  "pr_number": "${{ github.event.pull_request.number }}",' >> codecov_info.json
           echo '  "commit": "${{ github.event.pull_request.head.sha || github.sha }}",' >> codecov_info.json
-          echo '  "branch": "${{ github.ref }}"' >> codecov_info.json
-          echo '  "base_commit": "${{ github.event.pull_request.base.sha || github.base.sha }}"' >> codecov_info.json
-          echo '  "build_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"' >> codecov_info.json
+          echo '  "branch": "${{ github.ref }}",' >> codecov_info.json
+          echo '  "base_commit": "${{ github.event.pull_request.base.sha || github.base.sha }}",' >> codecov_info.json
+          echo '  "build_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",' >> codecov_info.json
           echo '  "build": "${{ github.run_id }}"' >> codecov_info.json
           echo '}' >> codecov_info.json
           echo "codecov_info.json created"
