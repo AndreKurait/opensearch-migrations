@@ -82,7 +82,7 @@ jobs:
     steps:
       - name: Create JSON Artifact
         env:
-          GH: ${{ github }}
+          GH: ${{ toJson(github) }}
         run: |
           echo "Creating codecov_info.json: ${{ env.GH }}"
           echo '{' > codecov_info.json
