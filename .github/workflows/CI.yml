@@ -77,6 +77,26 @@ jobs:
           name: coverage-reports-python-tests-${{ env.SANITIZED_PY_PROJECT }}
           path: ${{ env.WORKING_DIR }}/coverage.xml
 
+  upload-codecov-info:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create JSON Artifact
+        run: |
+          echo '{' > codecov_info.json
+          echo '  "pr_number": "${{ github.event.pull_request.number }}",' >> codecov_info.json
+          echo '  "commit": "${{ github.sha }}",' >> codecov_info.json
+          echo '  "branch": "${{ github.ref }}"' >> codecov_info.json
+          echo '}' >> codecov_info.json
+          echo "codecov_info.json created"
+          cat codecov_info.json
+      - name: Upload JSON Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: codecov-info
+          path: codecov_info.json
+
+
+
 #  gradle-tests:
 #    runs-on: ubuntu-latest
 #    steps:
