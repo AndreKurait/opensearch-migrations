@@ -20,6 +20,7 @@ jobs:
       - name: Download Workflow Info
         uses: actions/download-artifact@v4
         with:
+          # Needed for cross workflow downloading
           github-token: ${{ secrets.GITHUB_TOKEN }}
           name: workflow_info
           run-id: ${{ github.event.workflow_run.id }}
@@ -35,6 +36,8 @@ jobs:
       - name: Download Coverage Artifacts
         uses: actions/download-artifact@v4
         with:
+          # Needed for cross workflow downloading
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ./coverage-reports
           pattern: coverage-reports-*
           run-id: ${{ github.event.workflow_run.id }}
