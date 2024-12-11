@@ -114,23 +114,27 @@ jobs:
       - name: Define Docker Images
         id: define_images
         run: |
-          echo "IMAGES=\" \
-            opensearchproject/opensearch:1.3.16 \
-            opensearchproject/opensearch:2.14.0 \
-            docker.elastic.co/elasticsearch/elasticsearch:7.17.22 \
-            docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2 \
-            docker.elastic.co/elasticsearch/elasticsearch:6.8.23 \
-            docker.elastic.co/elasticsearch/elasticsearch:5.6.16 \
-            httpd:alpine \
-            confluentinc/cp-kafka:7.5.0 \
-            ghcr.io/shopify/toxiproxy:latest \
-            amazonlinux:2023 \
-            alpine:3.16 \
-            \"" >> $GITHUB_ENV
+          echo "IMAGES=$(cat <<EOF
+opensearchproject/opensearch:1.3.16
+opensearchproject/opensearch:2.14.0
+docker.elastic.co/elasticsearch/elasticsearch:7.17.22
+docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2
+docker.elastic.co/elasticsearch/elasticsearch:6.8.23
+docker.elastic.co/elasticsearch/elasticsearch:5.6.16
+httpd:alpine
+confluentinc/cp-kafka:7.5.0
+ghcr.io/shopify/toxiproxy:latest
+amazonlinux:2023
+alpine:3.16
+EOF
+)" >> $GITHUB_ENV
       - name: Generate Cache Key from Image List
         id: generate_cache_key
         run: |
-          images=($IMAGES)
+          images=()
+          while IFS= read -r line; do
+            images+=("$line")
+          done <<< "$IMAGES"
           images_string=$(printf "%s\n" "${images[@]}")
           key=$(echo "${images_string}" | sha1sum | awk '{print $1}')
           echo "key=${key}" >> "$GITHUB_OUTPUT"
@@ -149,7 +153,11 @@ jobs:
               docker pull "$image"
             fi
           }
-          for image in $IMAGES; do
+          images=()
+          while IFS= read -r line; do
+            images+=("$line")
+          done <<< "$IMAGES"
+          for image in "${images[@]}"; do
             pull_if_not_present "$image"
           done
       - name: Run Gradle Build
@@ -212,23 +220,27 @@ jobs:
       - name: Define Docker Images
         id: define_images
         run: |
-          echo "IMAGES=\" \
-            opensearchproject/opensearch:1.3.16 \
-            opensearchproject/opensearch:2.14.0 \
-            docker.elastic.co/elasticsearch/elasticsearch:7.17.22 \
-            docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2 \
-            docker.elastic.co/elasticsearch/elasticsearch:6.8.23 \
-            docker.elastic.co/elasticsearch/elasticsearch:5.6.16 \
-            httpd:alpine \
-            confluentinc/cp-kafka:7.5.0 \
-            ghcr.io/shopify/toxiproxy:latest \
-            amazonlinux:2023 \
-            alpine:3.16 \
-            \"" >> $GITHUB_ENV
+          echo "IMAGES=$(cat <<EOF
+opensearchproject/opensearch:1.3.16
+opensearchproject/opensearch:2.14.0
+docker.elastic.co/elasticsearch/elasticsearch:7.17.22
+docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2
+docker.elastic.co/elasticsearch/elasticsearch:6.8.23
+docker.elastic.co/elasticsearch/elasticsearch:5.6.16
+httpd:alpine
+confluentinc/cp-kafka:7.5.0
+ghcr.io/shopify/toxiproxy:latest
+amazonlinux:2023
+alpine:3.16
+EOF
+)" >> $GITHUB_ENV
       - name: Generate Cache Key from Image List
         id: generate_cache_key
         run: |
-          images=($IMAGES)
+          images=()
+          while IFS= read -r line; do
+            images+=("$line")
+          done <<< "$IMAGES"
           images_string=$(printf "%s\n" "${images[@]}")
           key=$(echo "${images_string}" | sha1sum | awk '{print $1}')
           echo "key=${key}" >> "$GITHUB_OUTPUT"
@@ -247,7 +259,11 @@ jobs:
               docker pull "$image"
             fi
           }
-          for image in $IMAGES; do
+          images=()
+          while IFS= read -r line; do
+            images+=("$line")
+          done <<< "$IMAGES"
+          for image in "${images[@]}"; do
             pull_if_not_present "$image"
           done
       - name: Start Docker Solution
