@@ -34,7 +34,8 @@ class MultiTypeMappingTransformationTest extends BaseMigrationTest {
         try (
                 final var indexCreatedCluster = new SearchClusterContainer(SearchClusterContainer.ES_V5_6_16);
                 final var upgradedSourceCluster = new SearchClusterContainer(ES_V6_8_23)
-                    .withFileSystemBind(localDirectory.getAbsolutePath(), SearchClusterContainer.CLUSTER_SNAPSHOT_DIR, BindMode.READ_WRITE);
+                    .withFileSystemBind(localDirectory.getAbsolutePath(), SearchClusterContainer.CLUSTER_SNAPSHOT_DIR, BindMode.READ_WRITE)
+                    .withLogConsumer(outputFrame -> log.warn(outputFrame.getUtf8String()));
                 final var targetCluster = new SearchClusterContainer(SearchClusterContainer.OS_V2_14_0)
         ) {
             indexCreatedCluster.start();
