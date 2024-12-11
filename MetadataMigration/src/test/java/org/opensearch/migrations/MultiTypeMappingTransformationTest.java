@@ -31,7 +31,6 @@ class MultiTypeMappingTransformationTest extends BaseMigrationTest {
 
     @SneakyThrows
     @Test
-    @Disabled("TODO, fix in GHA")
     public void multiTypeTransformationTest_union() {
         try (
                 final var indexCreatedCluster = new SearchClusterContainer(SearchClusterContainer.ES_V5_6_16);
