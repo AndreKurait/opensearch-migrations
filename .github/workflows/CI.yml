@@ -111,12 +111,28 @@ jobs:
         with:
           gradle-version: ${{ env.gradle-version }}
           gradle-home-cache-cleanup: true
-      - name: Generate Cache Key from Dockerfiles
+      - name: Define Docker Images
+        id: define_images
+        run: |
+          echo "IMAGES=\" \
+            opensearchproject/opensearch:1.3.16 \
+            opensearchproject/opensearch:2.14.0 \
+            docker.elastic.co/elasticsearch/elasticsearch:7.17.22 \
+            docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2 \
+            docker.elastic.co/elasticsearch/elasticsearch:6.8.23 \
+            docker.elastic.co/elasticsearch/elasticsearch:5.6.16 \
+            httpd:alpine \
+            confluentinc/cp-kafka:7.5.0 \
+            ghcr.io/shopify/toxiproxy:latest \
+            amazonlinux:2023 \
+            alpine:3.16 \
+            \"" >> $GITHUB_ENV
+      - name: Generate Cache Key from Image List
         id: generate_cache_key
         run: |
-          files=$(find . -type f \( -name 'docker-compose.yml' -o -name 'Dockerfile' \))
-          file_contents=$(cat $files)
-          key=$(echo "${file_contents}" | sha1sum | awk '{print $1}')
+          images=($IMAGES)
+          images_string=$(printf "%s\n" "${images[@]}")
+          key=$(echo "${images_string}" | sha1sum | awk '{print $1}')
           echo "key=${key}" >> "$GITHUB_OUTPUT"
       - name: Cache Docker Images
         uses: ScribeMD/docker-cache@0.5.0
@@ -133,33 +149,18 @@ jobs:
               docker pull "$image"
             fi
           }
-          images=(
-            "opensearchproject/opensearch:1.3.16"
-            "opensearchproject/opensearch:2.14.0"
-            "docker.elastic.co/elasticsearch/elasticsearch:7.17.22"
-            "docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2"
-            "docker.elastic.co/elasticsearch/elasticsearch:6.8.23"
-            "docker.elastic.co/elasticsearch/elasticsearch:5.6.16"
-            "httpd:alpine"
-            "confluentinc/cp-kafka:7.5.0"
-            "ghcr.io/shopify/toxiproxy:latest"
-            "amazonlinux:2023"
-            "alpine:3.16"
-          )
-          for image in "${images[@]}"; do
+          for image in $IMAGES; do
             pull_if_not_present "$image"
           done
-#      - name: Run Gradle Build
-#        run: ./gradlew build -x test -x TrafficCapture:dockerSolution:build -x spotlessCheck --stacktrace
-#        env:
-#          OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
-
+      - name: Run Gradle Build
+        run: ./gradlew build -x test -x TrafficCapture:dockerSolution:build -x spotlessCheck --stacktrace
+        env:
+          OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
       - name: Run Tests with Coverage
-#        run: ./gradlew mergeJacocoReports -x TrafficCapture:dockerSolution:build -x spotlessCheck --stacktrace
+  #        run: ./gradlew mergeJacocoReports -x TrafficCapture:dockerSolution:build -x spotlessCheck --stacktrace
         run: ./gradlew :MetadataMigration:isolatedTest --tests MultiTypeMappingTransformationTest -x spotlessCheck
         env:
           OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -167,6 +168,25 @@ jobs:
           path: |
             **/build/reports/tests/
             **/reports/jacoco/mergedReport/
+      - name: Collect Docker Logs
+        if: always()
+        run: |
+          mkdir -p logs/docker
+          for container in $(docker ps -aq); do
+            container_name=$(docker inspect --format '{{.Name}}' $container | sed 's/\///')
+            docker logs $container > logs/docker/${container_name}_logs.txt 2>&1
+          done
+      - name: Upload Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-test-docker-logs
+          path: |
+            logs/docker
+      - name: Clean up migrations docker images before caching
+        run: |
+          docker stop $(docker ps -q) && docker system prune --volumes -f
+          docker image ls --format '{{.Repository}}:{{.Tag}}' | grep '^migrations/' | xargs -I {} docker image rm {}
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v4
         with:
@@ -189,18 +209,47 @@ jobs:
       - uses: actions/setup-python@v5
         with:
          python-version: ${{ env.python-version }}
-      - name: Generate Cache Key from Dockerfiles
+      - name: Define Docker Images
+        id: define_images
+        run: |
+          echo "IMAGES=\" \
+            opensearchproject/opensearch:1.3.16 \
+            opensearchproject/opensearch:2.14.0 \
+            docker.elastic.co/elasticsearch/elasticsearch:7.17.22 \
+            docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2 \
+            docker.elastic.co/elasticsearch/elasticsearch:6.8.23 \
+            docker.elastic.co/elasticsearch/elasticsearch:5.6.16 \
+            httpd:alpine \
+            confluentinc/cp-kafka:7.5.0 \
+            ghcr.io/shopify/toxiproxy:latest \
+            amazonlinux:2023 \
+            alpine:3.16 \
+            \"" >> $GITHUB_ENV
+      - name: Generate Cache Key from Image List
         id: generate_cache_key
         run: |
-          files=$(find . -type f \( -name 'docker-compose.yml' -o -name 'Dockerfile' \))
-          file_contents=$(cat $files)
-          key=$(echo "${file_contents}" | sha1sum | awk '{print $1}')
+          images=($IMAGES)
+          images_string=$(printf "%s\n" "${images[@]}")
+          key=$(echo "${images_string}" | sha1sum | awk '{print $1}')
           echo "key=${key}" >> "$GITHUB_OUTPUT"
       - name: Cache Docker Images
         uses: ScribeMD/docker-cache@0.5.0
         with:
           key: docker-${{ runner.os }}-${{ steps.generate_cache_key.outputs.key }}
-          read-only: true
+      - name: Pre pull images
+        run: |
+          pull_if_not_present() {
+            local image="$1"
+            if docker image inspect "$image" > /dev/null 2>&1; then
+              echo "Image '$image' already exists locally."
+            else
+              echo "Pulling image '$image'..."
+              docker pull "$image"
+            fi
+          }
+          for image in $IMAGES; do
+            pull_if_not_present "$image"
+          done
       - name: Start Docker Solution
         run: ./gradlew -p TrafficCapture dockerSolution:ComposeUp -x test -x spotlessCheck --info --stacktrace
         env:
@@ -228,10 +277,6 @@ jobs:
             logs/docker
             logs/opensearch_benchmark_logs
             logs/shared_logs_output
-      - name: Clean up migrations docker images before caching
-        run: |
-          docker stop $(docker ps -q) && docker system prune --volumes -f
-          docker image ls --format '{{.Repository}}:{{.Tag}}' | grep '^migrations/' | xargs -I {} docker image rm {}
 
   node-tests:
     runs-on: ubuntu-latest
