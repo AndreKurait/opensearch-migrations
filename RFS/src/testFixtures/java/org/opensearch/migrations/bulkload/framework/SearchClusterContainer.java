@@ -29,8 +29,8 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
         "docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2",
         Version.fromString("ES 7.10.2")
     );
-    public static final ContainerVersion ES_V6_8_23 = new ElasticsearchOssVersion(
-        "docker.elastic.co/elasticsearch/elasticsearch-oss:6.8.23",
+    public static final ContainerVersion ES_V6_8_23 = new ElasticsearchVersion(
+        "docker.elastic.co/elasticsearch/elasticsearch:6.8.23",
         Version.fromString("ES 6.8.23")
     );
 

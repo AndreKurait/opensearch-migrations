@@ -138,7 +138,7 @@ jobs:
             "opensearchproject/opensearch:2.14.0"
             "docker.elastic.co/elasticsearch/elasticsearch:7.17.22"
             "docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2"
-            "docker.elastic.co/elasticsearch/elasticsearch-oss:6.8.23"
+            "docker.elastic.co/elasticsearch/elasticsearch:6.8.23"
             "docker.elastic.co/elasticsearch/elasticsearch:5.6.16"
             "httpd:alpine"
             "confluentinc/cp-kafka:7.5.0"
