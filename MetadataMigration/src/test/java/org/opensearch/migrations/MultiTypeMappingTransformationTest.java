@@ -14,7 +14,10 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.BindMode;
+import org.testcontainers.containers.output.OutputFrame;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -32,11 +35,11 @@ class MultiTypeMappingTransformationTest extends BaseMigrationTest {
     @Test
     public void multiTypeTransformationTest_union() {
         try (
-                final var indexCreatedCluster = new SearchClusterContainer(SearchClusterContainer.ES_V5_6_16);
-                final var upgradedSourceCluster = new SearchClusterContainer(ES_V6_8_23)
+            final var indexCreatedCluster = new SearchClusterContainer(SearchClusterContainer.ES_V5_6_16);
+            final var upgradedSourceCluster = new SearchClusterContainer(ES_V6_8_23)
                     .withFileSystemBind(localDirectory.getAbsolutePath(), SearchClusterContainer.CLUSTER_SNAPSHOT_DIR, BindMode.READ_WRITE)
-                    .withLogConsumer(outputFrame -> log.warn(outputFrame.getUtf8String()));
-                final var targetCluster = new SearchClusterContainer(SearchClusterContainer.OS_V2_14_0)
+                    .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("docker")));
+            final var targetCluster = new SearchClusterContainer(SearchClusterContainer.OS_V2_14_0)
         ) {
             indexCreatedCluster.start();
 
