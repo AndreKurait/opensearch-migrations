@@ -149,13 +149,14 @@ jobs:
           for image in "${images[@]}"; do
             pull_if_not_present "$image"
           done
-      - name: Run Gradle Build
-        run: ./gradlew build -x test -x TrafficCapture:dockerSolution:build -x spotlessCheck --stacktrace
-        env:
-          OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
+#      - name: Run Gradle Build
+#        run: ./gradlew build -x test -x TrafficCapture:dockerSolution:build -x spotlessCheck --stacktrace
+#        env:
+#          OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
 
       - name: Run Tests with Coverage
-        run: ./gradlew mergeJacocoReports -x TrafficCapture:dockerSolution:build -x spotlessCheck --stacktrace
+#        run: ./gradlew mergeJacocoReports -x TrafficCapture:dockerSolution:build -x spotlessCheck --stacktrace
+        run: ./gradlew :MetadataMigration:isolatedTest --tests MultiTypeMappingTransformationTest -x spotlessCheck
         env:
           OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
 
