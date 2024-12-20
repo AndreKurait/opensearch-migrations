@@ -188,26 +188,29 @@ public class OpenSearchWorkCoordinator implements IWorkCoordinator {
             + "   }\n"
             + "  },\n"
             + "  \"mappings\": {\n"
-            + "    \"properties\": {\n"
-            + "      \"" + EXPIRATION_FIELD_NAME + "\": {\n"
-            + "        \"type\": \"long\"\n"
-            + "      },\n"
-            + "      \"" + COMPLETED_AT_FIELD_NAME + "\": {\n"
-            + "        \"type\": \"long\"\n"
-            + "      },\n"
-            + "      \"leaseHolderId\": {\n"
-            + "        \"type\": \"keyword\",\n"
-            + "        \"norms\": false\n"
-            + "      },\n"
-            + "      \"status\": {\n"
-            + "        \"type\": \"keyword\",\n"
-            + "        \"norms\": false\n"
-            + "      },\n"
-            + "     \"" + SUCCESSOR_ITEMS_FIELD_NAME + "\": {\n"
-            + "       \"type\": \"keyword\",\n"
-            + "        \"norms\": false\n"
-            + "      }\n"
-            + "    }\n"
+            + "    \"doc\": {\n"
+
+                + "    \"properties\": {\n"
+                + "      \"" + EXPIRATION_FIELD_NAME + "\": {\n"
+                + "        \"type\": \"long\"\n"
+                + "      },\n"
+                + "      \"" + COMPLETED_AT_FIELD_NAME + "\": {\n"
+                + "        \"type\": \"long\"\n"
+                + "      },\n"
+                + "      \"leaseHolderId\": {\n"
+                + "        \"type\": \"keyword\",\n"
+                + "        \"norms\": false\n"
+                + "      },\n"
+                + "      \"status\": {\n"
+                + "        \"type\": \"keyword\",\n"
+                + "        \"norms\": false\n"
+                + "      },\n"
+                + "     \"" + SUCCESSOR_ITEMS_FIELD_NAME + "\": {\n"
+                + "       \"type\": \"keyword\",\n"
+                + "        \"norms\": false\n"
+                + "      }\n"
+                + "    }\n"
+            + "  }\n"
             + "  }\n"
             + "}\n";
 
@@ -329,7 +332,7 @@ public class OpenSearchWorkCoordinator implements IWorkCoordinator {
 
         return httpClient.makeJsonRequest(
             AbstractedHttpClient.POST_METHOD,
-            INDEX_NAME + "/_update/" + workItemId,
+            INDEX_NAME + "/doc/" + workItemId + "/_update" ,
             null,
             body
         );
@@ -402,7 +405,7 @@ public class OpenSearchWorkCoordinator implements IWorkCoordinator {
             } else {
                 final var httpResponse = httpClient.makeJsonRequest(
                     AbstractedHttpClient.GET_METHOD,
-                    INDEX_NAME + "/_doc/" + workItemId,
+                    INDEX_NAME + "/doc/" + workItemId,
                     null,
                     null
                 );
@@ -453,7 +456,7 @@ public class OpenSearchWorkCoordinator implements IWorkCoordinator {
 
             var response = httpClient.makeJsonRequest(
                 AbstractedHttpClient.POST_METHOD,
-                INDEX_NAME + "/_update/" + workItemId,
+                INDEX_NAME + "/doc/" + workItemId + "/_update" ,
                 null,
                 body
             );
@@ -495,7 +498,7 @@ public class OpenSearchWorkCoordinator implements IWorkCoordinator {
                 + "\"size\": 0" // This sets the number of items to include in the `hits.hits` array, but doesn't affect
                 + "}";          // the integer value in `hits.total.value`
 
-            var path = INDEX_NAME + "/_search";
+            var path = INDEX_NAME + "/doc/_search";
             var response = httpClient.makeJsonRequest(AbstractedHttpClient.POST_METHOD, path, null, queryBody);
             var statusCode = response.getStatusCode();
             if (statusCode != 200) {
@@ -507,7 +510,7 @@ public class OpenSearchWorkCoordinator implements IWorkCoordinator {
                 );
             }
             var payload = objectMapper.readTree(response.getPayloadBytes());
-            var totalHits = payload.path("hits").path("total").path("value").asInt();
+            var totalHits = payload.path("hits").path("total").intValue();
             // In the case where totalHits is 0, we need to be particularly sure that we're not missing data. The `relation`
             // for the total must be `eq` or we need to throw an error because it's not safe to rely on this data.
             if (totalHits == 0 && !payload.path("hits").path("total").path("relation").textValue().equals("eq")) {
@@ -751,7 +754,7 @@ public class OpenSearchWorkCoordinator implements IWorkCoordinator {
 
         var response = httpClient.makeJsonRequest(
                 AbstractedHttpClient.POST_METHOD,
-                INDEX_NAME + "/_update/" + workItemId,
+                INDEX_NAME + "/doc/" + workItemId +"/_update",
                 null,
                 body
         );
