@@ -1,8 +1,10 @@
 package org.opensearch.migrations.bulkload.common;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import org.opensearch.migrations.reindexer.tracing.IDocumentMigrationContexts.IDocumentReindexContext;
 import org.opensearch.migrations.transform.IJsonTransformer;
@@ -29,7 +31,8 @@ public class DocumentReindexer {
         var scheduler = Schedulers.newParallel("DocumentBulkAggregator");
         var bulkDocs = documentStream
             .publishOn(scheduler, 1)
-            .map(doc -> transformDocument(doc,indexName));
+            .map(doc -> transformDocument(doc,indexName))
+            .concatMapIterable(s -> s);
 
         return this.reindexDocsInParallelBatches(bulkDocs, indexName, context)
             .doOnSuccess(unused -> log.debug("All batches processed"))
@@ -53,13 +56,19 @@ public class DocumentReindexer {
     }
 
     @SneakyThrows
-    BulkDocSection transformDocument(RfsLuceneDocument doc, String indexName) {
+    @SuppressWarnings("unchecked")
+    List<BulkDocSection> transformDocument(RfsLuceneDocument doc, String indexName) {
         var original = new BulkDocSection(doc.id, indexName, doc.type, doc.source, doc.routing);
         if (transformer != null) {
             final Object transformedDoc = transformer.transformJson(original.toMap());
-            return BulkDocSection.fromMap(transformedDoc);
+            if (transformedDoc instanceof Map) {
+                return List.of(BulkDocSection.fromMap(transformedDoc));
+            } else if (transformedDoc instanceof List) {
+                return ((List<Map<String, Object>>) transformedDoc).stream()
+                    .map(BulkDocSection::fromMap).collect(Collectors.toList());
+            }
         }
-        return BulkDocSection.fromMap(original.toMap());
+        return List.of(BulkDocSection.fromMap(original.toMap()));
     }
 
     Mono<Void> sendBulkRequest(UUID batchId, List<BulkDocSection> docsBatch, String indexName, IDocumentReindexContext context, Scheduler scheduler) {
