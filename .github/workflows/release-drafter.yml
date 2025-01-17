@@ -45,7 +45,7 @@ jobs:
       - name: Download Repo Tar
         # Preface Traffic Capture version with 0. to signal interface immaturity
         run: |
-          wget https://github.com/opensearch-project/opensearch-migrations/archive/refs/tags/TESTING.tar.gz -O artifacts.tar.gz
+          wget https://github.com/AndreKurait/opensearch-migrations/archive/refs/tags/TESTING.tar.gz -O artifacts.tar.gz
           ./gradlew publishMavenJavaPublicationToMavenRepository -Dbuild.snapshot=false -Dbuild.version=0.TESTING && tar -C build -cvf traffic-capture-artifacts.tar.gz repository
       - name: Build Docker Images
         run: |
