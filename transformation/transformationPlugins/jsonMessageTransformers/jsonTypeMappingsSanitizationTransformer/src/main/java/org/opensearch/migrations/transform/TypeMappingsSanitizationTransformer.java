@@ -52,7 +52,7 @@ public class TypeMappingsSanitizationTransformer extends JavascriptTransformer {
                     )
             );
 
-        return new MapProxyObject(Map.of(
+        return Map.of(
             "index_mappings", indexMappings,
             "regex_mappings", regexMappings,
             "featureFlags", featureFlags,
@@ -61,7 +61,7 @@ public class TypeMappingsSanitizationTransformer extends JavascriptTransformer {
                 Map.of("version",
                     Map.of("major", sourceProperties.getVersion().getMajor(),
                         "minor", sourceProperties.getVersion().getMinor())
-                )));
+                ));
     }
 
     private static String getScripts() throws IOException {

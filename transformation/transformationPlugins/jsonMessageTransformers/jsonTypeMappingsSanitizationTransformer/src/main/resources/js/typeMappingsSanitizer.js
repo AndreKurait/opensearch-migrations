@@ -371,11 +371,11 @@ function detectAndTransform(document, context) {
         throw new Error("No source_document was defined - nothing to transform!");
     }
 
-    if ("type" in document && "name" in document && "body" in document) {
+    if (document.has("type") && document.has("name") && document.has("body")) {
         return processMetadataRequest(document, context);
-    } else if ("method" in document && "URI" in document) {
+    } else if (document.has("method") && document.has("URI")) {
         return routeHttpRequest(document, context);
-    } else if ("index" in document && "source" in document) {
+    } else if (document.has("index") && document.has("source")) {
         return processBulkIndex(document, context);
     } else {
         return document;
