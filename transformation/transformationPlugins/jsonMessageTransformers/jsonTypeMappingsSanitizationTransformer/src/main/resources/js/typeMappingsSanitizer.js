@@ -390,7 +390,12 @@ function main(context) {
         console.error("Context Missing source_properties: ", JSON.stringify(context, mapToPlainObjectReplacer, 2));
         throw new Error("No source_properties defined - required to transform correctly!");
     }
-    return (document) => detectAndTransform(document, context);
+    return (document) => {
+        if (document.flatten && Array.isArray(document.flatten)) {
+            return document.flatten.flat().map(item => detectAndTransform(item, context));
+        }
+        return detectAndTransform(document, context);
+    };
 }
 
 // Entrypoint function
