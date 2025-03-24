@@ -7,8 +7,7 @@ ENV LANG C.UTF-8
 RUN dnf install -y --setopt=install_weak_deps=False \
         curl-minimal \
         diffutils \
-        gcc \
-        gcc-c++\
+        clang \
         git \
         glibc-devel \
         hostname \
@@ -32,17 +31,25 @@ RUN dnf install -y --setopt=install_weak_deps=False \
     dnf clean all && \
     rm -rf /var/cache/dnf
 
+WORKDIR /tmp
+
 # Install HDF5 from source for Opensearch Benchmark compatibility with ARM
-ARG HDF5_VERSION=1.14.4
-ADD https://github.com/HDFGroup/hdf5/archive/refs/tags/hdf5_${HDF5_VERSION}.tar.gz /tmp/hdf5.tar.gz
-RUN mkdir /tmp/hdf5 && \
-    tar -xzf /tmp/hdf5.tar.gz -C /tmp/hdf5 --strip-components=1 && \
-    rm /tmp/hdf5.tar.gz
-WORKDIR /tmp/hdf5
-RUN CFLAGS="-w" ./configure --prefix=/usr/local --disable-tests --disable-tools && \
-    make -j$(nproc) && \
-    make install && \
-    rm -rf /tmp/hdf5
+ARG HDF5_VERSION=1.14.6
+
+RUN wget -O hdf5-${HDF5_VERSION}.tar.gz https://github.com/HDFGroup/hdf5/archive/refs/tags/hdf5-${HDF5_VERSION}.tar.gz \
+    && tar -xzf hdf5-${HDF5_VERSION}.tar.gz \
+    && rm hdf5-${HDF5_VERSION}.tar.gz
+
+RUN cd hdf5-hdf5-1.14.6 && \
+    CC=clang CFLAGS="-w" \
+    ./configure --prefix=/usr/local \
+                --disable-tools \
+                --disable-tests  \
+                --enable-optimizations \
+                --disable-fortran && \
+    make -s -Oline -j$(nproc --ignore=1) install && \
+    cd .. && \
+    rm -rf /tmp/*
 
 # Define the virtual environment path to use for all pipenv runs
 ENV WORKON_HOME=/
@@ -57,6 +64,8 @@ RUN python3.11 -m venv .venv
 WORKDIR /root
 COPY Pipfile .
 COPY Pipfile.lock .
+
+ENV LD_LIBRARY_PATH="/usr/local/lib"
 RUN HDF5_DIR=/usr/local pipenv install --deploy
 
 COPY *.sh /root/
