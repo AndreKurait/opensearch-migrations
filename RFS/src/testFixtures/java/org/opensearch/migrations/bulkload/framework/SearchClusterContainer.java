@@ -64,7 +64,7 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
     private enum INITIALIZATION_FLAVOR {
         BASE(Map.of("discovery.type", "single-node",
             "path.repo", CLUSTER_SNAPSHOT_DIR,
-            "ES_JAVA_OPTS", "-Xms2g -Xmx2g",
+            "ES_JAVA_OPTS", "-Xms4g -Xmx4g",
             "index.store.type", "mmapfs",
             "bootstrap.system_call_filter", "false"
         )),
