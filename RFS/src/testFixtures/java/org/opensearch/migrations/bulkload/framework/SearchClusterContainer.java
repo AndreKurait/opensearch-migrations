@@ -112,6 +112,8 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
         builder.withEnv(version.getInitializationType().getEnvVariables())
             .waitingFor(Wait.forHttp("/").forPort(9200).forStatusCode(200).withStartupTimeout(Duration.ofMinutes(1)));
 
+        builder.withReuse(false);
+
         this.containerVersion = version;
     }
 
