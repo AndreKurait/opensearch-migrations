@@ -172,14 +172,23 @@ jobs:
           path: |
             **/build/reports/tests/
 
-      - name: Publish Jacoco report artifact for stripe ${{ matrix.index }}
+      - name: Download JaCoCo CLI
+        run: |
+          curl -L -o jacoco-cli.jar https://repo1.maven.org/maven2/org/jacoco/org.jacoco.cli/0.8.11/org.jacoco.cli-0.8.11-nodeps.jar
+
+      - name: Merge JaCoCo exec files for stripe ${{ matrix.index }}
+        if: always()
+        run: |
+          mkdir -p merged
+          java -jar jacoco-cli.jar merge $(find . -type f -name "*.exec") --destfile merged/jacoco-merged.exec
+
+      - name: Publish merged Jacoco exec artifact for stripe ${{ matrix.index }}
         if: always()
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: coverage-exec-artifacts-gradle-tests-stripe-${{ matrix.index }}
-          path: |
-            **/build/jacoco/*.exec
+          path: merged/jacoco-merged.exec
 
   jacoco-aggregate:
     needs: [ gradle-tests ]
