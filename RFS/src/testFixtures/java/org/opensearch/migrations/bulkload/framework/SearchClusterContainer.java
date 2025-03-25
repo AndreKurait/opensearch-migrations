@@ -64,7 +64,7 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
     private enum INITIALIZATION_FLAVOR {
         BASE(Map.of("discovery.type", "single-node",
             "path.repo", CLUSTER_SNAPSHOT_DIR,
-            "ES_JAVA_OPTS", "-Xms2g -Xmx2g",
+            "ES_JAVA_OPTS", "-Xms4g -Xmx4g",
             "index.store.type", "mmapfs",
             "bootstrap.system_call_filter", "false"
         )),
@@ -111,6 +111,8 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
 
         builder.withEnv(version.getInitializationType().getEnvVariables())
             .waitingFor(Wait.forHttp("/").forPort(9200).forStatusCode(200).withStartupTimeout(Duration.ofMinutes(1)));
+
+        builder.withReuse(false);
 
         this.containerVersion = version;
     }
