@@ -224,10 +224,11 @@ subprojects {
             }
         }
 
-                tasks.register('isolatedTest', Test) {
+        tasks.register('isolatedTest', Test) {
             maxParallelForks = 1
             useJUnitPlatform {
-                includeTags 'isolatedTest'
+//                includeTags 'isolatedTest'
+                excludeTags('longTest', 'isolatedTest')
             }
         }
 
@@ -356,33 +357,22 @@ subprojects {
 }
 
 tasks.register('jacocoAggregateReport', JacocoReport) {
+    def jacocoProjects = subprojects.findAll { it.pluginManager.hasPlugin('jacoco') }
+
     group = 'Verification'
     description = 'Generates an aggregate report from exec files in build/jacocoMerged/*.exec over the whole project'
 
     // Find all merged .exec files
-    executionData.setFrom(fileTree(dir: "${buildDir}", includes: [
-            "jacocoMerged/**/*.exec"
-    ]))
+    doFirst {
+        executionData.setFrom(fileTree(dir: "${buildDir}", includes: [
+                "jacocoMerged/**/*.exec"
+        ]))
+    }
 
-    // Get all subprojects with Java plugin
-    def javaProjects = subprojects.findAll { it.plugins.hasPlugin('java') }
 
-    // Collect all class directories from Java subprojects
-    classDirectories.setFrom(
-            files(javaProjects.collect { project ->
-                project.sourceSets.main.output.classesDirs.filter { dir ->
-                    !dir.path.contains('captureProtobufs') &&
-                            !dir.path.contains('trafficCaptureProxyServerTest')
-                }
-            })
-    )
-
-    // Collect all source directories from Java subprojects
-    sourceDirectories.setFrom(
-            files(javaProjects.collect { project ->
-                project.sourceSets.main.allSource.srcDirs
-            })
-    )
+    additionalSourceDirs = files(jacocoProjects.sourceSets.main.allSource.srcDirs)
+    sourceDirectories = files(jacocoProjects.sourceSets.main.allSource.srcDirs)
+    classDirectories = files(jacocoProjects.sourceSets.main.output)
 
     reports {
         xml.required = true
