@@ -21,10 +21,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.kafka.ConfluentKafkaContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -38,33 +37,21 @@ public class KafkaKeepAliveTests extends InstrumentationTest {
     public static final long HEARTBEAT_INTERVAL_MS = 300;
     public static final String testTopicName = "TEST_TOPIC";
 
-    Producer<String, byte[]> kafkaProducer;
-    AtomicInteger sendCompleteCount;
-    Properties kafkaProperties;
-    BlockingTrafficSource trafficSource;
-    ArrayList<ITrafficStreamKey> keysReceived;
 
     @Container
     // see
     // https://docs.confluent.io/platform/current/installation/versions-interoperability.html#cp-and-apache-kafka-compatibility
-    private final KafkaContainer embeddedKafkaBroker = new KafkaContainer(SharedDockerImageNames.KAFKA);
+    private final ConfluentKafkaContainer embeddedKafkaBroker = new ConfluentKafkaContainer(SharedDockerImageNames.KAFKA);
 
     private KafkaTrafficCaptureSource kafkaSource;
 
-    /**
-     * Set up the test case where we've produced and received 1 message, but have not yet committed it.
-     * Another message is in the process of being produced.
-     * The BlockingTrafficSource is blocked on everything after a point before the beginning of the test.
-     * @throws Exception
-     */
-    @BeforeEach
-    private void setupTestCase() throws Exception {
-        kafkaProducer = KafkaTestUtils.buildKafkaProducer(embeddedKafkaBroker.getBootstrapServers());
-        this.sendCompleteCount = new AtomicInteger(0);
+    private TestSetup setupTestCase() throws Exception {
+        Producer<String, byte[]> kafkaProducer = KafkaTestUtils.buildKafkaProducer(embeddedKafkaBroker.getBootstrapServers());
+        AtomicInteger sendCompleteCount = new AtomicInteger(0);
         KafkaTestUtils.produceKafkaRecord(testTopicName, kafkaProducer, 0, sendCompleteCount).get();
         Assertions.assertEquals(1, sendCompleteCount.get());
 
-        this.kafkaProperties = KafkaTrafficCaptureSource.buildKafkaProperties(
+        Properties kafkaProperties = KafkaTrafficCaptureSource.buildKafkaProperties(
             embeddedKafkaBroker.getBootstrapServers(),
             TEST_GROUP_CONSUMER_ID,
             false,
@@ -76,97 +63,118 @@ public class KafkaKeepAliveTests extends InstrumentationTest {
         kafkaProperties.put(HEARTBEAT_INTERVAL_MS_KEY, HEARTBEAT_INTERVAL_MS + "");
         kafkaProperties.put("max.poll.records", 1);
         var kafkaConsumer = new KafkaConsumer<String, byte[]>(kafkaProperties);
-        this.kafkaSource = new KafkaTrafficCaptureSource(
+        KafkaTrafficCaptureSource kafkaSource = new KafkaTrafficCaptureSource(
             rootContext,
             kafkaConsumer,
             testTopicName,
             Duration.ofMillis(MAX_POLL_INTERVAL_MS)
         );
-        this.trafficSource = new BlockingTrafficSource(kafkaSource, Duration.ZERO);
-        this.keysReceived = new ArrayList<>();
+        BlockingTrafficSource trafficSource = new BlockingTrafficSource(kafkaSource, Duration.ZERO);
+        ArrayList<ITrafficStreamKey> keysReceived = new ArrayList<>();
 
         readNextNStreams(rootContext, trafficSource, keysReceived, 0, 1);
         KafkaTestUtils.produceKafkaRecord(testTopicName, kafkaProducer, 1, sendCompleteCount);
+
+        return new TestSetup(kafkaProducer, sendCompleteCount, kafkaProperties, kafkaSource, trafficSource, keysReceived);
     }
+
+    private record TestSetup(
+        Producer<String, byte[]> kafkaProducer,
+        AtomicInteger sendCompleteCount,
+        Properties kafkaProperties,
+        KafkaTrafficCaptureSource kafkaSource,
+        BlockingTrafficSource trafficSource,
+        ArrayList<ITrafficStreamKey> keysReceived
+    ) {}
 
     @Test
     @Tag("longTest")
     public void testTimeoutsDontOccurForSlowPolls() throws Exception {
-        var pollIntervalMs = Optional.ofNullable(kafkaProperties.get(KafkaTrafficCaptureSource.MAX_POLL_INTERVAL_KEY))
+        TestSetup setup = setupTestCase();
+
+        var pollIntervalMs = Optional.ofNullable(setup.kafkaProperties.get(KafkaTrafficCaptureSource.MAX_POLL_INTERVAL_KEY))
             .map(s -> Integer.valueOf((String) s))
             .orElseThrow();
         var executor = Executors.newSingleThreadScheduledExecutor();
-        executor.schedule(() -> {
-            try {
-                var k = keysReceived.get(0);
-                log.info("Calling commit traffic stream for " + k);
-                trafficSource.commitTrafficStream(k);
-                log.info("finished committing traffic stream");
-                log.info("Stop reads to infinity");
-                // this is a way to signal back to the main thread that this thread is done
-                KafkaTestUtils.produceKafkaRecord(testTopicName, kafkaProducer, 2, sendCompleteCount);
-            } catch (Exception e) {
-                throw Lombok.sneakyThrow(e);
-            }
-        }, pollIntervalMs, TimeUnit.MILLISECONDS);
+        try {
+            executor.schedule(() -> {
+                try {
+                    var k = setup.keysReceived.get(0);
+                    log.info("Calling commit traffic stream for " + k);
+                    setup.trafficSource.commitTrafficStream(k);
+                    log.info("finished committing traffic stream");
+                    log.info("Stop reads to infinity");
+                    // this is a way to signal back to the main thread that this thread is done
+                    KafkaTestUtils.produceKafkaRecord(testTopicName, setup.kafkaProducer, 2, setup.sendCompleteCount);
+                } catch (Exception e) {
+                    throw Lombok.sneakyThrow(e);
+                }
+            }, pollIntervalMs, TimeUnit.MILLISECONDS);
 
-        // wait for 2 messages so that they include the last one produced by the async schedule call previously
-        readNextNStreams(rootContext, trafficSource, keysReceived, 1, 2);
-        Assertions.assertEquals(3, keysReceived.size());
-        // At this point, we've read all (3) messages produced , committed the first one
-        // (all the way through to Kafka), and no commits are in-flight yet for the last two messages.
+                readNextNStreams(rootContext, setup.trafficSource, setup.keysReceived, 1, 2);
+            Assertions.assertEquals(3, setup.keysReceived.size());
+        } finally {
+            executor.shutdownNow();
+            setup.trafficSource.close();
+            setup.kafkaProducer.close();
+        }
     }
 
     @Test
     @Tag("longTest")
     public void testBlockedReadsAndBrokenCommitsDontCauseReordering() throws Exception {
-        for (int i = 0; i < 2; ++i) {
-            KafkaTestUtils.produceKafkaRecord(testTopicName, kafkaProducer, 1 + i, sendCompleteCount).get();
+        TestSetup setup = setupTestCase();
+
+        try {
+            for (int i = 0; i < 2; ++i) {
+                KafkaTestUtils.produceKafkaRecord(testTopicName, setup.kafkaProducer, 1 + i, setup.sendCompleteCount).get();
+            }
+            readNextNStreams(rootContext, setup.trafficSource, setup.keysReceived, 1, 1);
+
+            setup.trafficSource.commitTrafficStream(setup.keysReceived.get(0));
+            log.info(
+                "Called commitTrafficStream but waiting long enough for the client to leave the group.  "
+                    + "That will make the previous commit a 'zombie-commit' that should easily be dropped."
+            );
+
+            log.info(
+                "1 message was committed, but not synced, 1 message is being processed."
+                    + "wait long enough to fall out of the group before we can commit"
+            );
+            Thread.sleep(2 * MAX_POLL_INTERVAL_MS);
+
+            // Save the first key for later use
+            var firstKey = setup.keysReceived.get(0);
+            setup.keysReceived.clear();
+
+            log.info("re-establish a client connection so that the following commit will work");
+            log.atInfo().setMessage("1 ...{}").addArgument(() -> setup.kafkaSource.trackingKafkaConsumer.nextCommitsToString()).log();
+            readNextNStreams(rootContext, setup.trafficSource, setup.keysReceived, 0, 1);
+            log.atInfo().setMessage("2 ...{}").addArgument(() -> setup.kafkaSource.trackingKafkaConsumer.nextCommitsToString()).log();
+
+            log.info("wait long enough to fall out of the group again");
+            Thread.sleep(2 * MAX_POLL_INTERVAL_MS);
+
+            var keysReceivedUntilDrop2 = new ArrayList<>(setup.keysReceived);
+            setup.keysReceived.clear();
+            log.atInfo().setMessage("re-establish... 3 ...{}").addArgument(() -> setup.kafkaSource.trackingKafkaConsumer.nextCommitsToString()).log();
+            readNextNStreams(rootContext, setup.trafficSource, setup.keysReceived, 0, 1);
+            // Use the second key we've read
+            var secondKey = setup.keysReceived.get(0);
+            setup.trafficSource.commitTrafficStream(secondKey);
+            log.atInfo().setMessage("re-establish... 4 ...{}").addArgument(() -> setup.kafkaSource.trackingKafkaConsumer.nextCommitsToString()).log();
+            readNextNStreams(rootContext, setup.trafficSource, setup.keysReceived, 1, 1);
+            log.atInfo().setMessage("5 ...{}").addArgument(() -> setup.kafkaSource.trackingKafkaConsumer.nextCommitsToString()).log();
+
+            Thread.sleep(2 * MAX_POLL_INTERVAL_MS);
+            var keysReceivedUntilDrop3 = new ArrayList<>(setup.keysReceived);
+            setup.keysReceived.clear();
+            readNextNStreams(rootContext, setup.trafficSource, setup.keysReceived, 0, 3);
+            log.atInfo().setMessage("6 ...{}").addArgument(() -> setup.kafkaSource.trackingKafkaConsumer.nextCommitsToString()).log();
+        } finally {
+            setup.trafficSource.close();
+            setup.kafkaProducer.close();
         }
-        readNextNStreams(rootContext, trafficSource, keysReceived, 1, 1);
-
-        trafficSource.commitTrafficStream(keysReceived.get(0));
-        log.info(
-            "Called commitTrafficStream but waiting long enough for the client to leave the group.  "
-                + "That will make the previous commit a 'zombie-commit' that should easily be dropped."
-        );
-
-        log.info(
-            "1 message was committed, but not synced, 1 message is being processed."
-                + "wait long enough to fall out of the group before we can commit"
-        );
-        Thread.sleep(2 * MAX_POLL_INTERVAL_MS);
-
-        var keysReceivedUntilDrop1 = keysReceived;
-        keysReceived = new ArrayList<>();
-
-        log.info("re-establish a client connection so that the following commit will work");
-        log.atInfo().setMessage("1 ...{}").addArgument(this::renderNextCommitsAsString).log();
-        readNextNStreams(rootContext, trafficSource, keysReceived, 0, 1);
-        log.atInfo().setMessage("2 ...{}").addArgument(this::renderNextCommitsAsString).log();
-
-        log.info("wait long enough to fall out of the group again");
-        Thread.sleep(2 * MAX_POLL_INTERVAL_MS);
-
-        var keysReceivedUntilDrop2 = keysReceived;
-        keysReceived = new ArrayList<>();
-        log.atInfo().setMessage("re-establish... 3 ...{}").addArgument(this::renderNextCommitsAsString).log();
-        readNextNStreams(rootContext, trafficSource, keysReceived, 0, 1);
-        trafficSource.commitTrafficStream(keysReceivedUntilDrop1.get(1));
-        log.atInfo().setMessage("re-establish... 4 ...{}").addArgument(this::renderNextCommitsAsString).log();
-        readNextNStreams(rootContext, trafficSource, keysReceived, 1, 1);
-        log.atInfo().setMessage("5 ...{}").addArgument(this::renderNextCommitsAsString).log();
-
-        Thread.sleep(2 * MAX_POLL_INTERVAL_MS);
-        var keysReceivedUntilDrop3 = keysReceived;
-        keysReceived = new ArrayList<>();
-        readNextNStreams(rootContext, trafficSource, keysReceived, 0, 3);
-        log.atInfo().setMessage("6 ...{}").addArgument(kafkaSource.trackingKafkaConsumer::nextCommitsToString).log();
-        trafficSource.close();
-    }
-
-    private String renderNextCommitsAsString() {
-        return kafkaSource.trackingKafkaConsumer.nextCommitsToString();
     }
 
     @SneakyThrows
