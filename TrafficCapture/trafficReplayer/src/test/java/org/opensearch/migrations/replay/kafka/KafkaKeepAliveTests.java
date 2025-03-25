@@ -24,12 +24,12 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Slf4j
 @Testcontainers(disabledWithoutDocker = true)
 @Tag("requiresDocker")
+@Tag("isolatedTest")
 public class KafkaKeepAliveTests extends InstrumentationTest {
     public static final String TEST_GROUP_CONSUMER_ID = "TEST_GROUP_CONSUMER_ID";
     public static final String HEARTBEAT_INTERVAL_MS_KEY = "heartbeat.interval.ms";
@@ -37,22 +37,41 @@ public class KafkaKeepAliveTests extends InstrumentationTest {
     public static final long HEARTBEAT_INTERVAL_MS = 300;
     public static final String testTopicName = "TEST_TOPIC";
 
-
-    @Container
-    // see
-    // https://docs.confluent.io/platform/current/installation/versions-interoperability.html#cp-and-apache-kafka-compatibility
-    private final ConfluentKafkaContainer embeddedKafkaBroker = new ConfluentKafkaContainer(SharedDockerImageNames.KAFKA);
-
-    private KafkaTrafficCaptureSource kafkaSource;
-
+    private record TestSetup(
+        ConfluentKafkaContainer kafkaContainer,
+        Producer<String, byte[]> kafkaProducer,
+        AtomicInteger sendCompleteCount,
+        Properties kafkaProperties,
+        KafkaTrafficCaptureSource kafkaSource,
+        BlockingTrafficSource trafficSource,
+        ArrayList<ITrafficStreamKey> keysReceived
+    ) implements AutoCloseable {
+        @Override
+        public void close() throws Exception {
+            if (trafficSource != null) {
+                trafficSource.close();
+            }
+            if (kafkaProducer != null) {
+                kafkaProducer.close();
+            }
+            if (kafkaContainer != null) {
+                kafkaContainer.close();
+            }
+        }
+    }
+    
     private TestSetup setupTestCase() throws Exception {
-        Producer<String, byte[]> kafkaProducer = KafkaTestUtils.buildKafkaProducer(embeddedKafkaBroker.getBootstrapServers());
+        // Create and start a new Kafka container for this test
+        ConfluentKafkaContainer kafkaContainer = new ConfluentKafkaContainer(SharedDockerImageNames.KAFKA);
+        kafkaContainer.start();
+        
+        Producer<String, byte[]> kafkaProducer = KafkaTestUtils.buildKafkaProducer(kafkaContainer.getBootstrapServers());
         AtomicInteger sendCompleteCount = new AtomicInteger(0);
         KafkaTestUtils.produceKafkaRecord(testTopicName, kafkaProducer, 0, sendCompleteCount).get();
         Assertions.assertEquals(1, sendCompleteCount.get());
 
         Properties kafkaProperties = KafkaTrafficCaptureSource.buildKafkaProperties(
-            embeddedKafkaBroker.getBootstrapServers(),
+            kafkaContainer.getBootstrapServers(),
             TEST_GROUP_CONSUMER_ID,
             false,
             null
@@ -75,28 +94,19 @@ public class KafkaKeepAliveTests extends InstrumentationTest {
         readNextNStreams(rootContext, trafficSource, keysReceived, 0, 1);
         KafkaTestUtils.produceKafkaRecord(testTopicName, kafkaProducer, 1, sendCompleteCount);
 
-        return new TestSetup(kafkaProducer, sendCompleteCount, kafkaProperties, kafkaSource, trafficSource, keysReceived);
+        return new TestSetup(kafkaContainer, kafkaProducer, sendCompleteCount, kafkaProperties, kafkaSource, trafficSource, keysReceived);
     }
 
-    private record TestSetup(
-        Producer<String, byte[]> kafkaProducer,
-        AtomicInteger sendCompleteCount,
-        Properties kafkaProperties,
-        KafkaTrafficCaptureSource kafkaSource,
-        BlockingTrafficSource trafficSource,
-        ArrayList<ITrafficStreamKey> keysReceived
-    ) {}
 
     @Test
     @Tag("longTest")
     public void testTimeoutsDontOccurForSlowPolls() throws Exception {
-        TestSetup setup = setupTestCase();
-
-        var pollIntervalMs = Optional.ofNullable(setup.kafkaProperties.get(KafkaTrafficCaptureSource.MAX_POLL_INTERVAL_KEY))
-            .map(s -> Integer.valueOf((String) s))
-            .orElseThrow();
-        var executor = Executors.newSingleThreadScheduledExecutor();
-        try {
+        try (TestSetup setup = setupTestCase()) {
+            var pollIntervalMs = Optional.ofNullable(setup.kafkaProperties.get(KafkaTrafficCaptureSource.MAX_POLL_INTERVAL_KEY))
+                .map(s -> Integer.valueOf((String) s))
+                .orElseThrow();
+            var executor = Executors.newSingleThreadScheduledExecutor();
+            try {
             executor.schedule(() -> {
                 try {
                     var k = setup.keysReceived.get(0);
@@ -113,19 +123,16 @@ public class KafkaKeepAliveTests extends InstrumentationTest {
 
                 readNextNStreams(rootContext, setup.trafficSource, setup.keysReceived, 1, 2);
             Assertions.assertEquals(3, setup.keysReceived.size());
-        } finally {
-            executor.shutdownNow();
-            setup.trafficSource.close();
-            setup.kafkaProducer.close();
+            } finally {
+                executor.shutdownNow();
+            }
         }
     }
 
     @Test
     @Tag("longTest")
     public void testBlockedReadsAndBrokenCommitsDontCauseReordering() throws Exception {
-        TestSetup setup = setupTestCase();
-
-        try {
+        try (TestSetup setup = setupTestCase()) {
             for (int i = 0; i < 2; ++i) {
                 KafkaTestUtils.produceKafkaRecord(testTopicName, setup.kafkaProducer, 1 + i, setup.sendCompleteCount).get();
             }
@@ -171,9 +178,6 @@ public class KafkaKeepAliveTests extends InstrumentationTest {
             setup.keysReceived.clear();
             readNextNStreams(rootContext, setup.trafficSource, setup.keysReceived, 0, 3);
             log.atInfo().setMessage("6 ...{}").addArgument(() -> setup.kafkaSource.trackingKafkaConsumer.nextCommitsToString()).log();
-        } finally {
-            setup.trafficSource.close();
-            setup.kafkaProducer.close();
         }
     }
 

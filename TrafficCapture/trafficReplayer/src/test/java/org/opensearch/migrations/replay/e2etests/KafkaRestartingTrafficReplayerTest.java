@@ -40,14 +40,14 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.testcontainers.containers.KafkaContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.kafka.ConfluentKafkaContainer;
 
 @Slf4j
 @Testcontainers(disabledWithoutDocker = true)
 @WrapWithNettyLeakDetection(disableLeakChecks = true)
 @Tag("requiresDocker")
+@Tag("isolatedTest")
 public class KafkaRestartingTrafficReplayerTest extends InstrumentationTest {
     public static final int INITIAL_STOP_REPLAYER_REQUEST_COUNT = 1;
     public static final String TEST_GROUP_CONSUMER_ID = "TEST_GROUP_CONSUMER_ID";
@@ -61,10 +61,139 @@ public class KafkaRestartingTrafficReplayerTest extends InstrumentationTest {
     public static final Duration MAX_WAIT_TIME_FOR_TOPIC = Duration.ofMillis(PRODUCER_SLEEP_INTERVAL_MS * 2);
     public static final long DEFAULT_POLL_INTERVAL_MS = 5000;
 
-    @Container
-    // see
-    // https://docs.confluent.io/platform/current/installation/versions-interoperability.html#cp-and-apache-kafka-compatibility
-    private final KafkaContainer embeddedKafkaBroker = new KafkaContainer(SharedDockerImageNames.KAFKA);
+    private record TestSetup(
+        ConfluentKafkaContainer kafkaContainer
+    ) implements AutoCloseable {
+        @Override
+        public void close() throws Exception {
+            if (kafkaContainer != null) {
+                kafkaContainer.close();
+            }
+        }
+        
+        static TestSetup create() {
+            ConfluentKafkaContainer kafkaContainer = new ConfluentKafkaContainer(SharedDockerImageNames.KAFKA);
+            kafkaContainer.start();
+            return new TestSetup(kafkaContainer);
+        }
+        
+        @SneakyThrows
+        KafkaConsumer<String, byte[]> buildKafkaConsumer() {
+            var kafkaConsumerProps = KafkaTrafficCaptureSource.buildKafkaProperties(
+                kafkaContainer.getBootstrapServers(),
+                TEST_GROUP_CONSUMER_ID,
+                false,
+                null
+            );
+            kafkaConsumerProps.setProperty("max.poll.interval.ms", DEFAULT_POLL_INTERVAL_MS + "");
+            var kafkaConsumer = new KafkaConsumer<String, byte[]>(kafkaConsumerProps);
+            log.atInfo().setMessage("Just built KafkaConsumer={}").addArgument(kafkaConsumer).log();
+            return kafkaConsumer;
+        }
+        
+        Producer<String, byte[]> buildKafkaProducer() {
+            var kafkaProps = new Properties();
+            kafkaProps.put(
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                "org.apache.kafka.common.serialization.StringSerializer"
+            );
+            kafkaProps.put(
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                "org.apache.kafka.common.serialization.ByteArraySerializer"
+            );
+            // Property details:
+            // https://docs.confluent.io/platform/current/installation/configuration/producer-configs.html#delivery-timeout-ms
+            kafkaProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 10000);
+            kafkaProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 5000);
+            kafkaProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+            kafkaProps.put(ProducerConfig.CLIENT_ID_CONFIG, TEST_GROUP_PRODUCER_ID);
+            kafkaProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
+            try {
+                return new KafkaProducer(kafkaProps);
+            } catch (Exception e) {
+                log.atError().setCause(e).log();
+                System.exit(1);
+                throw e;
+            }
+        }
+        
+        void loadStreamsToKafka(KafkaConsumer<String, byte[]> kafkaConsumer, Stream<TrafficStream> streams)
+            throws Exception {
+            var kafkaProducer = buildKafkaProducer();
+            var counter = new AtomicInteger();
+            loadStreamsAsynchronouslyWithCloseableResource(
+                kafkaConsumer,
+                streams,
+                s -> s.forEach(
+                    trafficStream -> KafkaTestUtils.writeTrafficStreamRecord(
+                        kafkaProducer,
+                        trafficStream,
+                        TEST_TOPIC_NAME,
+                        "KEY_" + counter.incrementAndGet()
+                    )
+                )
+            );
+            Thread.sleep(PRODUCER_SLEEP_INTERVAL_MS);
+        }
+        
+        <R extends AutoCloseable> void loadStreamsAsynchronouslyWithCloseableResource(
+            KafkaConsumer<String, byte[]> kafkaConsumer,
+            R closeableResource,
+            Consumer<R> loader
+        ) throws Exception {
+            try {
+                new Thread(() -> loader.accept(closeableResource)).start();
+                var startTime = Instant.now();
+                while (!kafkaConsumer.listTopics().isEmpty()) {
+                    Thread.sleep(10);
+                    Assertions.assertTrue(
+                        Duration.between(startTime, Instant.now()).compareTo(MAX_WAIT_TIME_FOR_TOPIC) < 0
+                    );
+                }
+            } finally {
+                closeableResource.close();
+            }
+        }
+        
+        Supplier<ISimpleTrafficCaptureSource> loadStreamsToKafkaFromCompressedFile(
+            TestContext rootCtx,
+            KafkaConsumer<String, byte[]> kafkaConsumer,
+            String filename,
+            int recordCount
+        ) throws Exception {
+            var kafkaProducer = buildKafkaProducer();
+            loadStreamsAsynchronouslyWithCloseableResource(
+                kafkaConsumer,
+                new V0_1TrafficCaptureSource(rootCtx, filename),
+                originalTrafficSource -> {
+                    try {
+                        for (int i = 0; i < recordCount; ++i) {
+                            List<ITrafficStreamWithKey> chunks = null;
+                            chunks = originalTrafficSource.readNextTrafficStreamChunk(rootCtx::createReadChunkContext)
+                                .get();
+                            for (int j = 0; j < chunks.size(); ++j) {
+                                KafkaTestUtils.writeTrafficStreamRecord(
+                                    kafkaProducer,
+                                    chunks.get(j).getStream(),
+                                    TEST_TOPIC_NAME,
+                                    "KEY_" + i + "_" + j
+                                );
+                                Thread.sleep(PRODUCER_SLEEP_INTERVAL_MS);
+                            }
+                        }
+                    } catch (Exception e) {
+                        throw Lombok.sneakyThrow(e);
+                    }
+                }
+            );
+            return () -> new KafkaTrafficCaptureSource(
+                rootCtx,
+                kafkaConsumer,
+                TEST_TOPIC_NAME,
+                Duration.ofMillis(DEFAULT_POLL_INTERVAL_MS)
+            );
+        }
+    }
 
     private static class CounterLimitedReceiverFactory implements Supplier<Consumer<SourceTargetCaptureTuple>> {
         AtomicInteger nextStopPointRef = new AtomicInteger(INITIAL_STOP_REPLAYER_REQUEST_COUNT);
@@ -90,165 +219,50 @@ public class KafkaRestartingTrafficReplayerTest extends InstrumentationTest {
     @Tag("longTest")
     @ResourceLock("TrafficReplayerRunner")
     public void fullTest(int testSize, boolean randomize) throws Throwable {
-        var random = new Random(1);
-        try (
-            var httpServer = SimpleNettyHttpServer.makeServer(
-                false,
-                Duration.ofMillis(2),
-                response -> TestHttpServerContext.makeResponse(random, response)
-            )
-        ) {
-            var streamAndConsumer = ExhaustiveTrafficStreamGenerator.generateStreamAndSumOfItsTransactions(
-                TestContext.noOtelTracking(),
-                testSize,
-                randomize
-            );
-            var trafficStreams = streamAndConsumer.stream.collect(Collectors.toList());
-            log.atInfo().setMessage("{}")
-                .addArgument(() -> trafficStreams.stream()
-                    .map(TrafficStreamUtils::summarizeTrafficStream)
-                    .collect(Collectors.joining("\n"))
+        try (var setup = TestSetup.create()) {
+            var random = new Random(1);
+            try (
+                var httpServer = SimpleNettyHttpServer.makeServer(
+                    false,
+                    Duration.ofMillis(2),
+                    response -> TestHttpServerContext.makeResponse(random, response)
                 )
-                .log();
-
-            loadStreamsToKafka(
-                buildKafkaConsumer(),
-                Streams.concat(trafficStreams.stream(), Stream.of(SENTINEL_TRAFFIC_STREAM))
-            );
-            TrafficReplayerRunner.runReplayer(
-                streamAndConsumer.numHttpTransactions,
-                httpServer.localhostEndpoint(),
-                new CounterLimitedReceiverFactory(),
-                () -> TestContext.noOtelTracking(),
-                rootContext -> new SentinelSensingTrafficSource(
-                    new KafkaTrafficCaptureSource(
-                        rootContext,
-                        buildKafkaConsumer(),
-                        TEST_TOPIC_NAME,
-                        Duration.ofMillis(DEFAULT_POLL_INTERVAL_MS)
-                    )
-                )
-            );
-            httpServer.close();
-            log.info("done");
-        }
-    }
-
-    @SneakyThrows
-    private KafkaConsumer<String, byte[]> buildKafkaConsumer() {
-        var kafkaConsumerProps = KafkaTrafficCaptureSource.buildKafkaProperties(
-            embeddedKafkaBroker.getBootstrapServers(),
-            TEST_GROUP_CONSUMER_ID,
-            false,
-            null
-        );
-        kafkaConsumerProps.setProperty("max.poll.interval.ms", DEFAULT_POLL_INTERVAL_MS + "");
-        var kafkaConsumer = new KafkaConsumer<String, byte[]>(kafkaConsumerProps);
-        log.atInfo().setMessage("Just built KafkaConsumer={}").addArgument(kafkaConsumer).log();
-        return kafkaConsumer;
-    }
-
-    private void loadStreamsToKafka(KafkaConsumer<String, byte[]> kafkaConsumer, Stream<TrafficStream> streams)
-        throws Exception {
-        var kafkaProducer = buildKafkaProducer();
-        var counter = new AtomicInteger();
-        loadStreamsAsynchronouslyWithCloseableResource(
-            kafkaConsumer,
-            streams,
-            s -> s.forEach(
-                trafficStream -> KafkaTestUtils.writeTrafficStreamRecord(
-                    kafkaProducer,
-                    trafficStream,
-                    TEST_TOPIC_NAME,
-                    "KEY_" + counter.incrementAndGet()
-                )
-            )
-        );
-        Thread.sleep(PRODUCER_SLEEP_INTERVAL_MS);
-    }
-
-    private <R extends AutoCloseable> void loadStreamsAsynchronouslyWithCloseableResource(
-        KafkaConsumer<String, byte[]> kafkaConsumer,
-        R closeableResource,
-        Consumer<R> loader
-    ) throws Exception {
-        try {
-            new Thread(() -> loader.accept(closeableResource)).start();
-            var startTime = Instant.now();
-            while (!kafkaConsumer.listTopics().isEmpty()) {
-                Thread.sleep(10);
-                Assertions.assertTrue(
-                    Duration.between(startTime, Instant.now()).compareTo(MAX_WAIT_TIME_FOR_TOPIC) < 0
+            ) {
+                var streamAndConsumer = ExhaustiveTrafficStreamGenerator.generateStreamAndSumOfItsTransactions(
+                    TestContext.noOtelTracking(),
+                    testSize,
+                    randomize
                 );
+                var trafficStreams = streamAndConsumer.stream.collect(Collectors.toList());
+                log.atInfo().setMessage("{}")
+                    .addArgument(() -> trafficStreams.stream()
+                        .map(TrafficStreamUtils::summarizeTrafficStream)
+                        .collect(Collectors.joining("\n"))
+                    )
+                    .log();
+
+                var kafkaConsumer = setup.buildKafkaConsumer();
+                setup.loadStreamsToKafka(
+                    kafkaConsumer,
+                    Streams.concat(trafficStreams.stream(), Stream.of(SENTINEL_TRAFFIC_STREAM))
+                );
+                TrafficReplayerRunner.runReplayer(
+                    streamAndConsumer.numHttpTransactions,
+                    httpServer.localhostEndpoint(),
+                    new CounterLimitedReceiverFactory(),
+                    () -> TestContext.noOtelTracking(),
+                    rootContext -> new SentinelSensingTrafficSource(
+                        new KafkaTrafficCaptureSource(
+                            rootContext,
+                            setup.buildKafkaConsumer(),
+                            TEST_TOPIC_NAME,
+                            Duration.ofMillis(DEFAULT_POLL_INTERVAL_MS)
+                        )
+                    )
+                );
+                httpServer.close();
+                log.info("done");
             }
-        } finally {
-            closeableResource.close();
         }
     }
-
-    Producer<String, byte[]> buildKafkaProducer() {
-        var kafkaProps = new Properties();
-        kafkaProps.put(
-            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-            "org.apache.kafka.common.serialization.StringSerializer"
-        );
-        kafkaProps.put(
-            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-            "org.apache.kafka.common.serialization.ByteArraySerializer"
-        );
-        // Property details:
-        // https://docs.confluent.io/platform/current/installation/configuration/producer-configs.html#delivery-timeout-ms
-        kafkaProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 10000);
-        kafkaProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 5000);
-        kafkaProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
-        kafkaProps.put(ProducerConfig.CLIENT_ID_CONFIG, TEST_GROUP_PRODUCER_ID);
-        kafkaProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafkaBroker.getBootstrapServers());
-        try {
-            return new KafkaProducer(kafkaProps);
-        } catch (Exception e) {
-            log.atError().setCause(e).log();
-            System.exit(1);
-            throw e;
-        }
-    }
-
-    private Supplier<ISimpleTrafficCaptureSource> loadStreamsToKafkaFromCompressedFile(
-        TestContext rootCtx,
-        KafkaConsumer<String, byte[]> kafkaConsumer,
-        String filename,
-        int recordCount
-    ) throws Exception {
-        var kafkaProducer = buildKafkaProducer();
-        loadStreamsAsynchronouslyWithCloseableResource(
-            kafkaConsumer,
-            new V0_1TrafficCaptureSource(rootCtx, filename),
-            originalTrafficSource -> {
-                try {
-                    for (int i = 0; i < recordCount; ++i) {
-                        List<ITrafficStreamWithKey> chunks = null;
-                        chunks = originalTrafficSource.readNextTrafficStreamChunk(rootCtx::createReadChunkContext)
-                            .get();
-                        for (int j = 0; j < chunks.size(); ++j) {
-                            KafkaTestUtils.writeTrafficStreamRecord(
-                                kafkaProducer,
-                                chunks.get(j).getStream(),
-                                TEST_TOPIC_NAME,
-                                "KEY_" + i + "_" + j
-                            );
-                            Thread.sleep(PRODUCER_SLEEP_INTERVAL_MS);
-                        }
-                    }
-                } catch (Exception e) {
-                    throw Lombok.sneakyThrow(e);
-                }
-            }
-        );
-        return () -> new KafkaTrafficCaptureSource(
-            rootCtx,
-            kafkaConsumer,
-            TEST_TOPIC_NAME,
-            Duration.ofMillis(DEFAULT_POLL_INTERVAL_MS)
-        );
-    }
-
 }
