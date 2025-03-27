@@ -8,6 +8,11 @@ plugins {
     id 'java-test-fixtures'
 }
 
+repositories {
+    mavenCentral()
+    maven { url 'https://repo.jenkins-ci.org/releases/' }
+}
+
 dependencies {
     // Use JUnit Jupiter for testing.
     testImplementation libs.test.junit.jupiter
@@ -23,32 +28,75 @@ def targetConfigs = [
     'testAnnotationProcessor',
     'testFixturesAnnotationProcessor'
 ]
+def testOnlyConfigs = targetConfigs.findAll { it.contains("test") }
+def excludedPrefixes = ['lucene.']
 
-def testOnlyConfigs = targetConfigs.findAll { it.toLowerCase().contains("test") }
+// 1. Define resolution configurations and avoid publishing them
+configurations {
+    resolvedDeps {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+    resolvedTestDeps {
+        canBeConsumed = false
+        canBeResolved = true
+        extendsFrom configurations.resolvedDeps
+    }
+}
 
-def excludedPrefixes = [
-    'lucene.'
-]
+// 2. Add libraries to resolution configurations
+afterEvaluate {
+    def libs = extensions.getByType(VersionCatalogsExtension).named("libs")
 
-def libs = extensions.getByType(VersionCatalogsExtension).named("libs")
+    libs.libraryAliases.each { alias ->
+        if (excludedPrefixes.any { prefix -> alias.startsWith(prefix) }) return
+        def dep = libs.findLibrary(alias).orElse(null)
+        if (!dep) return
 
-libs.libraryAliases.each { alias ->
-    if (excludedPrefixes.any { prefix -> alias.startsWith(prefix) }) return
-    def dep = libs.findLibrary(alias).orElse(null)
-    if (!dep) return
+        def isBom = alias.startsWith("bom.") || alias.contains(".bom.")
+        def configName = alias.contains("test") ? "resolvedTestDeps" : "resolvedDeps"
+        if (!isBom) {
+            dependencies {
+                add(configName, dep)
+            }
+        } else {
+            dependencies {
+                add(configName, platform(dep.get()))
+            }
+        }
+    }
 
-    def configsToApply = alias.startsWith("test.") ? testOnlyConfigs : targetConfigs
+    // 3. Resolve versions into a lookup map
+    def resolved = [configurations.resolvedDeps, configurations.resolvedTestDeps].collectMany { config ->
+        config.resolvedConfiguration.firstLevelModuleDependencies.collect {
+            ["${it.moduleGroup}:${it.moduleName}": "${it.moduleGroup}:${it.moduleName}:${it.moduleVersion}"]
+        }
+    }.collectEntries()
 
-    configsToApply.each { cfg ->
-        dependencies {
-            if (alias.startsWith("bom.") || alias.contains(".bom.")) {
-                add(cfg, platform(dep.get()))
-            } else {
-                constraints { add(cfg, dep.get()) }
+    // 4. Apply final dependencies to real configurations (BOMs + resolved deps)
+    libs.libraryAliases.each { alias ->
+        if (excludedPrefixes.any { prefix -> alias.startsWith(prefix) }) return
+        def dep = libs.findLibrary(alias).orElse(null)
+        if (!dep) return
+
+        def isTest = alias.contains("test")
+        def isBom = alias.startsWith("bom.") || alias.contains(".bom.")
+        def configsToApply = isTest ? testOnlyConfigs : targetConfigs
+        def coord = "${dep.get().module.group}:${dep.get().module.name}"
+        def resolvedDep = resolved[coord]
+
+        configsToApply.each { cfg ->
+            dependencies {
+                if (isBom) {
+                    add(cfg, platform(dep.get()))
+                } else if (resolvedDep != null) {
+                    add(cfg, resolvedDep)
+                }
             }
         }
     }
 }
+
 tasks.named('test') {
     // Use JUnit Platform for unit tests.
     useJUnitPlatform()
