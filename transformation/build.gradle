@@ -33,6 +33,6 @@ dependencies {
     implementation libs.jackson.databind
     implementation libs.jackson.core
 
-    testImplementation libs.mockito.core
+    testImplementation libs.test.mockito.core
     testImplementation libs.hamcrest
 }

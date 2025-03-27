@@ -15,7 +15,7 @@ dependencies {
     implementation libs.jcommander
     implementation libs.semver4j
 
-    testImplementation libs.mockito.core
+    testImplementation libs.test.mockito.core
 }
 
 application {

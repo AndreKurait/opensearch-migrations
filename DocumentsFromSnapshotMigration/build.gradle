@@ -46,16 +46,16 @@ dependencies {
     testImplementation project(":MetadataMigration")
     testImplementation libs.lucene.v9.core
     testImplementation libs.hamcrest
-    testImplementation libs.junit.jupiter.api
-    testImplementation libs.junit.jupiter.params
-    testImplementation libs.testcontainers.opensearch
-    testImplementation libs.testcontainers
-    testImplementation libs.testcontainers.toxiproxy
-    testImplementation libs.mockito.core
-    testImplementation libs.mockito.junit.jupiter
+    testImplementation libs.test.junit.jupiter.api
+    testImplementation libs.test.junit.jupiter.params
+    testImplementation libs.test.testcontainers.opensearch
+    testImplementation libs.test.testcontainers
+    testImplementation libs.test.testcontainers.toxiproxy
+    testImplementation libs.test.mockito.core
+    testImplementation libs.test.mockito.junit.jupiter
     testImplementation libs.json
 
-    testRuntimeOnly libs.junit.jupiter.engine
+    testRuntimeOnly libs.test.junit.jupiter.engine
 
 }
 

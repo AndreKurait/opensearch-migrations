@@ -40,7 +40,7 @@ dependencies {
     testImplementation libs.jackson.databind
     testImplementation libs.jackson.core
 
-    testImplementation libs.mockito.core
+    testImplementation libs.test.mockito.core
     testImplementation libs.hamcrest
 
     testFixturesApi libs.opentelemetry.api

@@ -12,10 +12,12 @@ import io.opentelemetry.api.metrics.LongCounter;
 import io.opentelemetry.api.metrics.LongHistogram;
 import io.opentelemetry.api.metrics.LongUpDownCounter;
 import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.semconv.SemanticAttributes;
 import lombok.NonNull;
 
+import static io.opentelemetry.api.common.AttributeKey.booleanKey;
+
 public interface IScopedInstrumentationAttributes extends IWithStartTimeAndAttributes, AutoCloseable {
+    AttributeKey<java.lang.Boolean> EXCEPTION_ESCAPED_ATTRIBUTE = booleanKey("exception.escaped");
 
     String getActivityName();
 
@@ -86,7 +88,7 @@ public interface IScopedInstrumentationAttributes extends IWithStartTimeAndAttri
         IWithStartTimeAndAttributes.super.addTraceException(e, isPropagating);
         final var span = getCurrentSpan();
         if (isPropagating) {
-            span.recordException(e, Attributes.of(SemanticAttributes.EXCEPTION_ESCAPED, true));
+            span.recordException(e, Attributes.of(EXCEPTION_ESCAPED_ATTRIBUTE, true));
         } else {
             span.recordException(e);
         }

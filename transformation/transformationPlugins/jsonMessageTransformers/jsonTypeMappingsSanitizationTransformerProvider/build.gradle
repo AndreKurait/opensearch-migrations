@@ -21,10 +21,10 @@ dependencies {
 
     testImplementation libs.jackson.databind
     testImplementation libs.netty.all
-    testImplementation libs.junit.jupiter.api
-    testImplementation libs.junit.jupiter.params
+    testImplementation libs.test.junit.jupiter.api
+    testImplementation libs.test.junit.jupiter.params
     testImplementation libs.slf4j.api
-    testRuntimeOnly libs.junit.jupiter.engine
+    testRuntimeOnly libs.test.junit.jupiter.engine
 }
 
 tasks.named('test') {

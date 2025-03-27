@@ -10,8 +10,8 @@ dependencies {
     implementation libs.slf4j.api
 
     testImplementation project(':TrafficCapture:trafficReplayer')
-    testImplementation libs.junit.jupiter.api
-    testRuntimeOnly libs.junit.jupiter.engine
+    testImplementation libs.test.junit.jupiter.api
+    testRuntimeOnly libs.test.junit.jupiter.engine
 }
 
 tasks.named('test') {
