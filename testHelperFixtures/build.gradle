@@ -21,23 +21,23 @@ plugins {
 dependencies {
     testFixturesImplementation libs.jackson.databind
     testFixturesImplementation libs.guava
-    testFixturesImplementation libs.toxiproxy
+    testFixturesImplementation libs.test.toxiproxy
     testFixturesImplementation libs.netty.all
     testFixturesImplementation libs.httpclient5
     testFixturesImplementation libs.bouncycastle.provider
     testFixturesImplementation libs.bouncycastle.certs
-    testFixturesImplementation libs.junit.jupiter.api
+    testFixturesImplementation libs.test.junit.jupiter.api
     testFixturesImplementation libs.hamcrest
     testFixturesImplementation libs.slf4j.api
-    testFixturesApi libs.testcontainers
-    testFixturesApi libs.testcontainers.toxiproxy
+    testFixturesApi libs.test.testcontainers
+    testFixturesApi libs.test.testcontainers.toxiproxy
 
     testImplementation libs.log4j.api
     testImplementation libs.log4j.core
     testImplementation libs.log4j.slf4j2.impl
-    testImplementation libs.junit.jupiter.api
-    testImplementation libs.junit.jupiter.engine
-    testImplementation libs.junit.jupiter.params
+    testImplementation libs.test.junit.jupiter.api
+    testImplementation libs.test.junit.jupiter.engine
+    testImplementation libs.test.junit.jupiter.params
     testFixturesImplementation libs.log4j.api
     testFixturesImplementation libs.log4j.core
     testFixturesImplementation libs.log4j.slf4j2.impl

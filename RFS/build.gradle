@@ -110,28 +110,28 @@ dependencies {
 
     testImplementation testFixtures(project(path: ':RFS'))
     testImplementation libs.lucene.v9.backward.codecs
-    testImplementation libs.reactor.test
+    testImplementation libs.test.reactor.test
     testImplementation libs.log4j.core
     testImplementation libs.log4j.slf4j2.impl
-    testImplementation libs.junit.jupiter.api
-    testImplementation libs.junit.jupiter.params
-    testImplementation libs.mockito.core
-    testImplementation libs.mockito.junit.jupiter
+    testImplementation libs.test.junit.jupiter.api
+    testImplementation libs.test.junit.jupiter.params
+    testImplementation libs.test.mockito.core
+    testImplementation libs.test.mockito.junit.jupiter
 
     testImplementation project(':transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders')
     testRuntimeOnly project(':transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider')
 
-    testRuntimeOnly libs.junit.jupiter.engine
+    testRuntimeOnly libs.test.junit.jupiter.engine
 
     testImplementation libs.jmh.core
 
     // Integration tests
     testImplementation testFixtures(project(path: ':testHelperFixtures'))
     testImplementation testFixtures(project(path: ':coreUtilities'))
-    testImplementation libs.testcontainers
+    testImplementation libs.test.testcontainers
     testImplementation libs.hamcrest
-    testImplementation libs.junit.jupiter.api
-    testRuntimeOnly libs.junit.jupiter.engine
+    testImplementation libs.test.junit.jupiter.api
+    testRuntimeOnly libs.test.junit.jupiter.engine
     // why are these under implementation with the above comment for integ tests?
     implementation libs.httpclient5
     implementation libs.jackson.databind
@@ -143,7 +143,7 @@ dependencies {
     testFixturesImplementation libs.docker.java
     testFixturesImplementation libs.docker.java.core
     testFixturesImplementation libs.docker.java.transport.httpclient5
-    testFixturesImplementation libs.testcontainers
+    testFixturesImplementation libs.test.testcontainers
 
     testFixturesImplementation libs.hamcrest
     testFixturesImplementation libs.guava

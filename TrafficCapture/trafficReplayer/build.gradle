@@ -54,7 +54,7 @@ dependencies {
     testFixturesImplementation libs.slf4j.api
     testFixturesImplementation libs.jackson.databind
     testFixturesImplementation libs.netty.all
-    testFixturesImplementation libs.junit.jupiter.api
+    testFixturesImplementation libs.test.junit.jupiter.api
 
     testImplementation testFixtures(project(path: ':testHelperFixtures'))
     testImplementation testFixtures(project(path: ':coreUtilities'))
@@ -63,14 +63,14 @@ dependencies {
     testImplementation project(':transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider')
 
     testImplementation libs.httpclient5
-    testImplementation libs.junit.jupiter.api
-    testImplementation libs.testcontainers.junit.jupiter
-    testImplementation libs.testcontainers.kafka
-    testImplementation libs.testcontainers
+    testImplementation libs.test.junit.jupiter.api
+    testImplementation libs.test.testcontainers.junit.jupiter
+    testImplementation libs.test.testcontainers.kafka
+    testImplementation libs.test.testcontainers
 
-    testImplementation libs.mockito.core
-    testImplementation libs.mockito.junit.jupiter
-    testRuntimeOnly libs.junit.jupiter.engine
+    testImplementation libs.test.mockito.core
+    testImplementation libs.test.mockito.junit.jupiter
+    testRuntimeOnly libs.test.junit.jupiter.engine
 }
 
 application {

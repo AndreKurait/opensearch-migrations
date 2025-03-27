@@ -19,7 +19,7 @@ sourceSets {
 dependencies {
     implementation libs.groovy
     testImplementation libs.jenkins.pipeline.unit
-    testImplementation libs.junit.jupiter
+    testImplementation libs.test.junit.jupiter
 }
 
 test {

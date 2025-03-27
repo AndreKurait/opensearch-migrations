@@ -5,14 +5,50 @@
 plugins {
     // Apply the java Plugin to add support for Java.
     id 'java'
+    id 'java-test-fixtures'
 }
 
 dependencies {
     // Use JUnit Jupiter for testing.
-    testImplementation libs.junit.jupiter
-    testRuntimeOnly libs.junit.platform.launcher
+    testImplementation libs.test.junit.jupiter
+    testRuntimeOnly libs.test.junit.platform.launcher
+    testImplementation testFixtures(project(":testHelperFixtures"))
 }
 
+def targetConfigs = [
+    'implementation',
+    'testImplementation',
+    'testFixturesImplementation',
+    'annotationProcessor',
+    'testAnnotationProcessor',
+    'testFixturesAnnotationProcessor'
+]
+
+def testOnlyConfigs = targetConfigs.findAll { it.toLowerCase().contains("test") }
+
+def excludedPrefixes = [
+    'lucene.'
+]
+
+def libs = extensions.getByType(VersionCatalogsExtension).named("libs")
+
+libs.libraryAliases.each { alias ->
+    if (excludedPrefixes.any { prefix -> alias.startsWith(prefix) }) return
+    def dep = libs.findLibrary(alias).orElse(null)
+    if (!dep) return
+
+    def configsToApply = alias.startsWith("test.") ? testOnlyConfigs : targetConfigs
+
+    configsToApply.each { cfg ->
+        dependencies {
+            if (alias.startsWith("bom.") || alias.contains(".bom.")) {
+                add(cfg, platform(dep.get()))
+            } else {
+                constraints { add(cfg, dep.get()) }
+            }
+        }
+    }
+}
 tasks.named('test') {
     // Use JUnit Platform for unit tests.
     useJUnitPlatform()
