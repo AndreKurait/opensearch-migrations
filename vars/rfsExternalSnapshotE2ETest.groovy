@@ -50,7 +50,7 @@ def call(Map config = [:]) {
             "migrationAssistanceEnabled": true,
             "replayerOutputEFSRemovalPolicy": "DESTROY",
             "migrationConsoleServiceEnabled": true,
-            "otelCollectorEnabled": true,
+            "otelCollectorEnabled": true
           }
         }
     """
