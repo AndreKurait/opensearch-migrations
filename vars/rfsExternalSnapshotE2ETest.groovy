@@ -62,8 +62,9 @@ def call(Map config = [:]) {
             defaultStageId: stageId,
             lockResourceName: lockResourceName,  // Use the lock resource name for Jenkins locks
             skipCaptureProxyOnNodeSetup: true,
+            skipSourceDeploy: true,
             jobName: 'rfs-external-snapshot-e2e-test',
-            integTestCommand: '/root/lib/integ_test/integ_test/s3_snapshot_tests.py'
+            integTestCommand: '/root/lib/integ_test/integ_test/backfill_tests.py'
     )
 
 }

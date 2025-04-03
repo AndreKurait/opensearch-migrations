@@ -20,6 +20,7 @@ def call(Map config = [:]) {
     def source_context_file_name = 'sourceJenkinsContext.json'
     def migration_context_file_name = 'migrationJenkinsContext.json'
     def skipCaptureProxyOnNodeSetup = config.skipCaptureProxyOnNodeSetup ?: false
+    def skipSourceDeploy = config.skipSourceDeploy ?: false
     def time = new Date().getTime()
     def testUniqueId = config.testUniqueId ?: "integ_full_${time}_${currentBuild.number}"
     def testDir = "/root/lib/integ_test/integ_test"
@@ -140,6 +141,9 @@ def call(Map config = [:]) {
                                             "--migrations-git-branch ${params.GIT_BRANCH}"
                                     if (skipCaptureProxyOnNodeSetup) {
                                         baseCommand += " --skip-capture-proxy"
+                                    }
+                                    if (skipSourceDeploy) {
+                                        baseCommand += " --skip-source-deploy"
                                     }
                                     withCredentials([string(credentialsId: 'migrations-test-account-id', variable: 'MIGRATIONS_TEST_ACCOUNT_ID')]) {
                                         withAWS(role: 'JenkinsDeploymentRole', roleAccount: "${MIGRATIONS_TEST_ACCOUNT_ID}", duration: 5400, roleSessionName: 'jenkins-session') {
