@@ -51,8 +51,6 @@ def call(Map config = [:]) {
             "replayerOutputEFSRemovalPolicy": "DESTROY",
             "migrationConsoleServiceEnabled": true,
             "otelCollectorEnabled": true,
-            "sourceClusterDisabled": true,
-            "sourceClusterEndpoint": "dummy-endpoint-not-used"
           }
         }
     """
@@ -62,41 +60,10 @@ def call(Map config = [:]) {
             sourceContextId: sourceContextId,
             migrationContextId: migrationContextId,
             defaultStageId: stageId,
-            lockResourceName: lockResourceName,
+            lockResourceName: lockResourceName,  // Use the lock resource name for Jenkins locks
             skipCaptureProxyOnNodeSetup: true,
             jobName: 'rfs-external-snapshot-e2e-test',
-            integTestCommand: '/root/lib/integ_test/integ_test/s3_snapshot_tests.py',
-            // Override the deploy step to use --skip-source-deploy flag
-            deployStep: {
-                // Use the actual stage parameter for deployment, not the lock variable
-                def deployStage = params.STAGE
-                echo "Acquired lock resource: ${lockVar}"
-                echo "Deploying with stage: ${deployStage}"
-                sh 'sudo usermod -aG docker $USER'
-                sh 'sudo newgrp docker'
-                
-                // Use hardcoded file names and context IDs
-                def sourceContextFileName = 'sourceJenkinsContext.json'
-                def migrationContextFileName = 'migrationJenkinsContext.json'
-                
-                def baseCommand = "sudo --preserve-env ./awsE2ESolutionSetup.sh --source-context-file './${sourceContextFileName}' " +
-                        "--migration-context-file './${migrationContextFileName}' " +
-                        "--source-context-id ${sourceContextId} " +
-                        "--migration-context-id ${migrationContextId} " +
-                        "--stage ${deployStage} " +
-                        "--migrations-git-url ${params.GIT_REPO_URL} " +
-                        "--migrations-git-branch ${params.GIT_BRANCH} " +
-                        "--skip-source-deploy" // Skip deploying the source cluster
-                
-                withCredentials([string(credentialsId: 'migrations-test-account-id', variable: 'MIGRATIONS_TEST_ACCOUNT_ID')]) {
-                    withAWS(role: 'JenkinsDeploymentRole', roleAccount: "${MIGRATIONS_TEST_ACCOUNT_ID}", duration: 5400, roleSessionName: 'jenkins-session') {
-                        sh baseCommand
-                    }
-                }
-            },
-            // Override the finish step to avoid the FilePath error
-            finishStep: {
-                echo "External snapshot test completed"
-            }
+            integTestCommand: '/root/lib/integ_test/integ_test/s3_snapshot_tests.py'
     )
+
 }
