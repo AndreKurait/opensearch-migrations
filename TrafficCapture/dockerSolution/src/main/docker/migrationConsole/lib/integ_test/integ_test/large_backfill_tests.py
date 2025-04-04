@@ -72,3 +72,7 @@ class BackfillTests(unittest.TestCase):
         target_cluster: Cluster = pytest.console_env.target_cluster
 
         time.sleep(30)
+
+        ## Publish sample metrics
+        Duration = 30
+        Throughput = math.rand(1, 3)
