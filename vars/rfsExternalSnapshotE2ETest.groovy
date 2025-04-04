@@ -20,35 +20,30 @@ def call(Map config = [:]) {
     def migration_cdk_context = """
         {
           "migration-rfs-external-snapshot": {
-            "sourceCluster" : {
-              "endpoint": "https://vpc-os-cluster-rfs-akurait-av2nwb2dagx7u3zf235z354xna.us-east-1.es.amazonaws.com",
-              "version": "ES_7.10",
-              "auth": {
-                "type": "sigv4",
-                "region": "us-east-1",
-                "serviceSigningName": "es"
-              }
+            "sourceCluster": {
+              "disabled": true
             },
+              
             "stage": "<STAGE>",
             "vpcId": "<VPC_ID>",
             "engineVersion": "OS_2.11",
             "domainName": "os-cluster-<STAGE>",
-            "dataNodeCount": 2,
+            "dataNodeCount": 1,
+            
             "openAccessPolicyEnabled": true,
             "domainRemovalPolicy": "DESTROY",
             "artifactBucketRemovalPolicy": "DESTROY",
-            "trafficReplayerServiceEnabled": false,
-            "reindexFromSnapshotServiceEnabled": true,
             "tlsSecurityPolicy": "TLS_1_2",
             "enforceHTTPS": true,
             "nodeToNodeEncryptionEnabled": true,
             "encryptionAtRestEnabled": true,
+            "domainAZCount": 2,
+
+
+            "reindexFromSnapshotServiceEnabled": true,
             "vpcEnabled": true,
             "vpcAZCount": 2,
-            "domainAZCount": 2,
-            "mskAZCount": 2,
             "migrationAssistanceEnabled": true,
-            "replayerOutputEFSRemovalPolicy": "DESTROY",
             "migrationConsoleServiceEnabled": true,
             "otelCollectorEnabled": true
           }
@@ -64,7 +59,7 @@ def call(Map config = [:]) {
             skipCaptureProxyOnNodeSetup: true,
             skipSourceDeploy: true,
             jobName: 'rfs-external-snapshot-e2e-test',
-            integTestCommand: '/root/lib/integ_test/integ_test/backfill_tests.py'
+            integTestCommand: '/root/lib/integ_test/integ_test/large_backfill_tests.py'
     )
 
 }
