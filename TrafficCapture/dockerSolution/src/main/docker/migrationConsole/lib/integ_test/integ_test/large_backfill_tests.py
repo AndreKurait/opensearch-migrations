@@ -25,7 +25,7 @@ def preload_data(target_cluster: Cluster):
 
 
 @pytest.fixture(scope="class")
-def setup_large_backfill(request):
+def setup_backfill(request):
     config_path = request.config.getoption("--config_file_path")
     unique_id = request.config.getoption("--unique_id")
     console_env = Context(config_path).env
