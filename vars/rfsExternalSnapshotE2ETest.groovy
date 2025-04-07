@@ -28,7 +28,7 @@ def call(Map config = [:]) {
             "vpcId": "<VPC_ID>",
             "engineVersion": "OS_2.11",
             "domainName": "os-cluster-<STAGE>",
-            "dataNodeCount": 1,
+            "dataNodeCount": 2,
             
             "openAccessPolicyEnabled": true,
             "domainRemovalPolicy": "DESTROY",

@@ -28,15 +28,13 @@ def preload_data(target_cluster: Cluster):
 def setup_large_backfill(request):
     config_path = request.config.getoption("--config_file_path")
     unique_id = request.config.getoption("--unique_id")
+    console_env = Context(config_path).env
 
-    pytest.console_env = Context(config_path).env
-    pytest.unique_id = unique_id
+    preload_data(target_cluster=console_env.target_cluster)
 
-    preload_data(target_cluster=pytest.console_env.target_cluster)
-
-    backfill: Backfill = pytest.console_env.backfill
+    backfill: Backfill = console_env.backfill
     assert backfill is not None
-    metadata: Metadata = pytest.console_env.metadata
+    metadata: Metadata = console_env.metadata
     assert metadata is not None
 
     backfill.create()
@@ -51,6 +49,9 @@ def setup_large_backfill(request):
     backfill_scale_result: CommandResult = backfill.scale(units=2)
     assert backfill_scale_result.success
 
+    logger.info("Stopping backfill...")
+    backfill.stop()
+
 
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_after_tests():
@@ -59,18 +60,13 @@ def cleanup_after_tests():
 
     yield
 
-    # Teardown code
-    logger.info("Stopping backfill...")
-    backfill: Backfill = pytest.console_env.backfill
-    backfill.stop()
+    pass
 
 
 @pytest.mark.usefixtures("setup_backfill")
 class BackfillTests(unittest.TestCase):
 
     def test_backfill_large_snapshot(self):
-        target_cluster: Cluster = pytest.console_env.target_cluster
-
         time.sleep(30)
 
         ## Publish sample metrics
