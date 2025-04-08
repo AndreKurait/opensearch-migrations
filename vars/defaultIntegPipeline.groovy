@@ -1,8 +1,47 @@
+// Add this utility function to download files from the ECS task
+def downloadFileFromEcsTask(String remotePath, String localPath, String stage, String clusterName = null) {
+    echo "Downloading file from ${remotePath} to ${localPath} using ECS exec"
+    
+    // Create directory for the local file if it doesn't exist
+    sh "mkdir -p \$(dirname ${localPath})"
+    
+    // If cluster name is not provided, construct it from the stage
+    if (!clusterName) {
+        clusterName = "migration-console-${stage}"
+    }
+    
+    // Get the task ARN for the migration console task
+    sh """
+        TASK_ARN=\$(aws ecs list-tasks --cluster ${clusterName} --family migration-console --query 'taskArns[0]' --output text)
+        if [ -z "\$TASK_ARN" ] || [ "\$TASK_ARN" == "None" ]; then
+            echo "No migration-console task found in cluster ${clusterName}"
+            exit 1
+        fi
+        
+        # Use ECS exec to cat the file and redirect to local path
+        aws ecs execute-command --cluster ${clusterName} \\
+            --task \$TASK_ARN \\
+            --container migration-console \\
+            --interactive \\
+            --command "cat ${remotePath}" > ${localPath} || echo "Failed to download file from ${remotePath}"
+        
+        if [ -f "${localPath}" ] && [ ! -s "${localPath}" ]; then
+            echo "Downloaded file is empty, removing it"
+            rm ${localPath}
+            exit 1
+        fi
+    """
+    
+    return fileExists(localPath)
+}
+
 def call(Map config = [:]) {
     def sourceContext = config.sourceContext
     def migrationContext = config.migrationContext
     def defaultStageId = config.defaultStageId
     def jobName = config.jobName
+    // Add new parameter for file retrieval
+    def retrieveFiles = config.retrieveFiles ?: []
     if(sourceContext == null || sourceContext.isEmpty()){
         throw new RuntimeException("The sourceContext argument must be provided");
     }
@@ -179,6 +218,47 @@ def call(Map config = [:]) {
                                             sh "sudo --preserve-env ./awsRunIntegTests.sh --command '${command}' " +
                                                     "--test-result-file ${test_result_file} " +
                                                     "--stage ${deployStage}"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Add optional stage for file retrieval
+            stage('Retrieve Files') {
+                when {
+                    expression { return !retrieveFiles.isEmpty() }
+                }
+                steps {
+                    timeout(time: 10, unit: 'MINUTES') {
+                        dir('test') {
+                            script {
+                                // Allow overwriting this step
+                                if (config.fileRetrievalStep) {
+                                    config.fileRetrievalStep()
+                                } else {
+                                    def deployStage = params.STAGE
+                                    withCredentials([string(credentialsId: 'migrations-test-account-id', variable: 'MIGRATIONS_TEST_ACCOUNT_ID')]) {
+                                        withAWS(role: 'JenkinsDeploymentRole', roleAccount: "${MIGRATIONS_TEST_ACCOUNT_ID}", duration: 600, roleSessionName: 'jenkins-file-retrieval-session') {
+                                            // Download each file specified in the retrieveFiles list
+                                            retrieveFiles.each { fileMap ->
+                                                echo "Retrieving file: ${fileMap.remotePath} to ${fileMap.localPath}"
+                                                downloadFileFromEcsTask(fileMap.remotePath, fileMap.localPath, deployStage, fileMap.clusterName)
+                                            }
+                                            
+                                            // Archive all retrieved files
+                                            if (config.archiveRetrievedFiles != false) {
+                                                def archivePattern = retrieveFiles.collect { fileMap -> fileMap.localPath }.join(',')
+                                                archiveArtifacts artifacts: archivePattern, allowEmptyArchive: true
+                                            }
+                                            
+                                            // Call the post-retrieval callback if provided
+                                            if (config.fileRetrievalCallback) {
+                                                config.fileRetrievalCallback()
+                                            }
                                         }
                                     }
                                 }

@@ -7,6 +7,34 @@ def call(Map config = [:]) {
     def lockResourceName = config.lockResourceName ?: stageId
     def sourceContextId = 'source-empty'
     
+    // Define the metrics file paths
+    def testDir = "/root/lib/integ_test/integ_test"
+    def testUniqueId = config.testUniqueId ?: "integ_full_${new Date().getTime()}_${currentBuild.number}"
+    def remoteMetricsPath = "${testDir}/reports/${testUniqueId}/backfill_metrics.csv"
+    def metricsOutputDir = "backfill-metrics"
+    def localMetricsPath = "${metricsOutputDir}/backfill_metrics.csv"
+    
+    // Define the file retrieval callback for plotting
+    def plotMetricsCallback = { ->
+        if (fileExists(localMetricsPath)) {
+            echo "Plotting metrics from ${localMetricsPath}"
+            
+            // Plot the metrics
+            plot csvFileName: 'backfill_metrics.csv',
+                 csvSeries: [[file: localMetricsPath, exclusionValues: '', displayTableFlag: true, inclusionFlag: 'OFF', url: '']],
+                 group: 'Backfill Metrics',
+                 title: 'Backfill Performance',
+                 style: 'line',
+                 exclZero: false,
+                 keepRecords: true,
+                 logarithmic: false,
+                 numBuilds: '10',
+                 yaxis: 'Value'
+        } else {
+            echo "Metrics file not found at ${localMetricsPath}, skipping plot"
+        }
+    }
+    
     // Empty source context to satisfy defaultIntegPipeline requirements
     def source_cdk_context = """
         {
@@ -59,7 +87,18 @@ def call(Map config = [:]) {
             skipCaptureProxyOnNodeSetup: true,
             skipSourceDeploy: true,
             jobName: 'rfs-external-snapshot-e2e-test',
-            integTestCommand: '/root/lib/integ_test/integ_test/large_backfill_tests.py'
+            integTestCommand: '/root/lib/integ_test/integ_test/large_backfill_tests.py',
+            testUniqueId: testUniqueId,  // Pass the unique ID to ensure consistency
+            // Add file retrieval configuration
+            retrieveFiles: [
+                [
+                    remotePath: remoteMetricsPath,
+                    localPath: localMetricsPath,
+                    clusterName: null  // Use default cluster name
+                ]
+            ],
+            fileRetrievalCallback: plotMetricsCallback,
+            archiveRetrievedFiles: true
     )
 
 }

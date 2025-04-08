@@ -1,6 +1,10 @@
 import logging
 import pytest
 import unittest
+import csv
+import os
+import datetime
+import random
 from console_link.middleware.clusters import run_test_benchmarks, connection_check, clear_cluster, ConnectionResult
 from console_link.models.cluster import Cluster
 from console_link.models.backfill_base import Backfill
@@ -66,9 +70,33 @@ def cleanup_after_tests():
 @pytest.mark.usefixtures("setup_backfill")
 class BackfillTests(unittest.TestCase):
 
+    @pytest.fixture(autouse=True)
+    def _get_unique_id(self, request):
+        self.unique_id = request.config.getoption("--unique_id")
+
     def test_backfill_large_snapshot(self):
         time.sleep(30)
 
-        ## Publish sample metrics
-        Duration = 30
-        Throughput = math.rand(1, 3)
+        # Generate simple metrics
+        duration = 30  # seconds
+        throughput = random.uniform(1.0, 3.0)  # Random value between 1-3
+        timestamp = datetime.datetime.now().isoformat()
+        
+        # Use the unique_id from the fixture
+        unique_id = self.unique_id
+        
+        # Ensure the reports directory exists
+        reports_dir = os.path.join(os.path.dirname(__file__), "reports", unique_id)
+        os.makedirs(reports_dir, exist_ok=True)
+        
+        # Write metrics directly to CSV in the format needed by Jenkins Plot plugin
+        metrics_file = os.path.join(reports_dir, "backfill_metrics.csv")
+        with open(metrics_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            # Header row
+            writer.writerow(['timestamp', 'metric', 'value', 'unit'])
+            # Data rows
+            writer.writerow([timestamp, 'Duration', duration, 'seconds'])
+            writer.writerow([timestamp, 'Throughput', throughput, 'ops/sec'])
+        
+        logger.info(f"Metrics saved to: {metrics_file}")
