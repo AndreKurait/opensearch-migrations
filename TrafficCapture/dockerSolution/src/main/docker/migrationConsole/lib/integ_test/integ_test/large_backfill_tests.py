@@ -91,12 +91,37 @@ class BackfillTests(unittest.TestCase):
         
         # Write metrics directly to CSV in the format needed by Jenkins Plot plugin
         metrics_file = os.path.join(reports_dir, "backfill_metrics.csv")
-        with open(metrics_file, 'w', newline='') as f:
-            writer = csv.writer(f)
-            # Header row
-            writer.writerow(['timestamp', 'metric', 'value', 'unit'])
-            # Data rows
-            writer.writerow([timestamp, 'Duration', duration, 'seconds'])
-            writer.writerow([timestamp, 'Throughput', throughput, 'ops/sec'])
+        logger.info(f"Writing metrics to: {metrics_file}")
         
-        logger.info(f"Metrics saved to: {metrics_file}")
+        try:
+            with open(metrics_file, 'w', newline='') as f:
+                writer = csv.writer(f)
+                # Header row
+                writer.writerow(['timestamp', 'metric', 'value', 'unit'])
+                # Data rows
+                writer.writerow([timestamp, 'Duration', duration, 'seconds'])
+                writer.writerow([timestamp, 'Throughput', throughput, 'ops/sec'])
+            
+            # Verify the file was written correctly
+            if os.path.exists(metrics_file):
+                file_size = os.path.getsize(metrics_file)
+                logger.info(f"Metrics file created successfully. Size: {file_size} bytes")
+                
+                # Read back and log the content for verification
+                with open(metrics_file, 'r') as f:
+                    content = f.read()
+                    logger.info(f"Metrics file content:\n{content}")
+            else:
+                logger.error(f"Failed to create metrics file at {metrics_file}")
+                
+            logger.info(f"Metrics saved to: {metrics_file}")
+            logger.info(f"Reports directory: {reports_dir}")
+            
+            # List all files in the reports directory
+            logger.info(f"Files in reports directory:")
+            for file in os.listdir(reports_dir):
+                logger.info(f"  - {file}")
+                
+        except Exception as e:
+            logger.error(f"Error writing metrics file: {str(e)}")
+            raise

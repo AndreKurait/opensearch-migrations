@@ -16,22 +16,67 @@ def call(Map config = [:]) {
     
     // Define the file retrieval callback for plotting
     def plotMetricsCallback = { ->
-        if (fileExists(localMetricsPath)) {
-            echo "Plotting metrics from ${localMetricsPath}"
-            
-            // Plot the metrics
-            plot csvFileName: 'backfill_metrics.csv',
-                 csvSeries: [[file: localMetricsPath, exclusionValues: '', displayTableFlag: true, inclusionFlag: 'OFF', url: '']],
-                 group: 'Backfill Metrics',
-                 title: 'Backfill Performance',
-                 style: 'line',
-                 exclZero: false,
-                 keepRecords: true,
-                 logarithmic: false,
-                 numBuilds: '10',
-                 yaxis: 'Value'
-        } else {
-            echo "Metrics file not found at ${localMetricsPath}, skipping plot"
+        echo "Starting metrics plotting callback"
+        
+        try {
+            if (fileExists(localMetricsPath)) {
+                echo "Metrics file found at ${localMetricsPath}"
+                
+                // Display file contents for debugging
+                sh """
+                    echo "File size: \$(du -h ${localMetricsPath} | cut -f1)"
+                    echo "File contents:"
+                    cat ${localMetricsPath}
+                """
+                
+                // Validate CSV format
+                def fileContent = readFile(localMetricsPath)
+                if (!fileContent.trim()) {
+                    echo "ERROR: Metrics file is empty"
+                    return
+                }
+                
+                def lines = fileContent.split('\n')
+                echo "Number of lines in CSV: ${lines.size()}"
+                
+                if (lines.size() < 2) {
+                    echo "ERROR: CSV file does not have enough data (header + at least one data row)"
+                    return
+                }
+                
+                echo "CSV header: ${lines[0]}"
+                echo "First data row: ${lines.size() > 1 ? lines[1] : 'N/A'}"
+                
+                // Plot the metrics
+                echo "Plotting metrics with Jenkins Plot plugin"
+                plot csvFileName: 'backfill_metrics.csv',
+                     csvSeries: [[file: localMetricsPath, exclusionValues: '', displayTableFlag: true, inclusionFlag: 'OFF', url: '']],
+                     group: 'Backfill Metrics',
+                     title: 'Backfill Performance',
+                     style: 'line',
+                     exclZero: false,
+                     keepRecords: true,
+                     logarithmic: false,
+                     numBuilds: '10',
+                     yaxis: 'Value'
+                
+                echo "Plot configuration complete"
+            } else {
+                echo "ERROR: Metrics file not found at ${localMetricsPath}, skipping plot"
+                
+                // Check if the directory exists
+                sh """
+                    if [ -d "\$(dirname ${localMetricsPath})" ]; then
+                        echo "Directory exists, listing contents:"
+                        ls -la \$(dirname ${localMetricsPath})
+                    else
+                        echo "Directory does not exist: \$(dirname ${localMetricsPath})"
+                    fi
+                """
+            }
+        } catch (Exception e) {
+            echo "ERROR: Exception occurred during plotting: ${e.message}"
+            e.printStackTrace()
         }
     }
     

@@ -10,29 +10,59 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
         clusterName = "migration-console-${stage}"
     }
     
-    // Get the task ARN for the migration console task
-    sh """
-        TASK_ARN=\$(aws ecs list-tasks --cluster ${clusterName} --family migration-console --query 'taskArns[0]' --output text)
-        if [ -z "\$TASK_ARN" ] || [ "\$TASK_ARN" == "None" ]; then
-            echo "No migration-console task found in cluster ${clusterName}"
-            exit 1
-        fi
-        
-        # Use ECS exec to cat the file and redirect to local path
-        aws ecs execute-command --cluster ${clusterName} \\
-            --task \$TASK_ARN \\
-            --container migration-console \\
-            --interactive \\
-            --command "cat ${remotePath}" > ${localPath} || echo "Failed to download file from ${remotePath}"
-        
-        if [ -f "${localPath}" ] && [ ! -s "${localPath}" ]; then
-            echo "Downloaded file is empty, removing it"
-            rm ${localPath}
-            exit 1
-        fi
-    """
+    echo "Using cluster name: ${clusterName}"
     
-    return fileExists(localPath)
+    try {
+        // Get the task ARN for the migration console task
+        sh """
+            echo "Listing tasks in cluster ${clusterName}..."
+            aws ecs list-tasks --cluster ${clusterName} --family migration-console
+            
+            TASK_ARN=\$(aws ecs list-tasks --cluster ${clusterName} --family migration-console --query 'taskArns[0]' --output text)
+            echo "Found task ARN: \$TASK_ARN"
+            
+            if [ -z "\$TASK_ARN" ] || [ "\$TASK_ARN" == "None" ]; then
+                echo "ERROR: No migration-console task found in cluster ${clusterName}"
+                exit 1
+            fi
+            
+            echo "Checking if file exists on remote container..."
+            aws ecs execute-command --cluster ${clusterName} \\
+                --task \$TASK_ARN \\
+                --container migration-console \\
+                --interactive \\
+                --command "ls -la \$(dirname ${remotePath})"
+            
+            echo "Attempting to download file ${remotePath}..."
+            aws ecs execute-command --cluster ${clusterName} \\
+                --task \$TASK_ARN \\
+                --container migration-console \\
+                --interactive \\
+                --command "cat ${remotePath}" > ${localPath} || echo "Failed to download file from ${remotePath}"
+            
+            if [ -f "${localPath}" ]; then
+                echo "File downloaded, size: \$(du -h ${localPath} | cut -f1)"
+                echo "File contents preview:"
+                head -n 5 ${localPath}
+                
+                if [ ! -s "${localPath}" ]; then
+                    echo "WARNING: Downloaded file is empty, removing it"
+                    rm ${localPath}
+                    exit 1
+                fi
+            else
+                echo "ERROR: File was not downloaded to ${localPath}"
+                exit 1
+            fi
+        """
+        
+        def fileExists = fileExists(localPath)
+        echo "File exists check: ${fileExists}"
+        return fileExists
+    } catch (Exception e) {
+        echo "ERROR: Exception occurred during file download: ${e.message}"
+        return false
+    }
 }
 
 def call(Map config = [:]) {
