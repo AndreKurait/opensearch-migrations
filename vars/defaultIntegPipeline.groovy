@@ -272,7 +272,7 @@ def call(Map config = [:]) {
                                 } else {
                                     def deployStage = params.STAGE
                                     withCredentials([string(credentialsId: 'migrations-test-account-id', variable: 'MIGRATIONS_TEST_ACCOUNT_ID')]) {
-                                        withAWS(role: 'JenkinsDeploymentRole', roleAccount: "${MIGRATIONS_TEST_ACCOUNT_ID}", duration: 600, roleSessionName: 'jenkins-file-retrieval-session') {
+                                        withAWS(role: 'JenkinsDeploymentRole', roleAccount: "${MIGRATIONS_TEST_ACCOUNT_ID}", duration: 3600, roleSessionName: 'jenkins-file-retrieval-session') {
                                             // Download each file specified in the retrieveFiles list
                                             retrieveFiles.each { fileMap ->
                                                 echo "Retrieving file: ${fileMap.remotePath} to ${fileMap.localPath}"
