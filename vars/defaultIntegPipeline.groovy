@@ -18,7 +18,7 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
             echo "Listing tasks in cluster ${clusterName}..."
             aws ecs list-tasks --cluster ${clusterName} --service-name migration-${stage}-migration-console
             
-            TASK_ARN=\$(aws ecs list-tasks --cluster ${clusterName}--service-name migration-${stage}-migration-console --query 'taskArns[0]' --output text)
+            TASK_ARN=\$(aws ecs list-tasks --cluster ${clusterName} --service-name migration-${stage}-migration-console --query 'taskArns[0]' --output text)
             echo "Found task ARN: \$TASK_ARN"
             
             if [ -z "\$TASK_ARN" ] || [ "\$TASK_ARN" == "None" ]; then
