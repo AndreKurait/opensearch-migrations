@@ -17,7 +17,7 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
             # Inputs
             clusterName="migration-${stage}-ecs-cluster"
             serviceName="migration-${stage}-migration-console"
-            remotePath="/root/lib/integ_test/integ_test/reports/integ_full_1744216624822_46/backfill_metrics.csv"
+            remotePath="${remotePath}"
             localPath="${localPath}"
 
             echo "🔍 Finding ECS task in cluster: \$clusterName"
