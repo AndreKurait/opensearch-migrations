@@ -13,68 +13,63 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
     echo "Using cluster name: ${clusterName}"
     
     try {
-        // Get the task ARN for the migration console task
+        def localPath = "backfill-metrics/backfill_metrics.csv"
         sh """
-            # === Inputs ===
+            # Inputs
             clusterName="migration-${stage}-ecs-cluster"
             serviceName="migration-${stage}-migration-console"
             remotePath="/root/lib/integ_test/integ_test/reports/integ_full_1744216624822_46/backfill_metrics.csv"
-            localPath="backfill-metrics/backfill_metrics.csv"
+            localPath="${localPath}"
 
-            echo "🔍 Finding ECS task in cluster: $clusterName"
+            echo "🔍 Finding ECS task in cluster: \$clusterName"
             TASK_ARN=\$(aws ecs list-tasks \
-            --cluster "$clusterName" \
-            --service-name "$serviceName" \
-            --query 'taskArns[0]' \
-            --output text)
+                --cluster "\$clusterName" \
+                --service-name "\$serviceName" \
+                --query 'taskArns[0]' \
+                --output text)
 
-            if [[ -z "$TASK_ARN" || "$TASK_ARN" == "None" ]]; then
-            echo "❌ ERROR: No running task found in $serviceName"
-            exit 1
+            if [[ -z "\$TASK_ARN" || "\$TASK_ARN" == "None" ]]; then
+                echo "❌ ERROR: No running task found in \$serviceName"
+                exit 1
             fi
 
-            echo "✅ Found task: $TASK_ARN"
-
-            # Check file directory
-            echo "📂 Checking remote path: \$(dirname "$remotePath")"
+            echo "✅ Found task: \$TASK_ARN"
+            echo "📂 Checking remote path: \$(dirname "\$remotePath")"
             aws ecs execute-command \
-            --cluster "$clusterName" \
-            --task "$TASK_ARN" \
-            --container migration-console \
-            --interactive \
-            --command "ls -la \$(dirname "$remotePath")"
+                --cluster "\$clusterName" \
+                --task "\$TASK_ARN" \
+                --container migration-console \
+                --interactive \
+                --command "ls -la \$(dirname "\$remotePath")"
 
-            # Download file with banner-stripping
-            echo "📥 Downloading file: $remotePath"
-            mkdir -p "\$(dirname "$localPath")"
-
+            echo "📥 Downloading file: \$remotePath"
+            mkdir -p "\$(dirname "\$localPath")"
             aws ecs execute-command \
-            --cluster "$clusterName" \
-            --task "$TASK_ARN" \
-            --container migration-console \
-            --interactive \
-            --command "cat $remotePath" \
-            | tee /dev/tty | awk 'BEGIN { skip=1 } 
-                /[Ss]tarting session with.*/ { skip=0; next }
-                /[Ee]xiting session with.*/ { exit }
-                !skip { print }' > "$localPath" 
+                --cluster "\$clusterName" \
+                --task "\$TASK_ARN" \
+                --container migration-console \
+                --interactive \
+                --command "cat \$remotePath" \
+                | tee /dev/tty | awk 'BEGIN { skip=1 }
+                    /[Ss]tarting session with.*/ { skip=0; next }
+                    /[Ee]xiting session with.*/ { exit }
+                    !skip { print }' > "\$localPath"
 
-            # Validate and preview
-            if [[ ! -s "$localPath" ]]; then
-            echo "⚠️  Downloaded file is empty, removing: $localPath"
-            rm -f "$localPath"
-            exit 1
+            if [[ ! -s "\$localPath" ]]; then
+                echo "⚠️  Downloaded file is empty, removing: \$localPath"
+                rm -f "\$localPath"
+                exit 1
             fi
 
-            echo "✅ File downloaded: $localPath"
-            echo "📦 Size: \$(du -h "$localPath" | cut -f1)"
+            echo "✅ File downloaded: \$localPath"
+            echo "📦 Size: \$(du -h "\$localPath" | cut -f1)"
             echo "🔍 Preview:"
-            head -n 5 "$localPath"
+            head -n 5 "\$localPath"
         """
-        
-        def fileExists = fileExists(localPath)
-        echo "File exists check: ${fileExists}"
-        return fileExists
+
+        def exists = fileExists(localPath)
+        echo "File exists check: ${exists}"
+        return exists
     } catch (Exception e) {
         echo "ERROR: Exception occurred during file download: ${e.message}"
         return false
