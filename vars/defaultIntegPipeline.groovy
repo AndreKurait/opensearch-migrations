@@ -13,7 +13,6 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
     echo "Using cluster name: ${clusterName}"
     
     try {
-        def localPath = "backfill-metrics/backfill_metrics.csv"
         sh """
             # Inputs
             clusterName="migration-${stage}-ecs-cluster"
