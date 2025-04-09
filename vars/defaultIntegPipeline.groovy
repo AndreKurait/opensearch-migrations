@@ -34,11 +34,14 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
                 --command "ls -la \$(dirname ${remotePath})"
             
             echo "Attempting to download file ${remotePath}..."
+            # Download the file but filter out AWS Session Manager metadata
             aws ecs execute-command --cluster ${clusterName} \\
                 --task \$TASK_ARN \\
                 --container migration-console \\
                 --interactive \\
-                --command "cat ${remotePath}" > ${localPath} || echo "Failed to download file from ${remotePath}"
+                --command "cat ${remotePath}" | \\
+                sed -n '/^The Session Manager plugin was installed successfully/,/^Starting session with SessionId:/!p' | \\
+                sed '/^timestamp,metric,value,unit/,/^Cannot perform start session: EOF/d' > ${localPath} || echo "Failed to download file from ${remotePath}"
             
             if [ -f "${localPath}" ]; then
                 echo "File downloaded, size: \$(du -h ${localPath} | cut -f1)"
