@@ -52,7 +52,11 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
                 | tee /dev/tty | awk 'BEGIN { skip=1 }
                     /[Ss]tarting session with.*/ { skip=0; next }
                     /[Ee]xiting session with.*/ { exit }
-                    !skip { print }' > "\$localPath"
+                    !skip { print }' \
+                | grep -v "Session Manager plugin" \
+                | grep -v "session with SessionId" \
+                | grep -v "Cannot perform" \
+                | grep -v "^[[:space:]]*\$" > "\$localPath"
 
             if [[ ! -s "\$localPath" ]]; then
                 echo "⚠️  Downloaded file is empty, removing: \$localPath"
