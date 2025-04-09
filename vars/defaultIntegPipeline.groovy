@@ -7,7 +7,7 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
     
     // If cluster name is not provided, construct it from the stage
     if (!clusterName) {
-        clusterName = "migration-console-${stage}"
+        clusterName = "migration-${stage}-ecs-cluster"
     }
     
     echo "Using cluster name: ${clusterName}"
@@ -16,9 +16,9 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
         // Get the task ARN for the migration console task
         sh """
             echo "Listing tasks in cluster ${clusterName}..."
-            aws ecs list-tasks --cluster ${clusterName} --family migration-console
+            aws ecs list-tasks --cluster ${clusterName} --service-name migration-${stage}-migration-console
             
-            TASK_ARN=\$(aws ecs list-tasks --cluster ${clusterName} --family migration-console --query 'taskArns[0]' --output text)
+            TASK_ARN=\$(aws ecs list-tasks --cluster ${clusterName}--service-name migration-${stage}-migration-console --query 'taskArns[0]' --output text)
             echo "Found task ARN: \$TASK_ARN"
             
             if [ -z "\$TASK_ARN" ] || [ "\$TASK_ARN" == "None" ]; then
