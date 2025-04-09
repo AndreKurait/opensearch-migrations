@@ -35,13 +35,24 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
             
             echo "Attempting to download file ${remotePath}..."
             # Download the file but filter out AWS Session Manager metadata
+            # Create a temporary file for the raw output
+            TMP_FILE=\$(mktemp)
             aws ecs execute-command --cluster ${clusterName} \\
                 --task \$TASK_ARN \\
                 --container migration-console \\
                 --interactive \\
-                --command "cat ${remotePath}" | \\
-                sed -n '/^The Session Manager plugin was installed successfully/,/^Starting session with SessionId:/!p' | \\
-                sed '/^timestamp,metric,value,unit/,/^Cannot perform start session: EOF/d' > ${localPath} || echo "Failed to download file from ${remotePath}"
+                --command "cat ${remotePath}" > \$TMP_FILE || echo "Failed to download file from ${remotePath}"
+            
+            # Process the file to remove AWS Session Manager metadata
+            # Skip the first few lines (header) and stop before the metrics footer
+            cat \$TMP_FILE | \\
+                awk 'BEGIN {skip=1} 
+                     /^Starting session with SessionId:/ {skip=0; next} 
+                     /^timestamp,metric,value,unit/ {exit} 
+                     !skip {print}' > ${localPath}
+            
+            # Clean up temporary file
+            rm -f \$TMP_FILE
             
             if [ -f "${localPath}" ]; then
                 echo "File downloaded, size: \$(du -h ${localPath} | cut -f1)"
