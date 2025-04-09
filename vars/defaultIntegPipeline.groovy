@@ -15,59 +15,61 @@ def downloadFileFromEcsTask(String remotePath, String localPath, String stage, S
     try {
         // Get the task ARN for the migration console task
         sh """
-            echo "Listing tasks in cluster ${clusterName}..."
-            aws ecs list-tasks --cluster ${clusterName} --service-name migration-${stage}-migration-console
-            
-            TASK_ARN=\$(aws ecs list-tasks --cluster ${clusterName} --service-name migration-${stage}-migration-console --query 'taskArns[0]' --output text)
-            echo "Found task ARN: \$TASK_ARN"
-            
-            if [ -z "\$TASK_ARN" ] || [ "\$TASK_ARN" == "None" ]; then
-                echo "ERROR: No migration-console task found in cluster ${clusterName}"
-                exit 1
+            # === Inputs ===
+            clusterName="migration-${stage}-ecs-cluster"
+            serviceName="migration-${stage}-migration-console"
+            remotePath="/root/lib/integ_test/integ_test/reports/integ_full_1744216624822_46/backfill_metrics.csv"
+            localPath="backfill-metrics/backfill_metrics.csv"
+
+            echo "🔍 Finding ECS task in cluster: $clusterName"
+            TASK_ARN=\$(aws ecs list-tasks \
+            --cluster "$clusterName" \
+            --service-name "$serviceName" \
+            --query 'taskArns[0]' \
+            --output text)
+
+            if [[ -z "$TASK_ARN" || "$TASK_ARN" == "None" ]]; then
+            echo "❌ ERROR: No running task found in $serviceName"
+            exit 1
             fi
-            
-            echo "Checking if file exists on remote container..."
-            aws ecs execute-command --cluster ${clusterName} \\
-                --task \$TASK_ARN \\
-                --container migration-console \\
-                --interactive \\
-                --command "ls -la \$(dirname ${remotePath})"
-            
-            echo "Attempting to download file ${remotePath}..."
-            # Download the file but filter out AWS Session Manager metadata
-            # Create a temporary file for the raw output
-            TMP_FILE=\$(mktemp)
-            aws ecs execute-command --cluster ${clusterName} \\
-                --task \$TASK_ARN \\
-                --container migration-console \\
-                --interactive \\
-                --command "cat ${remotePath}" > \$TMP_FILE || echo "Failed to download file from ${remotePath}"
-            
-            # Process the file to remove AWS Session Manager metadata
-            # Skip the first few lines (header) and stop before the metrics footer
-            cat \$TMP_FILE | \\
-                awk 'BEGIN {skip=1} 
-                     /^Starting session with SessionId:/ {skip=0; next} 
-                     /^timestamp,metric,value,unit/ {exit} 
-                     !skip {print}' > ${localPath}
-            
-            # Clean up temporary file
-            rm -f \$TMP_FILE
-            
-            if [ -f "${localPath}" ]; then
-                echo "File downloaded, size: \$(du -h ${localPath} | cut -f1)"
-                echo "File contents preview:"
-                head -n 5 ${localPath}
-                
-                if [ ! -s "${localPath}" ]; then
-                    echo "WARNING: Downloaded file is empty, removing it"
-                    rm ${localPath}
-                    exit 1
-                fi
-            else
-                echo "ERROR: File was not downloaded to ${localPath}"
-                exit 1
+
+            echo "✅ Found task: $TASK_ARN"
+
+            # Check file directory
+            echo "📂 Checking remote path: \$(dirname "$remotePath")"
+            aws ecs execute-command \
+            --cluster "$clusterName" \
+            --task "$TASK_ARN" \
+            --container migration-console \
+            --interactive \
+            --command "ls -la \$(dirname "$remotePath")"
+
+            # Download file with banner-stripping
+            echo "📥 Downloading file: $remotePath"
+            mkdir -p "\$(dirname "$localPath")"
+
+            aws ecs execute-command \
+            --cluster "$clusterName" \
+            --task "$TASK_ARN" \
+            --container migration-console \
+            --interactive \
+            --command "cat $remotePath" \
+            | tee /dev/tty | awk 'BEGIN { skip=1 } 
+                /[Ss]tarting session with.*/ { skip=0; next }
+                /[Ee]xiting session with.*/ { exit }
+                !skip { print }' > "$localPath" 
+
+            # Validate and preview
+            if [[ ! -s "$localPath" ]]; then
+            echo "⚠️  Downloaded file is empty, removing: $localPath"
+            rm -f "$localPath"
+            exit 1
             fi
+
+            echo "✅ File downloaded: $localPath"
+            echo "📦 Size: \$(du -h "$localPath" | cut -f1)"
+            echo "🔍 Preview:"
+            head -n 5 "$localPath"
         """
         
         def fileExists = fileExists(localPath)
