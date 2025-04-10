@@ -3,7 +3,7 @@ import pytest
 import unittest
 import csv
 import os
-import datetime
+from datetime import datetime
 import random
 from console_link.middleware.clusters import run_test_benchmarks, connection_check, clear_cluster, ConnectionResult
 from console_link.models.cluster import Cluster
