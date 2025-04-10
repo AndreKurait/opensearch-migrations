@@ -12,11 +12,34 @@ from console_link.models.command_result import CommandResult
 from console_link.models.metadata import Metadata
 from console_link.cli import Context
 import time
+from dataclasses import dataclass
 
 from .default_operations import DefaultOperationsLibrary
 
 logger = logging.getLogger(__name__)
 ops = DefaultOperationsLibrary()
+
+@dataclass
+class Metric:
+    name: str
+    value: str
+    unit: str
+
+
+def generate_csv_data():
+    # Set a single timestamp.
+    ts = datetime.now().isoformat()
+    metrics = [
+        Metric("Timestamp", ts, "ISO-8601"),
+        Metric("Duration", 30, "sec"),
+        Metric("Size Transfered", 10000, "GB"),
+        Metric("Throughput", random.uniform(1.0, 3.0), "MiB/s")
+    ]
+    # Create header by combining name and unit.
+    header = [f"{m.name} ({m.unit})" for m in metrics]
+    # Create a row with each metric's value.
+    row = [m.value for m in metrics]
+    return [header, row]
 
 
 def preload_data(target_cluster: Cluster):
@@ -78,50 +101,29 @@ class BackfillTests(unittest.TestCase):
         time.sleep(30)
 
         # Generate simple metrics
-        duration = 30  # seconds
-        throughput = random.uniform(1.0, 3.0)  # Random value between 1-3
-        timestamp = datetime.datetime.now().isoformat()
-        
+        data = generate_csv_data()
+
         # Use the unique_id from the fixture
         unique_id = self.unique_id
-        
-        # Ensure the reports directory exists
-        reports_dir = os.path.join(os.path.dirname(__file__), "reports", unique_id)
-        os.makedirs(reports_dir, exist_ok=True)
-        
-        # Write metrics directly to CSV in the format needed by Jenkins Plot plugin
-        metrics_file = os.path.join(reports_dir, "backfill_metrics.csv")
-        logger.info(f"Writing metrics to: {metrics_file}")
-        
+
         try:
-            with open(metrics_file, 'w', newline='') as f:
-                writer = csv.writer(f)
-                # Header row
-                writer.writerow(['timestamp', 'metric', 'value', 'unit'])
-                # Data rows
-                writer.writerow([timestamp, 'Duration', duration, 'seconds'])
-                writer.writerow([timestamp, 'Throughput', throughput, 'ops/sec'])
+            # Ensure the reports directory exists
+            reports_dir = os.path.join(os.path.dirname(__file__), "reports", unique_id)
+            os.makedirs(reports_dir, exist_ok=True)
             
-            # Verify the file was written correctly
-            if os.path.exists(metrics_file):
-                file_size = os.path.getsize(metrics_file)
-                logger.info(f"Metrics file created successfully. Size: {file_size} bytes")
-                
-                # Read back and log the content for verification
-                with open(metrics_file, 'r') as f:
-                    content = f.read()
-                    logger.info(f"Metrics file content:\n{content}")
-            else:
-                logger.error(f"Failed to create metrics file at {metrics_file}")
-                
-            logger.info(f"Metrics saved to: {metrics_file}")
-            logger.info(f"Reports directory: {reports_dir}")
-            
-            # List all files in the reports directory
-            logger.info(f"Files in reports directory:")
-            for file in os.listdir(reports_dir):
-                logger.info(f"  - {file}")
-                
+            # Write metrics directly to CSV in the format needed by Jenkins Plot plugin
+            metrics_file = os.path.join(reports_dir, "backfill_metrics.csv")
+            logger.info(f"Writing metrics to: {metrics_file}")
+
+            write_csv(metrics_file, data)
+            logger.info(f"Wrote metrics to: {metrics_file}")              
         except Exception as e:
             logger.error(f"Error writing metrics file: {str(e)}")
             raise
+
+
+def write_csv(filename, data):
+    # data should be a list of rows, where each row is a list of values.
+    with open(filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(data)

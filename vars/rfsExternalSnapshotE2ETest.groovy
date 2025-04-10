@@ -50,15 +50,24 @@ def call(Map config = [:]) {
                 // Plot the metrics
                 echo "Plotting metrics with Jenkins Plot plugin"
                 plot csvFileName: 'backfill_metrics.csv',
-                     csvSeries: [[file: localMetricsPath, exclusionValues: '', displayTableFlag: true, inclusionFlag: 'OFF', url: '']],
+                     csvSeries: [[file: localMetricsPath, exclusionValues: 'Duration (sec)', displayTableFlag: false, inclusionFlag: 'INCLUDE_BY_STRING', url: '']],
                      group: 'Backfill Metrics',
-                     title: 'Backfill Performance',
+                     title: 'Backfill Duration',
                      style: 'line',
                      exclZero: false,
-                     keepRecords: true,
+                     keepRecords: false,
                      logarithmic: false,
-                     numBuilds: '10',
-                     yaxis: 'Value'
+                     yaxis: 'seconds'
+
+                plot csvFileName: 'backfill_metrics2.csv',
+                     csvSeries: [[file: localMetricsPath, exclusionValues: 'Throughput (MiB/s)', displayTableFlag: false, inclusionFlag: 'INCLUDE_BY_STRING', url: '']],
+                     group: 'Backfill Metrics',
+                     title: 'Backfill Throughput',
+                     style: 'line',
+                     exclZero: false,
+                     keepRecords: false,
+                     logarithmic: false,
+                     yaxis: 'MiB/s'
                 
                 echo "Plot configuration complete"
             } else {
