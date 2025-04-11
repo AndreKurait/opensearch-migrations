@@ -72,6 +72,10 @@ def setup_backfill(request):
 
     preload_data(target_cluster=console_env.target_cluster)
 
+
+    start_timestamp = datetime.now()
+
+
     backfill: Backfill = console_env.backfill
     assert backfill is not None
     metadata: Metadata = console_env.metadata
@@ -96,25 +100,7 @@ def setup_backfill(request):
         if is_backfill_done(message):
             break
 
-    backfill.stop()
-
-    logger.info("Stopping backfill...")
-    backfill.stop()
-
-
-def is_backfill_done(message: str) -> bool:
-    return "incomplete: 0" in message and "in progress: 0" and "unclaimed: 0"
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_after_tests():
-    # Setup code
-    logger.info("Starting backfill tests...")
-    start_timestamp = datetime.now()
-
-    yield
-
-    # Generate simple metrics
+        # Generate simple metrics
     data = generate_csv_data(start_timestamp, 1)
 
     # Use the unique_id from the fixture
@@ -135,6 +121,24 @@ def cleanup_after_tests():
         logger.error(f"Error writing metrics file: {str(e)}")
         raise
 
+
+def is_backfill_done(message: str) -> bool:
+    return "incomplete: 0" in message and "in progress: 0" and "unclaimed: 0"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_after_tests():
+    # Setup code
+    logger.info("Starting backfill tests...")
+
+    yield
+
+    logger.info("Stopping backfill...")
+    backfill: Backfill = pytest.console_env.backfill
+    assert backfill is not None
+    backfill.stop()
+
+    pass
 
 @pytest.mark.usefixtures("setup_backfill")
 class BackfillTests(unittest.TestCase):
