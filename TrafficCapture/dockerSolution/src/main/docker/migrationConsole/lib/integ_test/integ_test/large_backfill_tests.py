@@ -104,8 +104,8 @@ def setup_backfill(request):
         getTotalClusterSize(target)
         if status_result.value and not isinstance(status_result.value, Exception) and is_backfill_done(status_result.value[1]):
             break
-    target.call_api("_refresh")
-        # Generate simple metrics
+    target.call_api("/_refresh")
+
     data = generate_csv_data(start_timestamp, getTotalClusterSize(target))
 
     # Use the unique_id from the fixture
