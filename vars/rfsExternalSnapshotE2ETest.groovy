@@ -114,6 +114,7 @@ def call(Map config = [:]) {
             "domainName": "os-cluster-<STAGE>",
             "dataNodeCount": 8,
             "dataNodeType": "im4gn.2xlarge.search",
+            "ebsEnabled": false,
             "openAccessPolicyEnabled": true,
             "domainRemovalPolicy": "DESTROY",
             "artifactBucketRemovalPolicy": "DESTROY",
