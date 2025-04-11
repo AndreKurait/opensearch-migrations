@@ -141,7 +141,7 @@ def getTotalClusterSize(cluster: Cluster) -> float:
     # Convert bytes to tebibytes (TiB)
     primary_size_tib = float(primary_size_bytes) / (1024**4)
 
-    logger.info("Cluster primary store size: %s", primary_size_tib)
+    logger.info("Cluster primary store size (TiB): %s", primary_size_tib)
     return primary_size_tib
 
 
