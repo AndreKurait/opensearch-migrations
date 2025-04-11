@@ -112,8 +112,8 @@ def call(Map config = [:]) {
             "vpcId": "<VPC_ID>",
             "engineVersion": "OS_2.17",
             "domainName": "os-cluster-<STAGE>",
-            "dataNodeCount": 4,
-            "dataNodeType": 
+            "dataNodeCount": 8,
+            "dataNodeType": "im4gn.2xlarge.search",
             "openAccessPolicyEnabled": true,
             "domainRemovalPolicy": "DESTROY",
             "artifactBucketRemovalPolicy": "DESTROY",
