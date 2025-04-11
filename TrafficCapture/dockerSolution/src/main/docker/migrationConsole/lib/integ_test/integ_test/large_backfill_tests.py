@@ -75,14 +75,16 @@ def setup_backfill(request):
 
     start_timestamp = datetime.now()
 
+    target: Cluster = console_env.target_cluster
+    assert target is not None
 
     backfill: Backfill = console_env.backfill
     assert backfill is not None
     metadata: Metadata = console_env.metadata
     assert metadata is not None
 
-    success, value = metadata.migrate()
-    assert success, "Metadata failed with ${value}"
+    metadata_result: CommandResult = metadata.migrate()
+    assert metadata_result.success, f"Metadata failed with {metadata_result.value}"
 
     backfill.create()
 
@@ -95,9 +97,10 @@ def setup_backfill(request):
 
     while True:
         time.sleep(30)
-        _, message = backfill.get_status(deep_check=True)
-        print(message)
-        if is_backfill_done(message):
+        status_result = backfill.get_status(deep_check=True)
+        logger.info("Backfill has status: %s", status_result)
+        getTotalClusterSize()
+        if is_backfill_done(status_result.value[1]):
             break
 
         # Generate simple metrics
@@ -126,17 +129,18 @@ def is_backfill_done(message: str) -> bool:
     return "incomplete: 0" in message and "in progress: 0" and "unclaimed: 0"
 
 
+def getTotalClusterSize(cluster: Cluster) -> float:
+    value = cluster.call_api("/_stats/store?level=cluster")
+    logger.info("Size output: %s", value)
+    pass
+
+
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_after_tests():
     # Setup code
     logger.info("Starting backfill tests...")
 
     yield
-
-    logger.info("Stopping backfill...")
-    backfill: Backfill = pytest.console_env.backfill
-    assert backfill is not None
-    backfill.stop()
 
     pass
 
