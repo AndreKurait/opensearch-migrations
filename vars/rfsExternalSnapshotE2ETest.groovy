@@ -61,7 +61,8 @@ def call(Map config = [:]) {
                          exclZero: false,
                          keepRecords: false,
                          logarithmic: metric.logarithmic,
-                         yaxis: metric.yaxis
+                         yaxis: metric.yaxis,
+                         hasLegend: false
                 }
                 echo "Plotting complete"
             } else {
