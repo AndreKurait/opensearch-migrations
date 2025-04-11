@@ -98,13 +98,13 @@ def setup_backfill(request):
     assert backfill_scale_result.success
 
     while True:
-        time.sleep(15)
+        time.sleep(10)
         status_result = backfill.get_status(deep_check=True)
         logger.info("Backfill has status: %s", status_result)
         getTotalClusterSize(target)
         if status_result.value and not isinstance(status_result.value, Exception) and is_backfill_done(status_result.value[1]):
             break
-
+    target.call_api("_refresh")
         # Generate simple metrics
     data = generate_csv_data(start_timestamp, getTotalClusterSize(target))
 
@@ -132,7 +132,7 @@ def is_backfill_done(message: str) -> bool:
 
 
 def getTotalClusterSize(cluster: Cluster) -> float:
-    response = cluster.call_api("/_stats/store?level=cluster")
+    response = cluster.call_api("/_stats/store?level=cluster", raise_error=False)
     data = response.json()
     primary_size_bytes = data['_all']['primaries']['store']['size_in_bytes']
 
