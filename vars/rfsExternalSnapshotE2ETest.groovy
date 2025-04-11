@@ -15,10 +15,10 @@ def call(Map config = [:]) {
     def localMetricsPath = "${metricsOutputDir}/backfill_metrics.csv"
     
     def metricsToPlot = [
-        [field: 'Duration (min)', title: 'Duration', yaxis: 'minutes', style: 'line', logarithmic: true],
+        [field: 'Duration (min)', title: 'Duration', yaxis: 'minutes', style: 'line', logarithmic: false],
         [field: 'Reindexing Throughput Total (MiB/s)', title: 'Reindexing Throughput Total', yaxis: 'MiB/s', style: 'line', logarithmic: false],
         [field: 'Reindexing Throughput Per Worker (MiB/s)', title: 'Reindexing Throughput Per Worker', yaxis: 'MiB/s', style: 'line', logarithmic: false],
-        [field: 'Size Transferred (GB)', title: 'Primary Shard Size Transferred', yaxis: 'GiB', style: 'line', logarithmic: true],
+        [field: 'Size Transferred (GB)', title: 'Primary Shard Size Transferred', yaxis: 'GiB', style: 'line', logarithmic: false],
     ]
     
     def plotMetricsCallback = { ->
