@@ -11,7 +11,6 @@ from console_link.models.command_result import CommandResult
 from console_link.models.metadata import Metadata
 from console_link.cli import Context
 import time
-from dataclasses import dataclass
 
 from .default_operations import DefaultOperationsLibrary
 

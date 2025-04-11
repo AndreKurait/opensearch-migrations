@@ -59,7 +59,7 @@ def call(Map config = [:]) {
                          group: 'Backfill Metrics',
                          title: metric.title,
                          style: metric.style,
-                         series: [metric.field]
+                         series: [metric.field],
                          exclZero: false,
                          keepRecords: false,
                          logarithmic: metric.logarithmic,
