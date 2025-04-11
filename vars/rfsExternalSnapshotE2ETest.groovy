@@ -94,7 +94,10 @@ def call(Map config = [:]) {
         {
           "migration-rfs-external-snapshot": {
             "sourceCluster": {
-              "disabled": true
+              "disabled": true,
+              "endpoint": "https://google.com",
+              "auth": {"type": "none"},
+              "version": "ES_5.6"
             },
             "snapshot": {
                 "snapshotName": "final-snapshot-integ_full_1744320627507_109",
