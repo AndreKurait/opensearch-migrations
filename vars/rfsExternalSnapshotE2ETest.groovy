@@ -19,7 +19,7 @@ def call(Map config = [:]) {
         [field: 'Reindexing Throughput (MiB/s)', title: 'Reindexing Throughput', yaxis: 'MiB/s', style: 'line', logarithmic: false]
     ]
     
-s    def plotMetricsCallback = { ->
+    def plotMetricsCallback = { ->
         echo "Starting metrics plotting callback"
         
         try {
