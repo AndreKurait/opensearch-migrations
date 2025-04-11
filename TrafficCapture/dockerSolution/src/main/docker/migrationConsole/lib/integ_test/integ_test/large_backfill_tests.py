@@ -92,19 +92,19 @@ def setup_backfill(request):
     assert backfill_start_result.success
 
     # small enough to allow containers to be reused, big enough to test scaling out
-    backfill_scale_result: CommandResult = backfill.scale(units=2)
+    backfill_scale_result: CommandResult = backfill.scale(units=11)
     assert backfill_scale_result.success
 
     while True:
-        time.sleep(30)
+        time.sleep(15)
         status_result = backfill.get_status(deep_check=True)
         logger.info("Backfill has status: %s", status_result)
-        getTotalClusterSize()
-        if is_backfill_done(status_result.value[1]):
+        getTotalClusterSize(target)
+        if status_result.value and not isinstance(status_result.value, Exception) and is_backfill_done(status_result.value[1]):
             break
 
         # Generate simple metrics
-    data = generate_csv_data(start_timestamp, 1)
+    data = generate_csv_data(start_timestamp, getTotalClusterSize(target))
 
     # Use the unique_id from the fixture
     unique_id = request.config.getoption("--unique_id")
@@ -126,21 +126,34 @@ def setup_backfill(request):
 
 
 def is_backfill_done(message: str) -> bool:
-    return "incomplete: 0" in message and "in progress: 0" and "unclaimed: 0"
+    return "incomplete: 0" in message and "in progress: 0" in message and "unclaimed: 0" in message
 
 
 def getTotalClusterSize(cluster: Cluster) -> float:
-    value = cluster.call_api("/_stats/store?level=cluster")
-    logger.info("Size output: %s", value)
-    pass
+    response = cluster.call_api("/_stats/store?level=cluster")
+    data = response.json()
+    primary_size_bytes = data['_all']['primaries']['store']['size_in_bytes']
+
+    # Convert bytes to tebibytes (TiB)
+    primary_size_tib = float(primary_size_bytes) / (1024**4)
+
+    logger.info("Cluster primary store size: %s", primary_size_tib)
+    return primary_size_tib
 
 
 @pytest.fixture(scope="session", autouse=True)
-def cleanup_after_tests():
+def cleanup_after_tests(request):
     # Setup code
     logger.info("Starting backfill tests...")
 
     yield
+
+    config_path = request.config.getoption("--config_file_path")
+    console_env = Context(config_path).env
+
+    backfill: Backfill = console_env.backfill
+    assert backfill is not None
+    backfill.stop()
 
     pass
 
