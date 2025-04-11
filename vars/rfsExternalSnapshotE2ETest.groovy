@@ -19,7 +19,7 @@ def call(Map config = [:]) {
         [field: 'Reindexing Throughput (MiB/s)', title: 'Reindexing Throughput', yaxis: 'MiB/s', style: 'line', logarithmic: false]
     ]
     
-    def plotMetricsCallback = { ->
+s    def plotMetricsCallback = { ->
         echo "Starting metrics plotting callback"
         
         try {
@@ -102,8 +102,8 @@ def call(Map config = [:]) {
             "snapshot": {
                 "snapshotName": "final-snapshot-integ_full_1744320627507_109",
                 "s3Uri": "s3://test-large-snapshot-bucket/es56-10tb-snapshot",
-                "s3Region": "us-east-1",
-            }
+                "s3Region": "us-east-1"
+            },
             "stage": "<STAGE>",
             "vpcId": "<VPC_ID>",
             "engineVersion": "OS_2.11",
