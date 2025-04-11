@@ -77,7 +77,8 @@ def setup_backfill(request):
     metadata: Metadata = console_env.metadata
     assert metadata is not None
 
-    metadata.migrate()
+    success, value = metadata.migrate()
+    assert success, "Metadata failed with ${value}"
 
     backfill.create()
 
@@ -89,11 +90,11 @@ def setup_backfill(request):
     assert backfill_scale_result.success
 
     while True:
+        time.sleep(30)
         _, message = backfill.get_status(deep_check=True)
         print(message)
         if is_backfill_done(message):
             break
-        time.sleep(30)
 
     backfill.stop()
 
