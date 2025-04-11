@@ -24,8 +24,10 @@ class Metric:
         self.value = value
         self.unit = unit
 
+BACKFILL_SCALE = 10
 
 def generate_csv_data(start_timestamp: datetime, size_in_tib: float):
+    global BACKFILL_SCALE
     # Current time as the end timestamp.
     end_timestamp = datetime.now()
     
@@ -41,13 +43,14 @@ def generate_csv_data(start_timestamp: datetime, size_in_tib: float):
 
     # Calculate throughput (MiB/s). Avoid division by zero.
     throughput_mib_s = size_in_mib / duration_seconds if duration_seconds > 0 else 0
-
+    throughput_mib_s_per_worker = throughput_mib_s / BACKFILL_SCALE
     # Define the metrics.
     metrics = [
         Metric("End Timestamp", end_timestamp.isoformat(), "ISO-8601"),
         Metric("Duration", round(duration_hours, 2), "hr"),
         Metric("Size Transferred", size_in_gb, "GB"),
-        Metric("Reindexing Throughput", round(throughput_mib_s, 4), "MiB/s")
+        Metric("Reindexing Throughput Total", round(throughput_mib_s, 4), "MiB/s"),
+        Metric("Reindexing Throughput Per Worker", round(throughput_mib_s_per_worker, 4), "MiB/s")
     ]
 
     # Prepare the CSV header and row.
@@ -67,6 +70,7 @@ def preload_data(target_cluster: Cluster):
 
 @pytest.fixture(scope="class")
 def setup_backfill(request):
+    global BACKFILL_SCALE
     config_path = request.config.getoption("--config_file_path")
     console_env = Context(config_path).env
 
@@ -92,7 +96,7 @@ def setup_backfill(request):
     assert backfill_start_result.success
 
     # small enough to allow containers to be reused, big enough to test scaling out
-    backfill_scale_result: CommandResult = backfill.scale(units=11)
+    backfill_scale_result: CommandResult = backfill.scale(units=BACKFILL_SCALE)
     assert backfill_scale_result.success
 
     while True:

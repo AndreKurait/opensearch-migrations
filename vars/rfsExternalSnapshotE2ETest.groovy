@@ -16,7 +16,8 @@ def call(Map config = [:]) {
     
     def metricsToPlot = [
         [field: 'Duration (hr)', title: 'Duration', yaxis: 'hours', style: 'line', logarithmic: false],
-        [field: 'Reindexing Throughput (MiB/s)', title: 'Reindexing Throughput', yaxis: 'MiB/s', style: 'line', logarithmic: false]
+        [field: 'Reindexing Throughput Total (MiB/s)', title: 'Reindexing Throughput Total', yaxis: 'MiB/s', style: 'line', logarithmic: false],
+        [field: 'Reindexing Throughput Per Worker (MiB/s)', title: 'Reindexing Throughput Per Worker', yaxis: 'MiB/s', style: 'line', logarithmic: false]
     ]
     
     def plotMetricsCallback = { ->
