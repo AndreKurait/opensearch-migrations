@@ -110,10 +110,10 @@ def call(Map config = [:]) {
             },
             "stage": "<STAGE>",
             "vpcId": "<VPC_ID>",
-            "engineVersion": "OS_2.11",
+            "engineVersion": "OS_2.17",
             "domainName": "os-cluster-<STAGE>",
-            "dataNodeCount": 2,
-            
+            "dataNodeCount": 4,
+            "dataNodeType": 
             "openAccessPolicyEnabled": true,
             "domainRemovalPolicy": "DESTROY",
             "artifactBucketRemovalPolicy": "DESTROY",
