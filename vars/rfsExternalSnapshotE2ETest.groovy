@@ -14,7 +14,11 @@ def call(Map config = [:]) {
     def metricsOutputDir = "backfill-metrics"
     def localMetricsPath = "${metricsOutputDir}/backfill_metrics.csv"
     
-    // Define the file retrieval callback for plotting
+    def metricsToPlot = [
+        [field: 'Duration (hr)', title: 'Duration', yaxis: 'hours', style: 'line', logarithmic: false],
+        [field: 'Reindexing Throughput (MiB/s)', title: 'Reindexing Throughput', yaxis: 'MiB/s', style: 'line', logarithmic: false]
+    ]
+    
     def plotMetricsCallback = { ->
         echo "Starting metrics plotting callback"
         
@@ -22,14 +26,12 @@ def call(Map config = [:]) {
             if (fileExists(localMetricsPath)) {
                 echo "Metrics file found at ${localMetricsPath}"
                 
-                // Display file contents for debugging
                 sh """
                     echo "File size: \$(du -h ${localMetricsPath} | cut -f1)"
                     echo "File contents:"
                     cat ${localMetricsPath}
                 """
                 
-                // Validate CSV format
                 def fileContent = readFile(localMetricsPath)
                 if (!fileContent.trim()) {
                     echo "ERROR: Metrics file is empty"
@@ -38,42 +40,31 @@ def call(Map config = [:]) {
                 
                 def lines = fileContent.split('\n')
                 echo "Number of lines in CSV: ${lines.size()}"
-                
                 if (lines.size() < 2) {
                     echo "ERROR: CSV file does not have enough data (header + at least one data row)"
                     return
                 }
                 
                 echo "CSV header: ${lines[0]}"
-                echo "First data row: ${lines.size() > 1 ? lines[1] : 'N/A'}"
+                echo "First data row: ${lines[1]}"
                 
-                // Plot the metrics
-                echo "Plotting metrics with Jenkins Plot plugin"
-                plot csvFileName: 'backfill_metrics.csv',
-                     csvSeries: [[file: localMetricsPath, exclusionValues: 'Duration (sec)', displayTableFlag: false, inclusionFlag: 'INCLUDE_BY_STRING', url: '']],
-                     group: 'Backfill Metrics',
-                     title: 'Backfill Duration',
-                     style: 'line',
-                     exclZero: false,
-                     keepRecords: false,
-                     logarithmic: false,
-                     yaxis: 'seconds'
-
-                plot csvFileName: 'backfill_metrics2.csv',
-                     csvSeries: [[file: localMetricsPath, exclusionValues: 'Throughput (MiB/s)', displayTableFlag: false, inclusionFlag: 'INCLUDE_BY_STRING', url: '']],
-                     group: 'Backfill Metrics',
-                     title: 'Backfill Throughput',
-                     style: 'line',
-                     exclZero: false,
-                     keepRecords: false,
-                     logarithmic: false,
-                     yaxis: 'MiB/s'
-                
-                echo "Plot configuration complete"
+                // Plot each metric from the static list
+                metricsToPlot.each { metric ->
+                    echo "Plotting ${metric.title} (Field: ${metric.field})"
+                    
+                    plot csvFileName: 'backfill_metrics.csv',
+                         csvSeries: [[file: localMetricsPath, exclusionValues: metric.field, displayTableFlag: false, inclusionFlag: 'INCLUDE_BY_STRING', url: '']],
+                         group: '10 TiB Backfill Metrics',
+                         title: metric.title + " (10 TiB Migration)",
+                         style: metric.style,
+                         exclZero: false,
+                         keepRecords: false,
+                         logarithmic: metric.logarithmic,
+                         yaxis: metric.yaxis
+                }
+                echo "Plotting complete"
             } else {
                 echo "ERROR: Metrics file not found at ${localMetricsPath}, skipping plot"
-                
-                // Check if the directory exists
                 sh """
                     if [ -d "\$(dirname ${localMetricsPath})" ]; then
                         echo "Directory exists, listing contents:"
@@ -105,7 +96,11 @@ def call(Map config = [:]) {
             "sourceCluster": {
               "disabled": true
             },
-              
+            "snapshot": {
+                "snapshotName": "final-snapshot-integ_full_1744320627507_109",
+                "s3Uri": "s3://test-large-snapshot-bucket/es56-10tb-snapshot",
+                "s3Region": "us-east-1",
+            }
             "stage": "<STAGE>",
             "vpcId": "<VPC_ID>",
             "engineVersion": "OS_2.11",
