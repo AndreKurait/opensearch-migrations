@@ -53,13 +53,14 @@ def call(Map config = [:]) {
                 // Plot each metric from the static list
                 metricsToPlot.each { metric ->
                     echo "Plotting ${metric.title} (Field: ${metric.field})"
+
+                    def uniqueCsvName = "backfill_metrics_" + metric.field.replaceAll(/[^A-Za-z0-9]/, '') + ".csv"
                     
-                    plot csvFileName: 'backfill_metrics.csv',
+                    plot csvFileName: uniqueCsvName,
                          csvSeries: [[file: localMetricsPath, exclusionValues: metric.field, displayTableFlag: false, inclusionFlag: 'INCLUDE_BY_STRING', url: '']],
                          group: 'Backfill Metrics',
                          title: metric.title,
                          style: metric.style,
-                         series: [metric.field],
                          exclZero: false,
                          keepRecords: false,
                          logarithmic: metric.logarithmic,
