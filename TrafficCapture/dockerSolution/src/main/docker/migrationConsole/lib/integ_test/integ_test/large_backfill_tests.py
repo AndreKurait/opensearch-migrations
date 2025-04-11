@@ -33,8 +33,7 @@ def generate_csv_data(start_timestamp: datetime, size_in_tib: float):
     
     # Calculate elapsed duration in seconds.
     duration_seconds = (end_timestamp - start_timestamp).total_seconds()
-    # Convert duration to hours.
-    duration_hours = duration_seconds / 3600.0
+    duration_minutes = duration_seconds / 60.0
     
     # Convert data sizes:
     # 1 TiB = 1024 GiB; 1 GiB = 1024 MiB.
@@ -47,7 +46,7 @@ def generate_csv_data(start_timestamp: datetime, size_in_tib: float):
     # Define the metrics.
     metrics = [
         Metric("End Timestamp", end_timestamp.isoformat(), "ISO-8601"),
-        Metric("Duration", round(duration_hours, 2), "hr"),
+        Metric("Duration", round(duration_minutes, 2), "min"),
         Metric("Size Transferred", size_in_gb, "GB"),
         Metric("Reindexing Throughput Total", round(throughput_mib_s, 4), "MiB/s"),
         Metric("Reindexing Throughput Per Worker", round(throughput_mib_s_per_worker, 4), "MiB/s")

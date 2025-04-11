@@ -15,9 +15,10 @@ def call(Map config = [:]) {
     def localMetricsPath = "${metricsOutputDir}/backfill_metrics.csv"
     
     def metricsToPlot = [
-        [field: 'Duration (hr)', title: 'Duration', yaxis: 'hours', style: 'line', logarithmic: false],
+        [field: 'Duration (min)', title: 'Duration', yaxis: 'minutes', style: 'line', logarithmic: false],
         [field: 'Reindexing Throughput Total (MiB/s)', title: 'Reindexing Throughput Total', yaxis: 'MiB/s', style: 'line', logarithmic: false],
-        [field: 'Reindexing Throughput Per Worker (MiB/s)', title: 'Reindexing Throughput Per Worker', yaxis: 'MiB/s', style: 'line', logarithmic: false]
+        [field: 'Reindexing Throughput Per Worker (MiB/s)', title: 'Reindexing Throughput Per Worker', yaxis: 'MiB/s', style: 'line', logarithmic: false],
+        [field: 'Size Transferred (GB)', title: 'Primary Shard Size Transferred', yaxis: 'GiB', style: 'line', logarithmic: true],
     ]
     
     def plotMetricsCallback = { ->
@@ -55,9 +56,10 @@ def call(Map config = [:]) {
                     
                     plot csvFileName: 'backfill_metrics.csv',
                          csvSeries: [[file: localMetricsPath, exclusionValues: metric.field, displayTableFlag: false, inclusionFlag: 'INCLUDE_BY_STRING', url: '']],
-                         group: '10 TiB Backfill Metrics',
-                         title: metric.title + " (10 TiB Migration)",
+                         group: 'Backfill Metrics',
+                         title: metric.title,
                          style: metric.style,
+                         series: [metric.field]
                          exclZero: false,
                          keepRecords: false,
                          logarithmic: metric.logarithmic,
