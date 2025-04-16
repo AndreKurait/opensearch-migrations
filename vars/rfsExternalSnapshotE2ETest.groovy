@@ -112,7 +112,7 @@ def call(Map config = [:]) {
             "vpcId": "<VPC_ID>",
             "engineVersion": "OS_2.17",
             "domainName": "os-cluster-<STAGE>",
-            "dataNodeCount": 30,
+            "dataNodeCount": 10,
             "dataNodeType": "r7gd.8xlarge.search",
             "ebsEnabled": false,
             "openAccessPolicyEnabled": true,
