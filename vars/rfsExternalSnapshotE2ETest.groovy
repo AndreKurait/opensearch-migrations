@@ -124,7 +124,7 @@ def call(Map config = [:]) {
             "encryptionAtRestEnabled": true,
             "domainAZCount": 2,
             "dedicatedManagerNodeCount": 3,
-            "dedicatedManagerNodeType": "r7g.xlarge",
+            "dedicatedManagerNodeType": "r7g.xlarge.search",
             
 
 
