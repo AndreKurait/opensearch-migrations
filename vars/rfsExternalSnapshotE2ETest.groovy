@@ -125,8 +125,6 @@ def call(Map config = [:]) {
             "domainAZCount": 2,
             "dedicatedManagerNodeCount": 3,
             "dedicatedManagerNodeType": "r7g.xlarge.search",
-            
-
 
             "reindexFromSnapshotServiceEnabled": true,
             "vpcEnabled": true,
