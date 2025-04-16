@@ -123,6 +123,9 @@ def call(Map config = [:]) {
             "nodeToNodeEncryptionEnabled": true,
             "encryptionAtRestEnabled": true,
             "domainAZCount": 2,
+            "dedicatedManagerNodeCount": 3,
+            "dedicatedManagerNodeType": "r7g.xlarge",
+            
 
 
             "reindexFromSnapshotServiceEnabled": true,
