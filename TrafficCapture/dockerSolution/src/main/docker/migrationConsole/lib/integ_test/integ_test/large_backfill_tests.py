@@ -23,7 +23,7 @@ class Metric:
         self.value = value
         self.unit = unit
 
-BACKFILL_SCALE = 10
+BACKFILL_SCALE = 80
 
 def generate_csv_data(start_timestamp: datetime, size_in_tib: float):
     global BACKFILL_SCALE
