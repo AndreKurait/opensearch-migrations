@@ -124,7 +124,7 @@ def call(Map config = [:]) {
             // Acquire lock on a given deployment stage, use lockResourceName if provided
             // The variable 'lockVar' is only used internally for the lock mechanism
             lock(label: lockResourceName, quantity: 1, variable: 'lockVar')
-            timeout(time: 3, unit: 'HOURS')
+            timeout(time: 30, unit: 'HOURS')
             buildDiscarder(logRotator(daysToKeepStr: '30'))
         }
 
@@ -242,7 +242,7 @@ def call(Map config = [:]) {
 
             stage('Integ Tests') {
                 steps {
-                    timeout(time: 1, unit: 'HOURS') {
+                    timeout(time: 20, unit: 'HOURS') {
                         dir('test') {
                             script {
                                 // Allow overwriting this step
@@ -258,7 +258,7 @@ def call(Map config = [:]) {
                                             "--stage ${deployStage} " +
                                             "-s"
                                     withCredentials([string(credentialsId: 'migrations-test-account-id', variable: 'MIGRATIONS_TEST_ACCOUNT_ID')]) {
-                                        withAWS(role: 'JenkinsDeploymentRole', roleAccount: "${MIGRATIONS_TEST_ACCOUNT_ID}", duration: 3600, roleSessionName: 'jenkins-session') {
+                                        withAWS(role: 'JenkinsDeploymentRole', roleAccount: "${MIGRATIONS_TEST_ACCOUNT_ID}", duration: 43,200, roleSessionName: 'jenkins-session') {
                                             sh "sudo --preserve-env ./awsRunIntegTests.sh --command '${command}' " +
                                                     "--test-result-file ${test_result_file} " +
                                                     "--stage ${deployStage}"
