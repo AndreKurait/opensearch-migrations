@@ -104,8 +104,8 @@ def call(Map config = [:]) {
               "version": "ES_5.6"
             },
             "snapshot": {
-                "snapshotName": "final-snapshot-document_multiplier_1744733155893_1",
-                "s3Uri": "s3://migration-jenkins-snapshot-863518433585-us-east-1/es56-snapshot",
+                "snapshotName": "large-snapshot",
+                "s3Uri": "s3://migration-jenkins-snapshot-863518433585-us-east-1/large-snapshot-es5x",
                 "s3Region": "us-east-1"
             },
             "stage": "<STAGE>",
