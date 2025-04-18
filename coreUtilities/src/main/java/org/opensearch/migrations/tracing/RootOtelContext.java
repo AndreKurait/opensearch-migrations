@@ -20,6 +20,7 @@ import io.opentelemetry.sdk.metrics.export.PeriodicMetricReader;
 import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
+import io.opentelemetry.sdk.trace.samplers.Sampler;
 import io.opentelemetry.semconv.ResourceAttributes;
 import lombok.Getter;
 import lombok.NonNull;
@@ -40,6 +41,10 @@ public class RootOtelContext implements IRootOtelContext {
         final var spanProcessor = BatchSpanProcessor.builder(
             OtlpGrpcSpanExporter.builder().setEndpoint(collectorEndpoint).setTimeout(2, TimeUnit.SECONDS).build()
         ).build();
+        
+        // Configure a sampler that only samples 1% of spans
+        final var sampler = Sampler.traceIdRatioBased(0.01);
+        log.info("Configured OpenTelemetry with 1% sampling rate for spans");
         final var metricReader = PeriodicMetricReader.builder(
             OtlpGrpcMetricExporter.builder()
                 .setEndpoint(collectorEndpoint)
@@ -58,6 +63,7 @@ public class RootOtelContext implements IRootOtelContext {
                         .put(ResourceAttributes.SERVICE_INSTANCE_ID, nodeName)
                         .build())
                     .addSpanProcessor(spanProcessor)
+                    .setSampler(sampler)
                     .build()
             )
             .setMeterProvider(
