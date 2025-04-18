@@ -337,7 +337,7 @@ public class NettyPacketToHttpConsumer implements IPacketFinalizingConsumer<Aggr
                 .addArgument(channel)
                 .addArgument(pipeline)
                 .log();
-            for (var handlerName : new String[] { WRITE_COUNT_WATCHER_HANDLER_NAME, READ_COUNT_WATCHER_HANDLER_NAME }) {
+            for (var handlerName : new String[] { WRITE_COUNT_WATCHER_HANDLER_NAME, READ_COUNT_WATCHER_HANDLER_NAME, READ_TIMEOUT_HANDLER_NAME }) {
                 try {
                     pipeline.remove(handlerName);
                 } catch (NoSuchElementException e) {
