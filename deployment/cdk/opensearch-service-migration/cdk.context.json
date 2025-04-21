@@ -42,7 +42,9 @@
     "captureProxyDesiredCount": 1,
     "targetClusterProxyServiceEnabled": false,
     "targetClusterProxyDesiredCount": 1,
-    "// help targetClusterProxyExtraArgs": "Add --noCapture to disable capturing traffic to Kafka",
-    "targetClusterProxyExtraArgs": "--noCapture"
+    "// help targetClusterProxyExtraArgs": "Additional arguments to provide to the Target Cluster Proxy command",
+    "targetClusterProxyExtraArgs": "",
+    "// help targetProxyServiceCaptureEnabled": "Enable capturing traffic to Kafka from the target cluster proxy",
+    "targetProxyServiceCaptureEnabled": false
   }
 }

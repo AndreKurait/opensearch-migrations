@@ -4,5 +4,9 @@
   "migrationConsoleServiceEnabled": true,
   "trafficReplayerServiceEnabled": false,
   "otelCollectorEnabled": true,
-  "reindexFromSnapshotWorkerSize": "default"
+  "reindexFromSnapshotWorkerSize": "default",
+  "captureProxyDesiredCount": 1,
+  "targetClusterProxyDesiredCount": 1,
+  "targetClusterProxyExtraArgs": "",
+  "targetProxyServiceCaptureEnabled": false
 }

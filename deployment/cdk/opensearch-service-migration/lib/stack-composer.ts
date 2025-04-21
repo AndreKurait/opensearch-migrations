@@ -208,6 +208,7 @@ export class StackComposer {
         const captureProxyDesiredCount = this.getContextForType('captureProxyDesiredCount', 'number', defaultValues, contextJSON)
         const targetClusterProxyServiceEnabled = this.getContextForType('targetClusterProxyServiceEnabled', 'boolean', defaultValues, contextJSON)
         const targetClusterProxyDesiredCount = this.getContextForType('targetClusterProxyDesiredCount', 'number', defaultValues, contextJSON)
+        const targetProxyServiceCaptureEnabled = this.getContextForType('targetProxyServiceCaptureEnabled', 'boolean', defaultValues, contextJSON)
         const captureProxyExtraArgs = this.getContextForType('captureProxyExtraArgs', 'string', defaultValues, contextJSON)
         const targetClusterProxyExtraArgs = this.getContextForType('targetClusterProxyExtraArgs', 'string', defaultValues, contextJSON)
         const elasticsearchServiceEnabled = this.getContextForType('elasticsearchServiceEnabled', 'boolean', defaultValues, contextJSON)
@@ -626,7 +627,7 @@ export class StackComposer {
                     securityGroupMigrationSSMParameter: MigrationSSMParameter.OS_ACCESS_SECURITY_GROUP_ID,
                 },
                 otelCollectorEnabled: false,
-                streamingSourceType: StreamingSourceType.DISABLED,
+                streamingSourceType: targetProxyServiceCaptureEnabled ? streamingSourceType : StreamingSourceType.DISABLED,
                 extraArgs: targetClusterProxyExtraArgs,
                 stackName: `OSMigrations-${stage}-${region}-TargetClusterProxy`,
                 description: "This stack contains resources for the Target Cluster Proxy ECS service",

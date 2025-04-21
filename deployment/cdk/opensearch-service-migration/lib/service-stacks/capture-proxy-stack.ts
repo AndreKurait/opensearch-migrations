@@ -130,6 +130,9 @@ export class CaptureProxyStack extends MigrationServiceCore {
                 parameter: MigrationSSMParameter.KAFKA_BROKERS,
             });
             command = appendArgIfNotInExtraArgs(command, extraArgsDict, "--kafkaConnection", brokerEndpoints)
+        } else {
+            command = appendArgIfNotInExtraArgs(command, extraArgsDict, "--noCapture")
+            
         }
         if (props.streamingSourceType === StreamingSourceType.AWS_MSK) {
             command = appendArgIfNotInExtraArgs(command, extraArgsDict, "--enableMSKAuth")
