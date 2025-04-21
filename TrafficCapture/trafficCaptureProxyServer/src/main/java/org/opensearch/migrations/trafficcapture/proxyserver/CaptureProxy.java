@@ -92,16 +92,21 @@ public class CaptureProxy {
             arity = 1,
             description = "Kafka properties file for additional client customization.")
         public String kafkaPropertiesFile;
-        @Parameter(required = false,
-            names = { "--kafkaClientId" },
-            arity = 1,
-            description = "clientId to use for interfacing with Kafka.")
-        public String kafkaClientId = DEFAULT_KAFKA_CLIENT_ID;
-        @Parameter(required = false,
-            names = { "--kafkaConnection" },
-            arity = 1,
-            description = "Sequence of <HOSTNAME:PORT> values delimited by ','.")
-        public String kafkaConnection;
+    @Parameter(required = false,
+        names = { "--kafkaClientId" },
+        arity = 1,
+        description = "clientId to use for interfacing with Kafka.")
+    public String kafkaClientId = DEFAULT_KAFKA_CLIENT_ID;
+    @Parameter(required = false,
+        names = { "--kafka-traffic-topic", "--kafkaTrafficTopic" },
+        arity = 1,
+        description = "Topic name for Kafka traffic logging.")
+    public String kafkaTrafficTopic = "logging-traffic-topic";
+    @Parameter(required = false,
+        names = { "--kafkaConnection" },
+        arity = 1,
+        description = "Sequence of <HOSTNAME:PORT> values delimited by ','.")
+    public String kafkaConnection;
         @Parameter(required = false,
             names = { "--enableMSKAuth" },
             arity = 0,
@@ -336,6 +341,7 @@ public class CaptureProxy {
                 rootContext,
                 nodeId,
                 new KafkaProducer<>(buildKafkaProperties(params)),
+                params.kafkaTrafficTopic,
                 params.maximumTrafficStreamSize
             );
         } else if (params.noCapture) {
