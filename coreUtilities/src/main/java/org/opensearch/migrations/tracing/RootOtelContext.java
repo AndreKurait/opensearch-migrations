@@ -16,6 +16,7 @@ import io.opentelemetry.exporter.otlp.metrics.OtlpGrpcMetricExporter;
 import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.metrics.SdkMeterProvider;
+import io.opentelemetry.sdk.metrics.export.AggregationTemporalitySelector;
 import io.opentelemetry.sdk.metrics.export.PeriodicMetricReader;
 import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
@@ -50,9 +51,10 @@ public class RootOtelContext implements IRootOtelContext {
                 .setEndpoint(collectorEndpoint)
                 // see https://opentelemetry.io/docs/specs/otel/metrics/sdk_exporters/prometheus/
                 // "A Prometheus Exporter MUST only support Cumulative Temporality."
-                // .setAggregationTemporalitySelector(AggregationTemporalitySelector.deltaPreferred())
+                // Defaulting to delta temporality for cloudwatch support
+                .setAggregationTemporalitySelector(AggregationTemporalitySelector.deltaPreferred())
                 .build()
-        ).setInterval(Duration.ofMillis(1000)).build();
+        ).setInterval(Duration.ofMinutes(1)).build();
 
         var openTelemetrySdk = OpenTelemetrySdk.builder()
             .setTracerProvider(
