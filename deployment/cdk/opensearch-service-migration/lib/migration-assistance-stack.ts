@@ -2,7 +2,7 @@ import {RemovalPolicy, Stack} from "aws-cdk-lib";
 import {Port, SecurityGroup} from "aws-cdk-lib/aws-ec2";
 import {FileSystem, LifecyclePolicy, ThroughputMode} from 'aws-cdk-lib/aws-efs';
 import {Construct} from "constructs";
-import {CfnConfiguration} from "aws-cdk-lib/aws-msk";
+import {CfnConfiguration, CfnCluster} from "aws-cdk-lib/aws-msk";
 import {Cluster} from "aws-cdk-lib/aws-ecs";
 import {LogGroup, RetentionDays} from "aws-cdk-lib/aws-logs";
 import {Bucket, BucketEncryption} from "aws-cdk-lib/aws-s3";
@@ -16,7 +16,8 @@ import {
     ClientBrokerEncryption,
     Cluster as MSKCluster,
     ClusterMonitoringLevel,
-    KafkaVersion
+    KafkaVersion,
+    StorageMode
 } from "@aws-cdk/aws-msk-alpha";
 
 import {VpcDetails} from "./network-stack";
@@ -80,8 +81,15 @@ export class MigrationAssistanceStack extends Stack {
             monitoring: {
                 clusterMonitoringLevel: ClusterMonitoringLevel.DEFAULT
             },
+            storageMode: StorageMode.TIERED,
+            ebsStorageInfo: {
+                volumeSize: 1000, // Initial volume size in GiB
+            },
             removalPolicy: RemovalPolicy.DESTROY
         });
+
+        // The MSK cluster is already configured with StorageMode.TIERED
+        // No need for additional configuration
 
         createMigrationStringParameter(this, mskCluster.clusterArn, {
             ...props,

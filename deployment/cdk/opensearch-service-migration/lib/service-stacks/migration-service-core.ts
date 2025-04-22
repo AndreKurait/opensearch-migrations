@@ -163,6 +163,10 @@ export class MigrationServiceCore extends Stack {
             enableExecuteCommand: true,
             securityGroups: props.securityGroups,
             vpcSubnets: props.vpcDetails.subnetSelection,
+            // Configure minimum running tasks percentage to 100% for deployments
+            // This ensures that the service maintains 100% capacity during deployments
+            minHealthyPercent: 100,
+            maxHealthyPercent: 200
         });
 
         // Add any ServiceManagedVolumes to the service, if they exist
