@@ -575,6 +575,34 @@ export class StackComposer {
                 openSearchStack, osContainerStack])
             this.stacks.push(trafficReplayerStack)
             servicesYaml.replayer = trafficReplayerStack.replayerYaml;
+            
+            // Create a second replayer to replay from target proxy to source cluster if capture is enabled
+            if (targetProxyServiceCaptureEnabled && sourceCluster && !sourceClusterDisabled) {
+                const sourceReplayerStack = new TrafficReplayerStack(scope, `source-replayer-${deployId}`, {
+                    vpcDetails: networkStack.vpcDetails,
+                    clusterAuthDetails: sourceCluster.auth,  // Use source cluster auth
+                    addOnMigrationDeployId: deployId,
+                    customKafkaGroupId: `source-replayer-group-${deployId}`,
+                    userAgentSuffix: trafficReplayerCustomUserAgent,
+                    extraArgs: trafficReplayerExtraArgs,
+                    otelCollectorEnabled: otelCollectorEnabled,
+                    streamingSourceType: streamingSourceType,
+                    stackName: `OSMigrations-${stage}-${region}-${deployId}-SourceReplayer`,
+                    description: "This stack contains resources for the Source Traffic Replayer ECS service",
+                    stage: stage,
+                    defaultDeployId: defaultDeployId,
+                    fargateCpuArch: fargateCpuArch,
+                    maxUptime: trafficReplayerMaxUptime ? Duration.parse(trafficReplayerMaxUptime) : undefined,
+                    // Overrides for the source-targeting behavior
+                    replayerEndpoint: sourceClusterEndpoint,
+                    replayerKafkaTopic: "target-traffic-topic",  // Topic that target proxy writes to
+                    replayerServiceName: `source-replayer-${deployId}`,
+                    env: props.env
+                });
+                
+                this.addDependentStacks(sourceReplayerStack, [networkStack, migrationStack, kafkaBrokerStack]);
+                this.stacks.push(sourceReplayerStack);
+            }
         }
 
         let elasticsearchStack

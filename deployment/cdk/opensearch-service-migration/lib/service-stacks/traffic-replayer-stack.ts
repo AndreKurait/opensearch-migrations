@@ -33,7 +33,10 @@ export interface TrafficReplayerProps extends StackPropsExt {
     readonly userAgentSuffix?: string,
     readonly extraArgs?: string,
     readonly otelCollectorEnabled: boolean,
-    readonly maxUptime?: Duration
+    readonly maxUptime?: Duration,
+    readonly replayerEndpoint?: string,
+    readonly replayerKafkaTopic?: string,
+    readonly replayerServiceName?: string
 }
 
 export class TrafficReplayerStack extends MigrationServiceCore {
@@ -74,7 +77,7 @@ export class TrafficReplayerStack extends MigrationServiceCore {
         }
 
         const deployId = props.addOnMigrationDeployId ? props.addOnMigrationDeployId : props.defaultDeployId
-        const osClusterEndpoint = getMigrationStringParameterValue(this, {
+        const endpoint = props.replayerEndpoint || getMigrationStringParameterValue(this, {
             ...props,
             parameter: MigrationSSMParameter.OS_CLUSTER_ENDPOINT,
         });
@@ -82,13 +85,15 @@ export class TrafficReplayerStack extends MigrationServiceCore {
             ...props,
             parameter: MigrationSSMParameter.KAFKA_BROKERS,
         });
-        const groupId = props.customKafkaGroupId ? props.customKafkaGroupId : `logging-group-${deployId}`
+        const kafkaTopic = props.replayerKafkaTopic || "logging-traffic-topic";
+        const serviceName = props.replayerServiceName || `traffic-replayer-${deployId}`;
+        const groupId = props.customKafkaGroupId ? props.customKafkaGroupId : `${serviceName}-group-${deployId}`;
 
-        let command = `/runJavaWithClasspath.sh org.opensearch.migrations.replay.TrafficReplayer ${osClusterEndpoint}`
+        let command = `/runJavaWithClasspath.sh org.opensearch.migrations.replay.TrafficReplayer ${endpoint}`
         const extraArgsDict = parseArgsToDict(props.extraArgs)
         command = appendArgIfNotInExtraArgs(command, extraArgsDict, "--insecure")
         command = appendArgIfNotInExtraArgs(command, extraArgsDict, "--kafka-traffic-brokers", brokerEndpoints)
-        command = appendArgIfNotInExtraArgs(command, extraArgsDict, "--kafka-traffic-topic", "logging-traffic-topic")
+        command = appendArgIfNotInExtraArgs(command, extraArgsDict, "--kafka-traffic-topic", kafkaTopic)
         command = appendArgIfNotInExtraArgs(command, extraArgsDict, "--kafka-traffic-group-id", groupId)
 
         if (props.clusterAuthDetails.basicAuth) {
@@ -127,7 +132,7 @@ export class TrafficReplayerStack extends MigrationServiceCore {
         command = props.extraArgs?.trim() ? command.concat(` ${props.extraArgs?.trim()}`) : command
 
         this.createService({
-            serviceName: `traffic-replayer-${deployId}`,
+            serviceName: serviceName,
             taskInstanceCount: 0,
             dockerImageName: "migrations/traffic_replayer:latest",
             dockerImageCommand: ['/bin/sh', '-c', command],
@@ -136,7 +141,7 @@ export class TrafficReplayerStack extends MigrationServiceCore {
             mountPoints: [sharedLogFileSystem.asMountPoint()],
             taskRolePolicies: servicePolicies,
             environment: {
-                "SHARED_LOGS_DIR_PATH": `${sharedLogFileSystem.mountPointPath}/traffic-replayer-${deployId}`
+                "SHARED_LOGS_DIR_PATH": `${sharedLogFileSystem.mountPointPath}/${serviceName}`
             },
             cpuArchitecture: props.fargateCpuArch,
             taskCpuUnits: 1024,
@@ -146,7 +151,7 @@ export class TrafficReplayerStack extends MigrationServiceCore {
 
         this.replayerYaml = new ECSReplayerYaml();
         this.replayerYaml.ecs.cluster_name = `migration-${props.stage}-ecs-cluster`;
-        this.replayerYaml.ecs.service_name = `migration-${props.stage}-traffic-replayer-${deployId}`;
+        this.replayerYaml.ecs.service_name = `migration-${props.stage}-${serviceName}`;
 
         new MigrationDashboard(this, 'CnRDashboard', {
             dashboardName: `MigrationAssistant_CaptureAndReplay_Dashboard_${props.stage}`,
