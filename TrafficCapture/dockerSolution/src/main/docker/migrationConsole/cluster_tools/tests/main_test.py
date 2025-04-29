@@ -20,7 +20,7 @@ def test_list_tools(caplog):
         for line in caplog.text.splitlines()
         if "  - " in line
     ]
-    assert len(available_tools) >= 3, "Expected at least 3 tools"
+    assert len(available_tools) >= 5, "Expected at least 5 tools"
     assert "create_index" in available_tools, "Expected 'create_index' tool to be listed"
 
 
