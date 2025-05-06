@@ -8,8 +8,10 @@ import java.util.Optional;
 import org.opensearch.migrations.Flavor;
 import org.opensearch.migrations.Version;
 import org.opensearch.migrations.VersionMatchers;
+import org.opensearch.migrations.bulkload.common.http.AbstractRestClient;
 import org.opensearch.migrations.bulkload.common.http.ConnectionContext;
 import org.opensearch.migrations.bulkload.common.http.HttpResponse;
+import org.opensearch.migrations.bulkload.common.http.RestClientFactory;
 import org.opensearch.migrations.bulkload.version_es_5_6.OpenSearchClient_ES_5_6;
 import org.opensearch.migrations.bulkload.version_es_6_8.OpenSearchClient_ES_6_8;
 import org.opensearch.migrations.bulkload.version_os_2_11.OpenSearchClient_OS_2_11;
@@ -28,14 +30,14 @@ public class OpenSearchClientFactory {
 
     private ConnectionContext connectionContext;
     private Version version;
-    RestClient client;
+    AbstractRestClient client;
  
     public OpenSearchClientFactory(ConnectionContext connectionContext) {
         if (connectionContext == null) {
             throw new IllegalArgumentException("Connection context was not provided in constructor.");
         }
         this.connectionContext = connectionContext;
-        this.client = new RestClient(connectionContext);
+        this.client = RestClientFactory.createRestClient(connectionContext, connectionContext.getHttpClientImplementation());
     }
 
     public OpenSearchClient determineVersionAndCreate() {
@@ -51,13 +53,13 @@ public class OpenSearchClientFactory {
         }
     }
 
-    public OpenSearchClient determineVersionAndCreate(RestClient restClient, FailedRequestsLogger failedRequestsLogger) {
+    public OpenSearchClient determineVersionAndCreate(AbstractRestClient restClient, FailedRequestsLogger failedRequestsLogger) {
         if (version == null) {
             version = getClusterVersion();
         }
         var clientClass = getOpenSearchClientClass(version);
         try {
-            return clientClass.getConstructor(RestClient.class, FailedRequestsLogger.class, Version.class)
+            return clientClass.getConstructor(AbstractRestClient.class, FailedRequestsLogger.class, Version.class)
                     .newInstance(restClient, failedRequestsLogger, version);
         } catch (NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
             throw new ClientInstantiationException("Failed to instantiate OpenSearchClient", e);
@@ -99,7 +101,7 @@ public class OpenSearchClientFactory {
                 .block();
 
         // Compatibility mode is only enabled on OpenSearch clusters responding with the version of 7.10.2
-        if (!VersionMatchers.isES_7_10.test(versionFromRootApi)) {
+        if (versionFromRootApi == null || !VersionMatchers.isES_7_10.test(versionFromRootApi)) {
             return versionFromRootApi;
         }
         return client.getAsync("_cluster/settings?include_defaults=true", null)

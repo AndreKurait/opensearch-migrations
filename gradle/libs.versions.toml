@@ -38,6 +38,7 @@ protobuf = "4.30.2"
 reactor-netty = "1.2.4"
 reactor-test = "3.7.4"
 semver4j = "5.6.0"
+servicetalk = "0.42.0"
 slf4j = "2.0.17"
 testcontainers = "1.20.6"
 toxiproxy = "2.1.7"
@@ -146,6 +147,12 @@ reactor-netty-http = {module = "io.projectreactor.netty:reactor-netty-http", ver
 reactor-test = {module = "io.projectreactor:reactor-test", version.ref = "reactor-test" }
 
 semver4j = { module = "org.semver4j:semver4j", version.ref = "semver4j" }
+
+servicetalk-http-api = { module = "io.servicetalk:servicetalk-http-api", version.ref = "servicetalk" }
+servicetalk-http-netty = { module = "io.servicetalk:servicetalk-http-netty", version.ref = "servicetalk" }
+servicetalk-concurrent-api = { module = "io.servicetalk:servicetalk-concurrent-api", version.ref = "servicetalk" }
+servicetalk-concurrent-reactivestreams = { module = "io.servicetalk:servicetalk-concurrent-reactivestreams", version.ref = "servicetalk" }
+servicetalk-all = { module = "io.servicetalk:servicetalk-all", version.ref = "servicetalk" }
 
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 

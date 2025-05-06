@@ -101,6 +101,16 @@ dependencies {
     implementation libs.reactor.netty.core
     implementation libs.reactor.netty.http
 
+    // ServiceTalk dependencies
+    implementation libs.servicetalk.http.api
+    implementation libs.servicetalk.http.netty
+    implementation libs.servicetalk.concurrent.api
+    implementation libs.servicetalk.concurrent.reactivestreams
+    implementation 'io.servicetalk:servicetalk-transport-api:0.42.0'
+    implementation 'io.servicetalk:servicetalk-buffer-api:0.42.0'
+    implementation 'io.servicetalk:servicetalk-transport-netty-internal:0.42.0'
+
+
     implementation libs.aws.crt
     implementation libs.aws.s3
     implementation libs.aws.s3.transfer.manager

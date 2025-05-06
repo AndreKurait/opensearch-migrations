@@ -31,6 +31,7 @@ public class ConnectionContext {
     private final RequestTransformer requestTransformer;
     private final boolean compressionSupported;
     private final boolean awsSpecificAuthentication;
+    private final RestClientFactory.HttpClientImplementation httpClientImplementation;
 
     private TlsCredentialsProvider tlsCredentialsProvider;
 
@@ -83,6 +84,7 @@ public class ConnectionContext {
             requestTransformer = new NoAuthTransformer();
         }
         compressionSupported = params.isCompressionEnabled();
+        httpClientImplementation = params.getHttpClientImplementation();
 
         validateClientCertPairPresence(params);
 
@@ -122,6 +124,10 @@ public class ConnectionContext {
         boolean isCompressionEnabled();
 
         boolean isInsecure();
+        
+        default RestClientFactory.HttpClientImplementation getHttpClientImplementation() {
+            return RestClientFactory.HttpClientImplementation.REACTOR_NETTY;
+        }
 
         default ConnectionContext toConnectionContext() {
             return new ConnectionContext(this);
@@ -195,6 +201,11 @@ public class ConnectionContext {
         public boolean isCompressionEnabled() {
             return advancedArgs.isCompressionEnabled();
         }
+        
+        @Override
+        public RestClientFactory.HttpClientImplementation getHttpClientImplementation() {
+            return advancedArgs.getHttpClientImplementation();
+        }
     }
 
     // Flags that require more testing and validation before recommendations are made
@@ -204,6 +215,20 @@ public class ConnectionContext {
             description = "**Advanced**. Allow request compression to target",
             required = false)
         public boolean compressionEnabled = false;
+        
+        @Parameter(names = {"--target-http-client", "--targetHttpClient" },
+            description = "**Advanced**. HTTP client implementation to use (REACTOR_NETTY or SERVICE_TALK)",
+            required = false)
+        public String httpClient = "REACTOR_NETTY";
+        
+        public RestClientFactory.HttpClientImplementation getHttpClientImplementation() {
+            try {
+                return RestClientFactory.HttpClientImplementation.valueOf(httpClient);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid HTTP client implementation: " + httpClient +
+                    ". Valid values are: " + java.util.Arrays.toString(RestClientFactory.HttpClientImplementation.values()));
+            }
+        }
     }
 
     @Getter
