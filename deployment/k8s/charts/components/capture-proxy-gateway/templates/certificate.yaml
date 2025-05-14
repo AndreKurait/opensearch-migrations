@@ -1,0 +1,30 @@
+{{- if and .Values.tls.enabled (not .Values.tls.certManager.enabled) }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.tls.certificate.secretName }}
+  namespace: {{ .Values.gatewayApi.namespace }}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ .Values.tls.certificate.cert }}
+  tls.key: {{ .Values.tls.certificate.key }}
+{{- end }}
+
+{{- if and .Values.tls.enabled .Values.tls.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.tls.certificate.name }}
+  namespace: {{ .Values.gatewayApi.namespace }}
+spec:
+  secretName: {{ .Values.tls.certificate.secretName }}
+  issuerRef:
+    name: {{ .Values.tls.certManager.issuerName }}
+    kind: {{ .Values.tls.certManager.issuerKind }}
+  dnsNames:
+  {{- range .Values.gatewayApi.httpRoutes }}
+  {{- range .hostnames }}
+    - {{ . }}
+  {{- end }}
+  {{- end }}
+{{- end }}

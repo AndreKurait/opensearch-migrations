@@ -1,0 +1,51 @@
+{{- if .Values.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: capture-proxy-nlb
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- range $key, $value := .Values.service.annotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+    {{- range $key, $value := .Values.service.additionalAnnotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+    {{- if .Values.minikube.enabled }}
+    # Minikube specific annotations
+    service.beta.kubernetes.io/minikube-ip: {{ .Values.minikube.ip | quote }}
+    {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+      {{- if .Values.service.appProtocol }}
+      appProtocol: {{ .Values.service.appProtocol }}
+      {{- end }}
+  selector:
+    app: capture-proxy
+{{- end }}
+
+---
+# Backend service for the capture proxy
+apiVersion: v1
+kind: Service
+metadata:
+  name: capture-proxy
+  namespace: {{ .Release.Namespace }}
+  {{- if .Values.service.backendAppProtocol }}
+  annotations:
+    networking.kubernetes.io/app-protocol: {{ .Values.service.backendAppProtocol }}
+  {{- end }}
+spec:
+  selector:
+    app: capture-proxy
+  ports:
+    - port: 9200
+      targetPort: 9200
+      protocol: TCP
+      {{- if .Values.service.backendAppProtocol }}
+      appProtocol: {{ .Values.service.backendAppProtocol }}
+      {{- end }}

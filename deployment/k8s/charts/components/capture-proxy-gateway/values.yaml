@@ -1,0 +1,164 @@
+# Default values for capture-proxy-gateway
+# This is a YAML-formatted file.
+
+# Capture Proxy configuration
+capture-proxy:
+  # Override capture-proxy values here
+  parameters:
+    destinationUri:
+      source: parameterConfig
+      value: "http://sourcecluster.example.com:9200"
+      allowRuntimeOverride: true
+    listenPort:
+      source: parameterConfig
+      value: 9200
+      allowRuntimeOverride: false
+    insecureDestination:
+      source: parameterConfig
+      parameterType: booleanFlag
+      value: true
+      allowRuntimeOverride: true
+    kafkaConnection:
+      source: parameterConfig
+      value: "kafka-bootstrap:9092"
+      allowRuntimeOverride: true
+
+# Gateway API configuration
+gatewayApi:
+  enabled: true
+  # Gateway API class name (envoy-gateway for Envoy Gateway)
+  gatewayClassName: "envoy-gateway"
+  # Gateway name
+  name: "capture-proxy-gateway"
+  # Gateway namespace
+  namespace: "default"
+  # Gateway infrastructure configuration (Gateway API v1.2 feature)
+  # infrastructure:
+  #   labels:
+  #     istio-injection: enabled
+  #   annotations:
+  #     linkerd.io/inject: enabled
+  # Gateway listeners
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        namespaces:
+          from: Same
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: capture-proxy-cert
+            kind: Secret
+  # HTTP routes
+  httpRoutes:
+    - name: "capture-proxy-route"
+      hostnames:
+        - "capture-proxy.example.com"
+      rules:
+        - name: "main-route"  # Named rule (Gateway API v1.2 feature)
+          matches:
+            - path:
+                type: PathPrefix
+                value: /
+          # Timeouts (Gateway API v1.2 feature)
+          # timeouts:
+          #   request: 300ms
+          # Retry policy (Gateway API v1.2 feature)
+          # retry:
+          #   codes:
+          #     - 500
+          #     - 502
+          #     - 503
+          #     - 504
+          #   attempts: 3
+          #   backoff: 500ms
+          backendRefs:
+            - name: capture-proxy
+              port: 9200
+              # Request mirroring (Gateway API v1.2 feature)
+              # filters:
+              #   - type: RequestMirror
+              #     requestMirror:
+              #       backendRef:
+              #         name: capture-proxy-mirror
+              #         port: 9200
+              #       percent: 10  # Mirror 10% of traffic
+
+# TLS configuration
+tls:
+  enabled: false
+  # Set to true to use cert-manager for certificate management
+  certManager:
+    enabled: false
+    issuerName: "letsencrypt-prod"
+    issuerKind: "ClusterIssuer"
+  # Manual certificate configuration
+  certificate:
+    name: "capture-proxy-cert"
+    secretName: "capture-proxy-tls"
+    # Base64 encoded certificate and key
+    cert: ""
+    key: ""
+
+# Network Load Balancer configuration
+service:
+  # Set to true to create an NLB service
+  enabled: true
+  # Service type (LoadBalancer for NLB in EKS)
+  type: LoadBalancer
+  # Service port
+  port: 9200
+  # Target port (should match capture-proxy listenPort)
+  targetPort: 9200
+  # Application protocol (Gateway API v1.2 feature)
+  # appProtocol: "kubernetes.io/ws"  # WebSocket over cleartext
+  # Backend service application protocol (Gateway API v1.2 feature)
+  # backendAppProtocol: "kubernetes.io/ws"  # WebSocket over cleartext
+  # Annotations for the service
+  annotations:
+    # AWS NLB specific annotations
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+    # Set to "internet-facing" for public NLB, "internal" for private NLB
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    # Uncomment to enable cross-zone load balancing
+    # service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+  # Additional annotations for the service
+  additionalAnnotations: {}
+
+# Envoy Gateway configuration
+envoyGateway:
+  # Set to true to install Envoy Gateway
+  install: true
+  # Envoy Gateway version
+  version: "1.1.0"
+  # Envoy Gateway namespace
+  namespace: "envoy-gateway-system"
+  # Envoy Gateway Helm chart repository
+  repository: "oci://docker.io/envoyproxy/gateway-helm"
+  # Envoy Gateway Helm chart name
+  chartName: "gateway-helm"
+  # Envoy Gateway Helm chart values
+  values:
+    # Add any custom values for the Envoy Gateway Helm chart here
+    provider:
+      kubernetes:
+        gatewayAPIVersion: "v1"
+        rateLimitEnabled: true
+
+# Minikube specific configuration
+minikube:
+  # Set to true when deploying to Minikube
+  enabled: false
+  # Minikube IP address (used for local development)
+  ip: "192.168.49.2"
+  # Minikube tunnel (set to true to use minikube tunnel for LoadBalancer services)
+  tunnel: true

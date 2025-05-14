@@ -1,0 +1,48 @@
+{{- if .Values.gatewayApi.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gatewayApi.name }}
+  namespace: {{ .Values.gatewayApi.namespace }}
+spec:
+  gatewayClassName: {{ .Values.gatewayApi.gatewayClassName }}
+  listeners:
+  {{- range .Values.gatewayApi.listeners }}
+  - name: {{ .name }}
+    port: {{ .port }}
+    protocol: {{ .protocol }}
+    {{- if .allowedRoutes }}
+    allowedRoutes:
+      {{- if .allowedRoutes.namespaces }}
+      namespaces:
+        from: {{ .allowedRoutes.namespaces.from }}
+      {{- end }}
+    {{- end }}
+    {{- if .tls }}
+    tls:
+      mode: {{ .tls.mode }}
+      {{- if .tls.certificateRefs }}
+      certificateRefs:
+      {{- range .tls.certificateRefs }}
+      - name: {{ .name }}
+        kind: {{ .kind }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- if .Values.gatewayApi.infrastructure }}
+  infrastructure:
+    {{- if .Values.gatewayApi.infrastructure.labels }}
+    labels:
+      {{- range $key, $value := .Values.gatewayApi.infrastructure.labels }}
+      {{ $key }}: {{ $value }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.gatewayApi.infrastructure.annotations }}
+    annotations:
+      {{- range $key, $value := .Values.gatewayApi.infrastructure.annotations }}
+      {{ $key }}: {{ $value }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}

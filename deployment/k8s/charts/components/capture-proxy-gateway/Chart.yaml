@@ -1,0 +1,10 @@
+apiVersion: v2
+name: capture-proxy-gateway
+description: A Helm chart for deploying the OpenSearch Migration Assistant Capture Proxy with Gateway API and NLB integration
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+dependencies:
+  - name: capture-proxy
+    repository: file://../captureProxy
+    version: 0.1.0

@@ -1,0 +1,78 @@
+{{- if .Values.gatewayApi.enabled }}
+{{- range .Values.gatewayApi.httpRoutes }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.gatewayApi.namespace }}
+spec:
+  parentRefs:
+    - name: {{ $.Values.gatewayApi.name }}
+      namespace: {{ $.Values.gatewayApi.namespace }}
+  {{- if .hostnames }}
+  hostnames:
+  {{- range .hostnames }}
+    - {{ . }}
+  {{- end }}
+  {{- end }}
+  rules:
+  {{- range .rules }}
+    - {{- if .name }}
+      name: {{ .name }}
+      {{- end }}
+      matches:
+      {{- range .matches }}
+        - path:
+            type: {{ .path.type }}
+            value: {{ .path.value }}
+      {{- end }}
+      {{- if .timeouts }}
+      timeouts:
+        {{- if .timeouts.request }}
+        request: {{ .timeouts.request }}
+        {{- end }}
+      {{- end }}
+      {{- if .retry }}
+      retry:
+        {{- if .retry.codes }}
+        codes:
+        {{- range .retry.codes }}
+          - {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .retry.attempts }}
+        attempts: {{ .retry.attempts }}
+        {{- end }}
+        {{- if .retry.backoff }}
+        backoff: {{ .retry.backoff }}
+        {{- end }}
+      {{- end }}
+      backendRefs:
+      {{- range .backendRefs }}
+        - name: {{ .name }}
+          port: {{ .port }}
+          {{- if .filters }}
+          filters:
+          {{- range .filters }}
+            - type: {{ .type }}
+              {{- if eq .type "RequestMirror" }}
+              requestMirror:
+                backendRef:
+                  name: {{ .requestMirror.backendRef.name }}
+                  port: {{ .requestMirror.backendRef.port }}
+                {{- if .requestMirror.percent }}
+                percent: {{ .requestMirror.percent }}
+                {{- end }}
+                {{- if .requestMirror.fraction }}
+                fraction:
+                  numerator: {{ .requestMirror.fraction.numerator }}
+                  denominator: {{ .requestMirror.fraction.denominator }}
+                {{- end }}
+              {{- end }}
+          {{- end }}
+          {{- end }}
+      {{- end }}
+  {{- end }}
+---
+{{- end }}
+{{- end }}

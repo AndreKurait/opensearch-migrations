@@ -1,0 +1,114 @@
+{{- if .Values.envoyGateway.install }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.envoyGateway.namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-15"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: envoy-gateway-installer-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: envoy-gateway-installer-{{ .Release.Revision }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-9"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: envoy-gateway-installer-{{ .Release.Revision }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-8"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+subjects:
+  - kind: ServiceAccount
+    name: envoy-gateway-installer-{{ .Release.Revision }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: envoy-gateway-installer-{{ .Release.Revision }}
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: install-envoy-gateway-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  template:
+    spec:
+      serviceAccountName: envoy-gateway-installer-{{ .Release.Revision }}
+      containers:
+      - name: helm
+        image: alpine/helm:3.12.0
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Create namespace if it doesn't exist
+          kubectl create namespace {{ .Values.envoyGateway.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+          
+          # Install Gateway API CRDs if they don't exist
+          if ! kubectl get crd gateways.gateway.networking.k8s.io &> /dev/null; then
+            echo "Installing Gateway API CRDs..."
+            kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
+          fi
+          
+          # Install or upgrade Envoy Gateway
+          helm upgrade --install envoy-gateway {{ .Values.envoyGateway.repository }} \
+            --namespace {{ .Values.envoyGateway.namespace }} \
+            --version {{ .Values.envoyGateway.version }} \
+            --wait \
+            --timeout 5m \
+            --set provider.kubernetes.gatewayAPIVersion=v1 \
+            {{- if .Values.envoyGateway.values }}
+            --values /tmp/values.yaml
+            {{- end }}
+        {{- if .Values.envoyGateway.values }}
+        volumeMounts:
+        - name: values
+          mountPath: /tmp/values.yaml
+          subPath: values.yaml
+        {{- end }}
+      {{- if .Values.envoyGateway.values }}
+      volumes:
+      - name: values
+        configMap:
+          name: envoy-gateway-values-{{ .Release.Revision }}
+      {{- end }}
+      restartPolicy: OnFailure
+      terminationGracePeriodSeconds: 30
+{{- if .Values.envoyGateway.values }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envoy-gateway-values-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+data:
+  values.yaml: |
+    {{- toYaml .Values.envoyGateway.values | nindent 4 }}
+{{- end }}
+{{- end }}

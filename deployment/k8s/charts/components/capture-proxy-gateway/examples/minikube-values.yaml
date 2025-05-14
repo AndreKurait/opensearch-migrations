@@ -1,0 +1,101 @@
+# Example values file for Minikube deployment
+
+# Minikube-specific configuration
+minikube:
+  enabled: true
+  # Minikube IP address (use `minikube ip` to get your actual IP)
+  ip: "192.168.49.2"
+  # Set to true if you're using minikube tunnel
+  tunnel: true
+
+# Service configuration
+service:
+  enabled: true
+  type: LoadBalancer
+  port: 9200
+  targetPort: 9200
+  # Application protocol (Gateway API v1.2 feature)
+  # appProtocol: "kubernetes.io/ws"  # WebSocket over cleartext
+  # backendAppProtocol: "kubernetes.io/ws"  # WebSocket over cleartext
+
+# Gateway API configuration
+gatewayApi:
+  enabled: true
+  gatewayClassName: "envoy-gateway"
+  name: "capture-proxy-gateway"
+  namespace: "default"
+  # Gateway infrastructure configuration (Gateway API v1.2 feature)
+  # infrastructure:
+  #   labels:
+  #     istio-injection: enabled
+  #   annotations:
+  #     linkerd.io/inject: enabled
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+  httpRoutes:
+    - name: "capture-proxy-route"
+      # No hostnames for local development
+      rules:
+        - name: "main-route"  # Named rule (Gateway API v1.2 feature)
+          matches:
+            - path:
+                type: PathPrefix
+                value: /
+          # Timeouts (Gateway API v1.2 feature)
+          # timeouts:
+          #   request: 300ms
+          # Retry policy (Gateway API v1.2 feature)
+          # retry:
+          #   codes:
+          #     - 500
+          #     - 502
+          #     - 503
+          #     - 504
+          #   attempts: 3
+          #   backoff: 500ms
+          backendRefs:
+            - name: capture-proxy
+              port: 9200
+              # Request mirroring (Gateway API v1.2 feature)
+              # filters:
+              #   - type: RequestMirror
+              #     requestMirror:
+              #       backendRef:
+              #         name: capture-proxy-mirror
+              #         port: 9200
+              #       percent: 10  # Mirror 10% of traffic
+
+# Envoy Gateway configuration
+envoyGateway:
+  install: true
+  version: "1.1.0"
+  namespace: "envoy-gateway-system"
+  repository: "oci://docker.io/envoyproxy/gateway-helm"
+  chartName: "gateway-helm"
+  values:
+    # Reduce resource requirements for local development
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    provider:
+      kubernetes:
+        gatewayAPIVersion: "v1"
+
+# Capture Proxy configuration
+capture-proxy:
+  parameters:
+    destinationUri:
+      value: "http://elasticsearch:9200"
+    kafkaConnection:
+      value: "kafka-bootstrap:9092"
+    insecureDestination:
+      value: true
