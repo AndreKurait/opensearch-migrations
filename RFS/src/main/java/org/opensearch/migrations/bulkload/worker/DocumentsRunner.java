@@ -32,7 +32,8 @@ public class DocumentsRunner {
     private final Duration maxInitialLeaseDuration;
     private final DocumentReindexer reindexer;
     private final SnapshotShardUnpacker.Factory unpackerFactory;
-    private final BiFunction<String, Integer, ShardMetadata> shardMetadataFactory;
+    private final BiFunction<String, Integer, ShardMetadata> targetShardMetadataFactory;
+    private final BiFunction<String, Integer, ShardMetadata> initialShardMetadataFactory;
     private final LuceneIndexReader.Factory readerFactory;
     private final Consumer<WorkItemCursor> cursorConsumer;
     private final Consumer<Runnable> cancellationTriggerConsumer;
@@ -135,7 +136,33 @@ public class DocumentsRunner {
         IDocumentMigrationContexts.IDocumentReindexContext context
     ) {
         log.atInfo().setMessage("Migrating docs for {}").addArgument(workItem).log();
-        ShardMetadata shardMetadata = shardMetadataFactory.apply(workItem.getIndexName(), workItem.getShardNumber());
+        
+        String indexName = workItem.getIndexName();
+        int shardNumber = workItem.getShardNumber();
+        
+        // Get target shard metadata
+        ShardMetadata targetShardMetadata = targetShardMetadataFactory.apply(indexName, shardNumber);
+        
+        // If initialShardMetadataFactory is null, just use the target shard metadata
+        ShardMetadata shardMetadata = targetShardMetadata;
+        
+        // If initialShardMetadataFactory is provided, we need to handle both snapshots
+        if (initialShardMetadataFactory != null) {
+            try {
+                // Get initial shard metadata
+                ShardMetadata initialShardMetadata = initialShardMetadataFactory.apply(indexName, shardNumber);
+                log.atInfo().setMessage("Processing delta between snapshots for index: {}, shard: {}")
+                    .addArgument(indexName)
+                    .addArgument(shardNumber)
+                    .log();
+                
+                // The DocumentsRunner doesn't need to combine the metadata - that's handled by the caller
+                // Just use the target metadata
+            } catch (Exception e) {
+                log.atError().setCause(e).setMessage("Error processing initial snapshot metadata, falling back to target snapshot only").log();
+                // Fall back to target snapshot only
+            }
+        }
 
         var unpacker = unpackerFactory.create(shardMetadata);
         var reader = readerFactory.getReader(unpacker.unpack());

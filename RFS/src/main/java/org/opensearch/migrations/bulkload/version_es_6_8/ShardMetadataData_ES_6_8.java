@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+import lombok.EqualsAndHashCode;
 import org.opensearch.migrations.bulkload.models.ShardFileInfo;
 import org.opensearch.migrations.bulkload.models.ShardMetadata;
 
@@ -101,6 +102,7 @@ public class ShardMetadataData_ES_6_8 implements ShardMetadata {
     }
 
     @Getter
+    @EqualsAndHashCode
     public static class FileInfo implements ShardFileInfo {
         private final String name;
         private final String physicalName;
@@ -120,6 +122,18 @@ public class ShardMetadataData_ES_6_8 implements ShardMetadata {
                 fileMetadataRaw.partSize,
                 fileMetadataRaw.writtenBy,
                 fileMetadataRaw.metaHash
+            );
+        }
+
+        public static ShardMetadataData_ES_6_8.FileInfoRaw toFileMetadataRaw(ShardFileInfo fileMetadata) {
+            return new ShardMetadataData_ES_6_8.FileInfoRaw(
+                    fileMetadata.getName(),
+                    fileMetadata.getPhysicalName(),
+                    fileMetadata.getLength(),
+                    fileMetadata.getChecksum(),
+                    fileMetadata.getPartSize(),
+                    fileMetadata.getWrittenBy(),
+                    fileMetadata.getMetaHash()
             );
         }
 

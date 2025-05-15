@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,8 +26,10 @@ import org.opensearch.migrations.bulkload.common.SourceRepo;
 import org.opensearch.migrations.bulkload.common.http.ConnectionContext;
 import org.opensearch.migrations.bulkload.lucene.LuceneIndexReader;
 import org.opensearch.migrations.bulkload.models.IndexMetadata;
+import org.opensearch.migrations.bulkload.models.ShardFileInfo;
 import org.opensearch.migrations.bulkload.models.ShardMetadata;
 import org.opensearch.migrations.bulkload.tracing.IWorkCoordinationContexts;
+import org.opensearch.migrations.bulkload.version_es_7_10.ShardMetadataData_ES_7_10;
 import org.opensearch.migrations.bulkload.workcoordination.CoordinateWorkHttpClient;
 import org.opensearch.migrations.bulkload.workcoordination.IWorkCoordinator;
 import org.opensearch.migrations.bulkload.workcoordination.LeaseExpireTrigger;
@@ -143,6 +146,12 @@ public class RfsMigrateDocuments {
                 "performing the document migration.  " +
                 "Useful for preventing disk overflow.  Default: 80 * 1024 * 1024 * 1024 (80 GB)"))
         public long maxShardSizeBytes = 80 * 1024 * 1024 * 1024L;
+        
+        @Parameter(required = false,
+            names = { "--from-snapshot-state", "--fromSnapshotState" },
+            description = "Optional. The name of the initial snapshot to calculate delta from. " +
+                "If provided, only the differences between this snapshot and the target snapshot will be migrated.")
+        public String fromSnapshotState = null;
 
         @Parameter(required = false,
             names = { "--initial-lease-duration", "--initialLeaseDuration" },
@@ -378,7 +387,8 @@ public class RfsMigrateDocuments {
                 arguments.maxShardSizeBytes,
                 context,
                 cancellationRunnableRef,
-                workItemTimeProvider);
+                workItemTimeProvider,
+                arguments.fromSnapshotState);
             cleanShutdownCompleted.set(true);
         } catch (NoWorkLeftException e) {
             log.atWarn().setMessage("No work left to acquire.  Exiting with error code to signal that.").log();
@@ -578,7 +588,8 @@ public class RfsMigrateDocuments {
                                                        long maxShardSizeBytes,
                                                        RootDocumentMigrationContext rootDocumentContext,
                                                        AtomicReference<Runnable> cancellationRunnable,
-                                                       WorkItemTimeProvider timeProvider)
+                                                       WorkItemTimeProvider timeProvider,
+                                                       String fromSnapshotState)
         throws IOException, InterruptedException, NoWorkLeftException
     {
         var scopedWorkCoordinator = new ScopedWorkCoordinator(workCoordinator, leaseExpireTrigger);
@@ -593,20 +604,34 @@ public class RfsMigrateDocuments {
         )) {
             throw new NoWorkLeftException("No work items are pending/all work items have been processed.  Returning.");
         }
-        BiFunction<String, Integer, ShardMetadata> shardMetadataSupplier = (name, shard) -> {
+        // Create target shard metadata supplier
+        final BiFunction<String, Integer, ShardMetadata> targetShardMetadataSupplier = (name, shard) -> {
             var shardMetadata = shardMetadataFactory.fromRepo(snapshotName, name, shard);
-            log.info("Shard size: " + shardMetadata.getTotalSizeBytes());
+            log.info("Target snapshot: " + snapshotName + ", index: " + name + ", shard: " + shard);
+            log.info("Target shard size: " + shardMetadata.getTotalSizeBytes());
+            
             if (shardMetadata.getTotalSizeBytes() > maxShardSizeBytes) {
                 throw new DocumentsRunner.ShardTooLargeException(shardMetadata.getTotalSizeBytes(), maxShardSizeBytes);
             }
+            
             return shardMetadata;
         };
+        
+        // Create initial shard metadata supplier if fromSnapshotState is provided
+        final BiFunction<String, Integer, ShardMetadata> initialShardMetadataSupplier = fromSnapshotState != null ? 
+            (name, shard) -> {
+                var shardMetadata = shardMetadataFactory.fromRepo(fromSnapshotState, name, shard);
+                log.info("Initial snapshot: " + fromSnapshotState + ", index: " + name + ", shard: " + shard);
+                log.info("Initial shard size: " + shardMetadata.getTotalSizeBytes());
+                return shardMetadata;
+            } : null;
 
         var runner = new DocumentsRunner(scopedWorkCoordinator,
             maxInitialLeaseDuration,
             reindexer,
             unpackerFactory,
-            shardMetadataSupplier,
+            targetShardMetadataSupplier,
+            initialShardMetadataSupplier,
             readerFactory,
             progressCursor::set,
             cancellationRunnable::set,

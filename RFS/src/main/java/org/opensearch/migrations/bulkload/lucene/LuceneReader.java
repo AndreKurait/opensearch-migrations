@@ -128,6 +128,7 @@ public class LuceneReader {
                             RfsLuceneDocument document = LuceneReader.getDocument(segmentReader, docIdx.intValue(), true, segmentDocBase, getSegmentReaderDebugInfo, indexDirectoryPath);
                             return Mono.justOrEmpty(document); // Emit only non-null documents
                         } else {
+                            // Call Delete on docs found
                             return Mono.empty(); // Skip non-live documents
                         }
                     } catch (Exception e) {

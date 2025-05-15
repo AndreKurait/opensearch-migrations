@@ -40,6 +40,24 @@ From the root directory of the repo, run a CLI command like so:
   || { exit_code=$?; [[ $exit_code -ne 3 ]] && echo "Command failed with exit code $exit_code. Consider rerunning the command."; }
 ```
 
+### Delta Snapshots
+
+You can migrate only the differences between two snapshots by using the `--from-snapshot-state` parameter. This is useful when you have a large initial snapshot and want to migrate only the changes that have occurred since that snapshot.
+
+```shell
+./gradlew DocumentsFromSnapshotMigration:run --args="\
+  --snapshot-name target_snapshot \
+  --from-snapshot-state initial_snapshot \
+  --s3-local-dir /tmp/s3_files \
+  --s3-repo-uri s3://your-s3-uri \
+  --s3-region us-fake-1 \
+  --lucene-dir /tmp/lucene_files \
+  --target-host http://hostname:9200" \
+  || { exit_code=$?; [[ $exit_code -ne 3 ]] && echo "Command failed with exit code $exit_code. Consider rerunning the command."; }
+```
+
+In this example, RFS will calculate and apply only the differences between `initial_snapshot` and `target_snapshot`.
+
 ### Handling Auth
 
 If your target cluster has basic auth enabled on it, you can supply those credentials to the tool via the CLI:
@@ -80,6 +98,7 @@ To see the default shard size, use the `--help` CLI option:
 | --s3-repo-uri                     | The S3 URI of the snapshot repo, like: s3://my-bucket/dir1/dir2                                                                                          |
 | --s3-region                       | The AWS Region the S3 bucket is in, like: us-east-2                                                                                                      |
 | --lucene-dir                      | The absolute path to the directory where we'll put the Lucene docs                                                                                       |
+| --from-snapshot-state             | Optional. The name of the initial snapshot to calculate delta from. If provided, only the differences between this snapshot and the target snapshot will be migrated |
 | --index-allowlist                 | Optional. List of index names to migrate (e.g. 'logs_2024_01, logs_2024_02'). Default: all non-system indices (e.g. those not starting with '.')         |
 | --max-shard-size-bytes            | Optional. The maximum shard size, in bytes, to allow when performing the document migration. Default: 80 * 1024 * 1024 * 1024 (80 GB)                    |
 | --initial-lease-duration          | Optional. The time that the first attempt to migrate a shard's documents should take. Default: PT10M                                                     |

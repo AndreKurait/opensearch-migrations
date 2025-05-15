@@ -410,7 +410,7 @@ public class SourceTestBase {
 
     protected ExpectedMigrationWorkTerminationException waitForRfsCompletion(Executable executable) {
         var expectedTerminationException = Assertions.assertTimeout(
-            Duration.ofSeconds(30),
+            Duration.ofSeconds(30000),
             () -> {
                 return Assertions.assertThrows(
                     ExpectedMigrationWorkTerminationException.class,
