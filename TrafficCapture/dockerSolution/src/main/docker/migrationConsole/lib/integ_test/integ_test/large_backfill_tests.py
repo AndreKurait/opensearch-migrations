@@ -4,7 +4,7 @@ import unittest
 import csv
 import os
 from datetime import datetime
-from console_link.middleware.clusters import connection_check, clear_cluster, ConnectionResult
+from console_link.middleware.clusters import connection_check, clear_cluster, clear_indices, ConnectionResult
 from console_link.models.cluster import Cluster
 from console_link.models.backfill_base import Backfill
 from console_link.models.command_result import CommandResult
@@ -64,7 +64,9 @@ def preload_data(target_cluster: Cluster):
 
     # Clear all data from cluster
     clear_cluster(target_cluster)
-
+    clear_output = clear_indices(target_cluster)
+    if isinstance(clear_output, str) and "Error" in clear_output:
+        raise Exception(f"Cluster Clear Indices Failed: {clear_output}")
 
 @pytest.fixture(scope="class")
 def setup_backfill(request):
@@ -156,6 +158,10 @@ def cleanup_after_tests(request):
     backfill: Backfill = console_env.backfill
     assert backfill is not None
     backfill.stop()
+
+    target: Cluster = console_env.target_cluster
+    assert target is not None
+    clear_cluster(target)
 
     pass
 

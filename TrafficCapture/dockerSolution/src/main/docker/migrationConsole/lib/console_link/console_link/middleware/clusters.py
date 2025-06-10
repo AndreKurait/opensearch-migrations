@@ -60,7 +60,7 @@ def run_test_benchmarks(cluster: Cluster):
 def clear_indices(cluster: Cluster):
     clear_indices_path = "/*,-.*,-searchguard*,-sg7*,.migrations_working_state"
     try:
-        r = cluster.call_api(clear_indices_path, method=HttpMethod.DELETE, params={"ignore_unavailable": "true"})
+        r = cluster.call_api(clear_indices_path, method=HttpMethod.DELETE, params={"ignore_unavailable": "true"}, raise_error=True)
         return r.content
     except Exception as e:
         return f"Error encountered when clearing indices: {e}"
