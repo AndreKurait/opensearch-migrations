@@ -98,13 +98,12 @@ def call(Map config = [:]) {
     def migration_cdk_context = """
         {
           "migration-rfs-external-snapshot": {
-            "sourceCluster": {
-              "endpoint": "https://google.com",
-              "auth": {"type": "none"},
-              "version": "ES_5.6"
-            },
+           "sourceCluster": {
+                "disabled": true
+           },
             "snapshot": {
                 "snapshotName": "large-snapshot",
+                "snapshotRepoName": "migration_assistant_repo",
                 "s3Uri": "s3://migration-jenkins-snapshot-863518433585-us-east-1/large-snapshot-es5x",
                 "s3Region": "us-east-1"
             },
