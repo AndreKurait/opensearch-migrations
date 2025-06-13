@@ -1,5 +1,6 @@
 package org.opensearch.migrations;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -8,9 +9,9 @@ import java.util.stream.Stream;
 
 import org.opensearch.migrations.bulkload.SupportedClusters;
 import org.opensearch.migrations.bulkload.framework.SearchClusterContainer;
-import org.opensearch.migrations.bulkload.models.DataFilterArgs;
 import org.opensearch.migrations.commands.MigrationItemResult;
 import org.opensearch.migrations.metadata.CreationResult;
+import org.opensearch.migrations.snapshot.creation.tracing.SnapshotTestContext;
 import org.opensearch.migrations.transformation.rules.IndexMappingTypeRemoval.MultiTypeResolutionBehavior;
 
 import lombok.SneakyThrows;
@@ -18,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.hamcrest.Matcher;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -36,6 +38,9 @@ import static org.hamcrest.Matchers.hasItems;
 @Slf4j
 class EndToEndTest extends BaseMigrationTest {
 
+    @TempDir
+    protected File localDirectory;
+
     private static Stream<Arguments> scenarios() {
         return SupportedClusters.supportedPairs(false).stream()
             .flatMap(pair -> {
@@ -43,7 +48,8 @@ class EndToEndTest extends BaseMigrationTest {
                             (VersionMatchers.isOS_2_X.test(pair.source().getVersion())
                                     ? Stream.empty()
                                     : Stream.of(TemplateType.Legacy)),
-                            (VersionMatchers.equalOrGreaterThanES_7_10.test(pair.source().getVersion())
+                                (UnboundVersionMatchers.isGreaterOrEqualES_7_X
+                                    .test(pair.source().getVersion())
                                     ? Stream.of(TemplateType.Index, TemplateType.IndexAndComponent)
                                     : Stream.empty()))
                     .toList();
@@ -68,6 +74,30 @@ class EndToEndTest extends BaseMigrationTest {
             this.targetCluster = targetCluster;
             metadataCommandOnClusters(medium, MetadataCommands.EVALUATE, templateTypes);
             metadataCommandOnClusters(medium, MetadataCommands.MIGRATE, templateTypes);
+        }
+    }
+
+    private static Stream<Arguments> extendedScenarios() {
+        return SupportedClusters.extendedSources().stream().map(s -> Arguments.of(s));
+    }
+
+    @ParameterizedTest(name = "From version {0} to version OS 2.19")
+    @MethodSource(value = "extendedScenarios")
+    void extendedMetadata(SearchClusterContainer.ContainerVersion sourceVersion) {
+        try (
+                final var sourceCluster = new SearchClusterContainer(sourceVersion);
+                final var targetCluster = new SearchClusterContainer(SearchClusterContainer.OS_V2_19_1);
+        ) {
+            this.sourceCluster = sourceCluster;
+            this.targetCluster = targetCluster;
+            metadataCommandOnClusters(
+                    TransferMedium.SnapshotImage,
+                    MetadataCommands.EVALUATE,
+                    List.of(TemplateType.Legacy));
+            metadataCommandOnClusters(
+                    TransferMedium.SnapshotImage,
+                    MetadataCommands.MIGRATE,
+                    List.of(TemplateType.Legacy));
         }
     }
 
@@ -122,12 +152,15 @@ class EndToEndTest extends BaseMigrationTest {
         sourceOperations.createAlias(testData.aliasName, "movies*");
         testData.aliasNames.add(testData.aliasName);
 
-        final MigrateOrEvaluateArgs arguments;
+        MigrateOrEvaluateArgs arguments;
 
         switch (medium) {
             case SnapshotImage:
-                var snapshotName = createSnapshot("my_snap_" + command.name().toLowerCase());
-                arguments = prepareSnapshotMigrationArgs(snapshotName);
+                var snapshotName = "my_snap_" + command.name().toLowerCase();
+                var testSnapshotContext = SnapshotTestContext.factory().noOtelTracking();
+                createSnapshot(sourceCluster, snapshotName, testSnapshotContext);
+                sourceCluster.copySnapshotData(localDirectory.toString());
+                arguments = prepareSnapshotMigrationArgs(snapshotName, localDirectory.toString());
                 break;
 
             case Http:
@@ -139,18 +172,15 @@ class EndToEndTest extends BaseMigrationTest {
             default:
                 throw new RuntimeException("Invalid Option");
         }
-        arguments.metadataTransformationParams.multiTypeResolutionBehavior = MultiTypeResolutionBehavior.UNION;
 
-        // Set up data filters for ES 7.17 as we do not currently have transformations in place to support breaking
-        // changes from default templates and settings here: https://opensearch.atlassian.net/browse/MIGRATIONS-2447
-        if (sourceCluster.getContainerVersion().getVersion().equals(Version.fromString("ES 7.17.22"))) {
-            var dataFilterArgs = new DataFilterArgs();
-            dataFilterArgs.indexAllowlist = Stream.concat(testData.blogIndexNames.stream(),
-                    Stream.of(testData.movieIndexName, testData.indexThatAlreadyExists)).collect(Collectors.toList());
-            dataFilterArgs.componentTemplateAllowlist = testData.componentTemplateNames;
-            dataFilterArgs.indexTemplateAllowlist = testData.templateNames;
-            arguments.dataFilterArgs = dataFilterArgs;
+        // If the target is not part of  supported target matrix enable loose version matching
+        if (!(SupportedClusters.supportedTargets(false)
+            .stream()
+            .anyMatch(v -> v.equals(targetCluster.getContainerVersion().getVersion())))) {
+            arguments.versionStrictness.allowLooseVersionMatches = true;
         }
+
+        arguments.metadataTransformationParams.multiTypeResolutionBehavior = MultiTypeResolutionBehavior.UNION;
 
         targetOperations.createDocument(testData.indexThatAlreadyExists, "doc77", "{}");
 

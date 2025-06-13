@@ -24,7 +24,10 @@ export class ClusterYaml {
 }
 
 export class MetricsSourceYaml {
-    cloudwatch? : object | null = null;
+    cloudwatch?: {
+        aws_region?: string
+        qualifier: string;
+    } | null = null;
 }
 
 export class ECSService {
@@ -89,6 +92,7 @@ export class S3SnapshotYaml {
 export class SnapshotYaml {
     snapshot_name = '';
     otel_endpoint = '';
+    snapshot_repo_name = '';
     s3?: S3SnapshotYaml;
     fs?: FileSystemSnapshotYaml;
 
@@ -96,6 +100,7 @@ export class SnapshotYaml {
         return {
             snapshot_name: this.snapshot_name,
             otel_endpoint: this.otel_endpoint,
+            snapshot_repo_name: this.snapshot_repo_name,
             // This conditinally includes the s3 and fs parameters if they're defined,
             // but does not add the keys otherwise
             ...(this.s3 && { s3: this.s3 }),

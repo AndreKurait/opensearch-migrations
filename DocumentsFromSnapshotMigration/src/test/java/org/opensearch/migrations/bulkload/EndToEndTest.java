@@ -29,7 +29,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.testcontainers.lifecycle.Startables;
 
-
 @Tag("isolatedTest")
 public class EndToEndTest extends SourceTestBase {
     @TempDir
@@ -53,6 +52,21 @@ public class EndToEndTest extends SourceTestBase {
         }
     }
 
+    private static Stream<Arguments> extendedScenarios() {
+        return SupportedClusters.extendedSources().stream().map(s -> Arguments.of(s));
+    }
+    @ParameterizedTest(name = "Source {0} to Target OS 2.19")
+    @MethodSource(value = "extendedScenarios")
+    public void extendedMigrationDocuments(
+            final SearchClusterContainer.ContainerVersion sourceVersion) {
+        try (
+                final var sourceCluster = new SearchClusterContainer(sourceVersion);
+                final var targetCluster = new SearchClusterContainer(SearchClusterContainer.OS_V2_19_1)
+        ) {
+            migrationDocumentsWithClusters(sourceCluster, targetCluster);
+        }
+    }
+
     @SneakyThrows
     private void migrationDocumentsWithClusters(
         final SearchClusterContainer sourceCluster,
@@ -65,9 +79,6 @@ public class EndToEndTest extends SourceTestBase {
             // === ACTION: Set up the source/target clusters ===
             Startables.deepStart(sourceCluster, targetCluster).join();
 
-            snapshot(sourceCluster, snapshotContext, "snap_1");
-
-
             var indexName = "blog_2023";
             var numberOfShards = 3;
             var sourceClusterOperations = new ClusterOperations(sourceCluster);
@@ -76,14 +87,15 @@ public class EndToEndTest extends SourceTestBase {
             // Number of default shards is different across different versions on ES/OS.
             // So we explicitly set it.
             var sourceVersion = sourceCluster.getContainerVersion().getVersion();
+            boolean supportsSoftDeletes = VersionMatchers.equalOrGreaterThanES_6_5.test(sourceVersion);
             String body = String.format(
                 "{" +
                 "  \"settings\": {" +
                 "    \"number_of_shards\": %d," +
                 "    \"number_of_replicas\": 0," +
-                (VersionMatchers.isBelowES_6_X.test(sourceVersion)
-                        ? ""
-                        : "    \"index.soft_deletes.enabled\": true,") +
+                (supportsSoftDeletes
+                        ? "    \"index.soft_deletes.enabled\": true,"
+                        : "") +
                 "    \"refresh_interval\": -1" +
                 "  }" +
                 "}",
@@ -97,30 +109,39 @@ public class EndToEndTest extends SourceTestBase {
             sourceClusterOperations.createDocument(indexName, "large1", largeDoc, "3", null);
             sourceClusterOperations.createDocument(indexName, "large2", largeDoc, "3", null);
 
-            snapshot(sourceCluster, snapshotContext, "snap_2");
-
             // === ACTION: Create some searchable documents ===
             sourceClusterOperations.createDocument(indexName, "222", "{\"author\":\"Tobias Funke\"}");
             sourceClusterOperations.createDocument(indexName, "223", "{\"author\":\"Tobias Funke\", \"category\": \"cooking\"}", "1", null);
             sourceClusterOperations.createDocument(indexName, "224", "{\"author\":\"Tobias Funke\", \"category\": \"cooking\"}", "1", null);
             sourceClusterOperations.createDocument(indexName, "225", "{\"author\":\"Tobias Funke\", \"category\": \"tech\"}", "2", null);
 
-            snapshot(sourceCluster, snapshotContext, "snap_3");
 
             // To create deleted docs in a segment that persists on the snapshot, refresh, then create two docs on a shard, then after a refresh, delete one.
             sourceClusterOperations.post("/" + indexName + "/_refresh", null);
             sourceClusterOperations.createDocument(indexName, "toBeDeleted", "{\"author\":\"Tobias Funke\", \"category\": \"cooking\"}", "1", null);
             sourceClusterOperations.createDocument(indexName, "remaining", "{\"author\":\"Tobias Funke\", \"category\": \"tech\"}", "1", null);
-
-            snapshot(sourceCluster, snapshotContext, "snap_4");
-
             sourceClusterOperations.post("/" + indexName + "/_refresh", null);
             sourceClusterOperations.deleteDocument(indexName, "toBeDeleted" , "1", null);
             sourceClusterOperations.post("/" + indexName + "/_refresh", null);
 
-            snapshot(sourceCluster, snapshotContext, "snap_5");
-
             // === ACTION: Take a snapshot ===
+            var snapshotName = "my_snap";
+            var snapshotRepoName = "my_snap_repo";
+            var sourceClientFactory = new OpenSearchClientFactory(ConnectionContextTestParams.builder()
+                    .host(sourceCluster.getUrl())
+                    .insecure(true)
+                    .build()
+                    .toConnectionContext());
+            var sourceClient = sourceClientFactory.determineVersionAndCreate();
+            var snapshotCreator = new FileSystemSnapshotCreator(
+                snapshotName,
+                snapshotRepoName,
+                sourceClient,
+                SearchClusterContainer.CLUSTER_SNAPSHOT_DIR,
+                List.of(),
+                snapshotContext.createSnapshotCreateContext()
+            );
+            SnapshotRunner.runAndWaitForCompletion(snapshotCreator);
             sourceCluster.copySnapshotData(localDirectory.toString());
             var sourceRepo = new FileSystemRepo(localDirectory.toPath());
 
@@ -136,7 +157,7 @@ public class EndToEndTest extends SourceTestBase {
             // ExpectedMigrationWorkTerminationException is thrown on completion.
             var expectedTerminationException = waitForRfsCompletion(() -> migrateDocumentsSequentially(
                     sourceRepo,
-                    "snap_5",
+                    snapshotName,
                     List.of(),
                     targetCluster,
                     runCounter,
@@ -173,23 +194,6 @@ public class EndToEndTest extends SourceTestBase {
         return "{\"timestamp\":\"" + timestamp + "\", \"large_field\":\"" + sb + "\"}";
     }
 
-    private void snapshot(SearchClusterContainer sourceCluster, SnapshotTestContext snapshotContext, String name) {
-        var sourceClientFactory = new OpenSearchClientFactory(ConnectionContextTestParams.builder()
-                .host(sourceCluster.getUrl())
-                .insecure(true)
-                .build()
-                .toConnectionContext());
-        var sourceClient = sourceClientFactory.determineVersionAndCreate();
-        var snapshotCreator = new FileSystemSnapshotCreator(
-                name,
-                sourceClient,
-                SearchClusterContainer.CLUSTER_SNAPSHOT_DIR,
-                List.of(),
-                snapshotContext.createSnapshotCreateContext()
-        );
-        SnapshotRunner.runAndWaitForCompletion(snapshotCreator);
-
-    }
     private void checkDocsWithRouting(
         SearchClusterContainer clusterContainer,
         DocumentMigrationTestContext context) {

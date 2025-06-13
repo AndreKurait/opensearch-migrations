@@ -54,7 +54,6 @@ export interface OpensearchDomainStackProps extends StackPropsExt {
   readonly nodeToNodeEncryptionEnabled?: boolean,
   readonly vpcDetails?: VpcDetails,
   readonly vpcSecurityGroupIds?: string[],
-  readonly domainAZCount?: number,
   readonly domainRemovalPolicy?: RemovalPolicy,
   readonly domainAccessSecurityGroupParameter?: string
 
@@ -133,7 +132,7 @@ export class OpenSearchDomainStack extends Stack {
   constructor(scope: Construct, id: string, props: OpensearchDomainStackProps) {
     super(scope, id, props);
 
-    const deployId = props.addOnMigrationDeployId ? props.addOnMigrationDeployId : props.defaultDeployId
+    const deployId = props.addOnMigrationDeployId ?? props.defaultDeployId
     // Retrieve existing account resources if defined
     const earKmsKey: IKey|undefined = props.encryptionAtRestKmsKeyARN && props.encryptionAtRestEnabled ?
         Key.fromKeyArn(this, "earKey", props.encryptionAtRestKmsKeyARN) : undefined
@@ -158,8 +157,8 @@ export class OpenSearchDomainStack extends Stack {
         secretStringValue: SecretValue.unsafePlainText("myStrongPassword123!")
       })
     }
-    const zoneAwarenessConfig: ZoneAwarenessConfig|undefined = props.domainAZCount && props.domainAZCount > 1 ?
-        {enabled: true, availabilityZoneCount: props.domainAZCount} : undefined
+    const zoneAwarenessConfig: ZoneAwarenessConfig|undefined = props.vpcDetails?.azCount && props.vpcDetails.azCount > 1 ?
+        {enabled: true, availabilityZoneCount: props.vpcDetails.azCount} : undefined;
 
     // If specified, these subnets will be selected to place the Domain nodes in. Otherwise, this is not provided
     // to the Domain as it has existing behavior to select private subnets from a given VPC

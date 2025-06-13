@@ -1,7 +1,11 @@
 package org.opensearch.migrations.cli;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.opensearch.migrations.metadata.CreationResult;
 
@@ -26,6 +30,22 @@ public class Items {
     @NonNull
     private final List<CreationResult> aliases;
     private final String failureMessage;
+
+    public List<String> getAllErrors() {
+        var errors = new ArrayList<String>();
+        if (failureMessage != null) {
+            errors.add(failureMessage);
+        }
+
+        Stream.of(indexTemplates, componentTemplates, indexes, aliases)
+            .filter(Objects::nonNull)
+            .flatMap(Collection::stream)
+            .filter(result -> result.getFailureType() != null && result.getFailureType().isFatal())
+            .map(this::failureMessage)
+            .forEach(errors::add);
+
+        return errors;
+    }
 
     public String asCliOutput() {
         var sb = new StringBuilder();
@@ -85,7 +105,10 @@ public class Items {
         }
     }
 
-    private String failureMessage(CreationResult result){
+    private String failureMessage(CreationResult result) {
+        if (result.getFailureType() == null) {
+            return "";
+        }
         var sb = new StringBuilder()
             .append(result.getFailureType().isFatal() ? "ERROR" : "WARN")
             .append(" - ")
@@ -93,8 +116,12 @@ public class Items {
             .append(" ")
             .append(result.getFailureType().getMessage());
 
-        if (result.getFailureType().isFatal()) {
-            sb.append(": " + result.getException().getMessage());
+        if (result.getFailureType().isFatal() && result.getException() != null) {
+            // There might not be an message in the exception, if so fallback to the toString of the exception.  
+            var exceptionDetail = result.getException().getMessage() != null
+                ? result.getException().getMessage()
+                : result.getException().toString();
+            sb.append(": " + exceptionDetail);
         }
 
         return sb.toString();

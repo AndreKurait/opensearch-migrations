@@ -48,7 +48,6 @@ export interface NetworkStackProps extends StackPropsExt {
     readonly elasticsearchServiceEnabled?: boolean;
     readonly captureProxyServiceEnabled?: boolean;
     readonly targetClusterProxyServiceEnabled?: boolean;
-    readonly captureProxyESServiceEnabled?: boolean;
     readonly migrationAPIEnabled?: boolean;
     readonly sourceClusterDisabled?: boolean;
     readonly sourceClusterEndpoint?: string;
@@ -247,7 +246,6 @@ export class NetworkStack extends Stack {
 
         const needAlb = props.captureProxyServiceEnabled ||
             props.elasticsearchServiceEnabled ||
-            props.captureProxyESServiceEnabled ||
             props.targetClusterProxyServiceEnabled;
 
         // Check that AZ requirements are met
@@ -301,15 +299,14 @@ export class NetworkStack extends Stack {
             }
 
             // Setup when deploying elasticsearch source on ECS
-            if (props.elasticsearchServiceEnabled || props.captureProxyESServiceEnabled) {
-                const targetPort = props.captureProxyESServiceEnabled ? 19200 : 9200
-                this.albSourceClusterTG = this.createSecureTargetGroup('ALBSourceCluster', props.stage, targetPort, vpc);
+            if (props.elasticsearchServiceEnabled) {
+                this.albSourceClusterTG = this.createSecureTargetGroup('ALBSourceCluster', props.stage, 9200, vpc);
                 this.createSecureListener('SourceCluster', 9999, alb, cert, this.albSourceClusterTG);
                 createALBListenerUrlParameter(9999, MigrationSSMParameter.SOURCE_CLUSTER_ENDPOINT);
             }
 
             // Setup when deploying capture proxy in ECS
-            if (props.captureProxyServiceEnabled || props.captureProxyESServiceEnabled) {
+            if (props.captureProxyServiceEnabled) {
                 this.albSourceProxyTG = this.createSecureTargetGroup('ALBSourceProxy', props.stage, 9200, vpc);
                 this.createSecureListener('SourceProxy', 9201, alb, cert, this.albSourceProxyTG);
                 createALBListenerUrlParameter(9201, MigrationSSMParameter.SOURCE_PROXY_URL);
@@ -345,7 +342,7 @@ export class NetworkStack extends Stack {
                 parameter: MigrationSSMParameter.SOURCE_CLUSTER_ENDPOINT
             });
         } else if (!props.sourceClusterDisabled && !this.albSourceClusterTG) {
-            throw new Error(`Capture Proxy ESService, Elasticsearch Service, or SourceClusterEndpoint must be enabled, unless the source cluster is disabled.`);
+            throw new Error(`Elasticsearch Service or SourceClusterEndpoint must be enabled, unless the source cluster is disabled.`);
         }
 
         if (!props.addOnMigrationDeployId) {
@@ -363,13 +360,13 @@ export class NetworkStack extends Stack {
             });
 
             if (props.targetClusterEndpoint) {
-                const deployId = props.addOnMigrationDeployId ? props.addOnMigrationDeployId : props.defaultDeployId;
+                const deployId = props.addOnMigrationDeployId ?? props.defaultDeployId;
                 createMigrationStringParameter(this, props.targetClusterEndpoint, {
                     stage: props.stage,
                     defaultDeployId: deployId,
                     parameter: MigrationSSMParameter.OS_CLUSTER_ENDPOINT
                 });
-                // This is a somewhat surprsing place for this non-network related set of parameters, but it pairs well with
+                // This is a somewhat surprising place for this non-network related set of parameters, but it pairs well with
                 // the OS_CLUSTER_ENDPOINT parameter and is helpful to ensure it happens. This probably isn't a long-term place
                 // for it, but is helpful for the time being.
                 if (props.targetClusterUsername && props.targetClusterPasswordSecretArn) {

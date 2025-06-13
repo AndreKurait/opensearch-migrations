@@ -1,15 +1,21 @@
 def call(Map config = [:]) {
-    def jobName = config.jobName
-    if (jobName == null || jobName.isEmpty()) {
-        throw new RuntimeException("The jobName argument must be provided to k8sLocalDeployment()");
+    ['jobName', 'sourceVersion', 'targetVersion', 'gitUrl', 'gitBranch'].each { key ->
+        if (!config[key]) {
+            throw new RuntimeException("The ${key} argument must be provided to k8sLocalDeployment()")
+        }
     }
+    def gitDefaultUrl = config.gitUrl
+    def gitDefaultBranch = config.gitBranch
+    def jobName = config.jobName
+    def sourceVersion = config.sourceVersion
+    def targetVersion = config.targetVersion
 
     pipeline {
         agent { label config.workerAgent ?: 'Jenkins-Default-Agent-X64-C5xlarge-Single-Host' }
 
         parameters {
-            string(name: 'GIT_REPO_URL', defaultValue: 'https://github.com/opensearch-project/opensearch-migrations.git', description: 'Git repository url')
-            string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch to use for repository')
+            string(name: 'GIT_REPO_URL', defaultValue: "${gitDefaultUrl}", description: 'Git repository url')
+            string(name: 'GIT_BRANCH', defaultValue: "${gitDefaultBranch}", description: 'Git branch to use for repository')
         }
 
         options {
@@ -42,13 +48,21 @@ def call(Map config = [:]) {
 
             stage('Check Minikube Status') {
                 steps {
-                    timeout(time: 1, unit: 'MINUTES') {
+                    timeout(time: 5, unit: 'MINUTES') {
                         script {
                             def status = sh(script: "minikube status --format='{{.Host}}'", returnStdout: true).trim()
                             if (status == "Running") {
                                 echo "✅ Minikube is running"
                             } else {
-                                error("❌ Minikube is NOT running")
+                                echo "Minikube is not running, status: " + status
+                                sh(script: "minikube delete", returnStdout: true)
+                                sh(script: "minikube start", returnStdout: true)
+                                def status2 = sh(script: "minikube status --format='{{.Host}}'", returnStdout: true).trim()
+                                if (status2 == "Running") {
+                                    echo "✅ Minikube was started as is running"
+                                } else {
+                                    error("❌ Minikube failed to start")
+                                }
                             }
                         }
                     }
@@ -73,7 +87,7 @@ def call(Map config = [:]) {
                         dir('libraries/testAutomation') {
                             script {
                                 sh "sudo -u ec2-user pipenv install --deploy"
-                                sh "sudo -u ec2-user pipenv run app --skip-delete"
+                                sh "sudo -u ec2-user pipenv run app --source-version=$sourceVersion --target-version=$targetVersion --skip-delete"
                             }
                         }
                     }
