@@ -105,6 +105,7 @@ def call(Map config = [:]) {
             },
             "snapshot": {
                 "snapshotName": "large-snapshot",
+                "snapshotRepoName": "migration_assistant_repo",
                 "s3Uri": "s3://migration-jenkins-snapshot-863518433585-us-east-1/large-snapshot-es5x",
                 "s3Region": "us-east-1"
             },
