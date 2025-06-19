@@ -56,17 +56,18 @@ def generate_csv_data(start_timestamp: datetime, size_in_tib: float):
     row = [m.value for m in metrics]
     return [header, row]
 
+def clear_cluster_with_validation(cluster: Cluster):
+    # Clear all data from cluster
+    clear_cluster(cluster)
+    clear_output = clear_indices(cluster)
+    if isinstance(clear_output, str) and "Error" in clear_output:
+        raise Exception(f"Cluster Clear Indices Failed: {clear_output}")
 
 def preload_data(target_cluster: Cluster):
     # Confirm target connection
     target_con_result: ConnectionResult = connection_check(target_cluster)
     assert target_con_result.connection_established is True
-
-    # Clear all data from cluster
-    clear_cluster(target_cluster)
-    clear_output = clear_indices(target_cluster)
-    if isinstance(clear_output, str) and "Error" in clear_output:
-        raise Exception(f"Cluster Clear Indices Failed: {clear_output}")
+    clear_cluster_with_validation(target_cluster)
 
 @pytest.fixture(scope="class")
 def setup_backfill(request):
@@ -98,6 +99,9 @@ def setup_backfill(request):
     # small enough to allow containers to be reused, big enough to test scaling out
     backfill_scale_result: CommandResult = backfill.scale(units=BACKFILL_SCALE)
     assert backfill_scale_result.success
+
+    # Wait for backfill to initialize before checking status
+    time.sleep(120)
 
     while True:
         time.sleep(10)
@@ -161,9 +165,12 @@ def cleanup_after_tests(request):
 
     target: Cluster = console_env.target_cluster
     assert target is not None
-    clear_cluster(target)
-
-    pass
+    try:
+        clear_cluster_with_validation(target)
+        logger.info("Successfully cleared cluster after migration")
+    except Exception as e:
+        logger.info("Encountered error clearing cluster after tests, cluster will be cleared on next run.", exc_info=e)
+        pass
 
 @pytest.mark.usefixtures("setup_backfill")
 class BackfillTests(unittest.TestCase):
