@@ -60,6 +60,7 @@ tasks.named('test') {
 
 
 dependencies {
+    implementation project(':searchSnapshotExtractor')
     implementation project(':awsUtilities')
     implementation project(':coreUtilities')
     implementation project(':transformation')
