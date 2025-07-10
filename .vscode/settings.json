@@ -12,5 +12,6 @@
         ".vscode",
         ".vscode-insiders",
         "*.py"
-    ]
+    ],
+    "java.configuration.updateBuildConfiguration": "automatic"
 }
