@@ -54,28 +54,25 @@ public class ES6SnapshotRepositoryParser implements SnapshotRepositoryParser {
      * Convert the ES6-specific DTO to the common RepositoryMetadata format
      */
     private RepositoryMetadata convertToRepositoryMetadata(ES6RepositoryMetadataDto dto) {
-        RepositoryMetadata metadata = new RepositoryMetadata();
-        
         // Convert snapshots
+        List<SnapshotInfo> snapshots = null;
         if (dto.snapshots != null) {
-            List<SnapshotInfo> snapshots = dto.snapshots.stream()
+            snapshots = dto.snapshots.stream()
                 .map(this::convertSnapshot)
                 .collect(Collectors.toList());
-            metadata.setSnapshots(snapshots);
         }
         
         // Convert indices
+        List<IndexInfo> indices = null;
         if (dto.indices != null) {
-            List<IndexInfo> indices = dto.indices.entrySet().stream()
+            indices = dto.indices.entrySet().stream()
                 .map(entry -> convertIndex(entry.getKey(), entry.getValue()))
                 .collect(Collectors.toList());
-            metadata.setIndices(indices);
         }
         
+        // Create RepositoryMetadata using record constructor
         // ES 6.x doesn't have min_version field
-        metadata.setMinVersion(null);
-        
-        return metadata;
+        return new RepositoryMetadata(snapshots, indices, null);
     }
     
     private SnapshotInfo convertSnapshot(ES6SnapshotDto snapshotDto) {
