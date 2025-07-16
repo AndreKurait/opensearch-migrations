@@ -1,0 +1,1 @@
+{"snapshots":[{"name":"snapshot_v1","uuid":"MsqBdlLGQEaP1UQ_bJb4xg","state":1},{"name":"snapshot_v2","uuid":"ljWaLGyXSgGdsqLCGkUeGg","state":1}],"indices":{"simple_index":{"id":"-ecxfEnCSMig8CeL621C2A","snapshots":["MsqBdlLGQEaP1UQ_bJb4xg","ljWaLGyXSgGdsqLCGkUeGg"]}}}

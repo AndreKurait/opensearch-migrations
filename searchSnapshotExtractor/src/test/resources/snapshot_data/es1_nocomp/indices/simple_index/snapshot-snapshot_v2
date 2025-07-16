@@ -1,0 +1,1 @@
+{"simple_index":{"version":1,"state":"open","settings":{"index.number_of_replicas":"0","index.number_of_shards":"1","index.version.created":"1070699","index.creation_date":"1752653617429","index.uuid":"jFZYfHPXTGKBgjOPcVuptA"},"mappings":[{"doc":{"properties":{"value":{"type":"integer"}}}}],"aliases":{}}}
