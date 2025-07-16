@@ -1,0 +1,54 @@
+{
+  "name" : "snapshot_v2",
+  "index_version" : 5,
+  "start_time" : 1752653628113,
+  "time" : 18,
+  "number_of_files" : 4,
+  "total_size" : 2475,
+  "files" : [ {
+    "name" : "__4",
+    "physical_name" : "_1.cfs",
+    "length" : 1700,
+    "checksum" : "1vdgygq",
+    "written_by" : "4.10.4"
+  }, {
+    "name" : "__0",
+    "physical_name" : "_0.cfe",
+    "length" : 350,
+    "checksum" : "cxivlf",
+    "written_by" : "4.10.4"
+  }, {
+    "name" : "__1",
+    "physical_name" : "_0.si",
+    "length" : 248,
+    "checksum" : "16x39kw",
+    "written_by" : "4.10.4",
+    "meta_hash" : "P9dsFxNMdWNlbmU0NlNlZ21lbnRJbmZvAAAAAQY0LjEwLjQAAAABAQAAAAgCb3MFTGludXgLamF2YS52ZW5kb3IST3JhY2xlIENvcnBvcmF0aW9uDGphdmEudmVyc2lvbgkxLjguMF8xMzEObHVjZW5lLnZlcnNpb24GNC4xMC40B29zLmFyY2gFYW1kNjQGc291cmNlBWZsdXNoCm9zLnZlcnNpb24QNi4xMC4xNC1saW51eGtpdAl0aW1lc3RhbXANMTc1MjY1MzYyNzc1MgAAAAMGXzAuY2ZlBV8wLnNpBl8wLmNmc8Aok+gAAAAAAAAAAJqu/EA="
+  }, {
+    "name" : "__5",
+    "physical_name" : "_1.cfe",
+    "length" : 350,
+    "checksum" : "1fpztpw",
+    "written_by" : "4.10.4"
+  }, {
+    "name" : "__6",
+    "physical_name" : "_1.si",
+    "length" : 248,
+    "checksum" : "1fn2rya",
+    "written_by" : "4.10.4",
+    "meta_hash" : "P9dsFxNMdWNlbmU0NlNlZ21lbnRJbmZvAAAAAQY0LjEwLjQAAAABAQAAAAgCb3MFTGludXgLamF2YS52ZW5kb3IST3JhY2xlIENvcnBvcmF0aW9uDGphdmEudmVyc2lvbgkxLjguMF8xMzEObHVjZW5lLnZlcnNpb24GNC4xMC40B29zLmFyY2gFYW1kNjQGc291cmNlBWZsdXNoCm9zLnZlcnNpb24QNi4xMC4xNC1saW51eGtpdAl0aW1lc3RhbXANMTc1MjY1MzYyODA0MwAAAAMGXzEuY2ZzBl8xLmNmZQVfMS5zacAok+gAAAAAAAAAALoeHQI="
+  }, {
+    "name" : "__2",
+    "physical_name" : "_0.cfs",
+    "length" : 1700,
+    "checksum" : "qps2st",
+    "written_by" : "4.10.4"
+  }, {
+    "name" : "__7",
+    "physical_name" : "segments_5",
+    "length" : 177,
+    "checksum" : "xw5c8e",
+    "written_by" : "4.10.4",
+    "meta_hash" : "P9dsFwhzZWdtZW50cwAAAAMAAAAAAAAABQAAAAIAAAACAl8wCUx1Y2VuZTQxMP//////////AAAAAP////////////////////8AAAAAAAAAAAJfMQlMdWNlbmU0MTD//////////wAAAAD/////////////////////AAAAAAAAAAAAAAABC3RyYW5zbG9nX2lkDTE3NTI2NTM2Mjc2MTjAKJPoAAAAAAAAAAB6JxEu"
+  } ]
+}
