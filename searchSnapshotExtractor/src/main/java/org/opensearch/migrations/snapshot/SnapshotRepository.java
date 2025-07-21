@@ -12,8 +12,6 @@ import java.util.regex.Pattern;
 
 import org.opensearch.migrations.io.BlobSource;
 import org.opensearch.migrations.io.FileBlobSource;
-import org.opensearch.migrations.snapshot.es_v6.ES6SnapshotRepositoryParser;
-import org.opensearch.migrations.snapshot.es_v7.ES7SnapshotRepositoryParser;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,10 +26,9 @@ public class SnapshotRepository {
     
     private final BlobSource blobSource;
     
-    // Available parsers in order of preference (newest first)
+    // Available parsers - simplified to only ES1 (no compression)
     private final List<SnapshotRepositoryParser> parsers = Arrays.asList(
-        new ES7SnapshotRepositoryParser(),
-        new ES6SnapshotRepositoryParser()
+        new ES1SnapshotRepositoryParser()
     );
     
     /**
@@ -54,11 +51,17 @@ public class SnapshotRepository {
     
     /**
      * Find and return the latest index file in the repository
-     * @return the name of the latest index file (e.g., "index-1")
+     * @return the name of the latest index file (e.g., "index-1" or "index")
      * @throws IOException if no index files are found or if there's an error reading
      */
     public String findLatestIndexFile() throws IOException {
-        // First try to read index.latest if it exists
+        // First check for ES1 format - simple "index" file
+        if (blobSource.exists("index")) {
+            log.debug("Found ES1 format index file: index");
+            return "index";
+        }
+        
+        // Then try to read index.latest if it exists (ES5+)
         if (blobSource.exists("index.latest")) {
             try (InputStream stream = blobSource.getBlob("index.latest")) {
                 String content = new String(stream.readAllBytes()).trim();
@@ -70,7 +73,7 @@ public class SnapshotRepository {
             }
         }
         
-        // Fallback: scan for index-N files and find the highest version
+        // Fallback: scan for index-N files and find the highest version (ES2+)
         List<String> allFiles = blobSource.listBlobs("");
         Pattern pattern = Pattern.compile("^index-(\\d+)$");
         String highestVersionedFile = null;
