@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.Optional;
 
@@ -204,6 +207,40 @@ public class S3Repo implements SourceRepo {
                 .addArgument(s3RepoUri.bucketName)
                 .addArgument(blobFilesS3Prefix)
                 .addArgument(shardDirPath).log();
+
+            try (var files = Files.list(shardDirPath)) {
+                var stats = files
+                        .filter(Files::isRegularFile)
+                        .mapToLong(path -> {
+                            try {
+                                return Files.size(path);
+                            } catch (IOException e) {
+                                log.atWarn()
+                                        .setMessage("Could not get size for file: {}")
+                                        .addArgument(path)
+                                        .setCause(e)
+                                        .log();
+                                return 0L;
+                            }
+                        })
+                        .summaryStatistics();
+
+                log.atInfo()
+                        .setMessage("Found {} files in directory before download (total size: {} bytes)")
+                        .addArgument(stats.getCount())
+                        .addArgument(stats.getSum())
+                        .log();
+
+            } catch (IOException e) {
+                log.atWarn()
+                        .setMessage("Exception accessing directory {}")
+                        .addArgument(shardDirPath)
+                        .setCause(e)
+                        .log();
+            }
+
+
+            var start = Instant.now();
             DirectoryDownload directoryDownload = transferManager.downloadDirectory(
                 DownloadDirectoryRequest.builder()
                     .destination(shardDirPath)
@@ -214,12 +251,45 @@ public class S3Repo implements SourceRepo {
 
             // Wait for the transfer to complete
             CompletedDirectoryDownload completedDirectoryDownload = directoryDownload.completionFuture().join();
+            var end = Instant.now();
 
-            log.atInfo().setMessage("Blob file download(s) complete").log();
 
+            try (var files = Files.list(shardDirPath)) {
+                var stats = files
+                        .filter(Files::isRegularFile)
+                        .mapToLong(path -> {
+                            try {
+                                return Files.size(path);
+                            } catch (IOException e) {
+                                log.atWarn()
+                                        .setMessage("Could not get size for file: {}")
+                                        .addArgument(path)
+                                        .setCause(e)
+                                        .log();
+                                return 0L;
+                            }
+                        })
+                        .summaryStatistics();
+
+                log.atInfo()
+                        .setMessage("Found {} files in directory after download (total size: {} bytes)")
+                        .addArgument(stats.getCount())
+                        .addArgument(stats.getSum())
+                        .log();
+
+            } catch (IOException e) {
+                log.atWarn()
+                        .setMessage("Exception accessing directory {}")
+                        .addArgument(shardDirPath)
+                        .setCause(e)
+                        .log();
+            }
+            log.atInfo().setMessage("Blob file download(s) complete in {}ms")
+                    .addArgument(Duration.between(start, end)).log();
             // Print out any failed downloads
             completedDirectoryDownload.failedTransfers().forEach(x->log.error("{}", x));
         }
+        throw new RuntimeException("Ending program");
     }
 
     public static class CannotFindSnapshotRepoRoot extends RfsException {
