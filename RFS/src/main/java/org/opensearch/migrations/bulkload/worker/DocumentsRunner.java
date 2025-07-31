@@ -73,11 +73,15 @@ public class DocumentsRunner {
                     log.info("Acquired work item: {}", workItem.getWorkItem());
                     var docMigrationCursors = setupDocMigration(workItem.getWorkItem(), context);
                     var latch = new CountDownLatch(1);
-                    var finishScheduler = Schedulers.newSingle( "workFinishScheduler");
+                    var baseReindexingScheduler = Schedulers.newBoundedElastic(1, 2, "rfs");
                     var disposable = docMigrationCursors
-                        .subscribeOn(finishScheduler)
-                        .doFinally(s -> finishScheduler.dispose())
+                        .subscribeOn(baseReindexingScheduler)
+                        .publishOn(baseReindexingScheduler)
                         .takeLast(1)
+                        .doOnCancel(() -> log.atInfo()
+                            .setMessage("Document reindexing stream cancelled. This can be due to end of lease or shutdown.")
+                            .log())
+                        .doFinally(s -> baseReindexingScheduler.dispose())
                         .subscribe(lastItem -> {},
                             error -> log.atError()
                                     .setCause(error)

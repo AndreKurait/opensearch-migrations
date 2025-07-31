@@ -2,8 +2,6 @@ package org.opensearch.migrations.bulkload.common;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -47,43 +45,44 @@ public class DocumentReindexer {
     }
 
     public Flux<WorkItemCursor> reindex(String indexName, Flux<RfsLuceneDocument> documentStream, IDocumentReindexContext context) {
-        // Create executor with hook for threadSafeTransformer cleaner
+        // Create custom scheduler for transformations with hook for threadSafeTransformer closing
         AtomicInteger id = new AtomicInteger();
-        int transformationParallelizationFactor = Runtime.getRuntime().availableProcessors();
-        ExecutorService executor = Executors.newFixedThreadPool(transformationParallelizationFactor, r -> {
-            int threadNum = id.incrementAndGet();
-            return new Thread(() -> {
+        int transformationParallelizationFactor = Math.max(Runtime.getRuntime().availableProcessors(), 1);
+        var transformationScheduler = Schedulers.newParallel(
+            transformationParallelizationFactor,
+            r -> new Thread(() -> {
                 try {
                     r.run();
                 } finally {
                     threadSafeTransformer.close();
                 }
-            }, "DocumentBulkAggregator-" + threadNum);
-        });
-        Scheduler scheduler = Schedulers.fromExecutor(executor);
+        }, "transformationThread-" + id.incrementAndGet()));
         var rfsDocs = documentStream
-            .publishOn(scheduler, 1)
             .buffer(Math.min(100, maxDocsPerBulkRequest)) // arbitrary
-            .concatMapIterable(docList -> transformDocumentBatch(threadSafeTransformer, docList, indexName));
-        return this.reindexDocsInParallelBatches(rfsDocs, indexName, context)
-            .doFinally(signalType -> {
-                scheduler.dispose();
-                executor.shutdown();
-            });
+            .flatMapSequential(
+                docList ->
+                    Mono.fromSupplier(() -> transformDocumentBatch(threadSafeTransformer, docList, indexName))
+                        .flatMapIterable(s -> s)
+                        .subscribeOn(transformationScheduler),
+                transformationParallelizationFactor, transformationParallelizationFactor)
+            .doFinally(signalType -> transformationScheduler.dispose());
+        return this.reindexDocsInParallelBatches(rfsDocs, indexName, context);
     }
 
     Flux<WorkItemCursor> reindexDocsInParallelBatches(Flux<RfsDocument> docs, String indexName, IDocumentReindexContext context) {
         // Use parallel scheduler for send subscription due on non-blocking io client
-        var scheduler = Schedulers.newParallel("DocumentBatchReindexer");
+        var sendDocScheduler = Schedulers.newParallel("DocumentBatchReindexer");
         var bulkDocsBatches = batchDocsBySizeOrCount(docs);
         var bulkDocsToBuffer = 50; // Arbitrary, takes up 500MB at default settings
 
         return bulkDocsBatches
             .limitRate(bulkDocsToBuffer, 1) // Bulk Doc Buffer, Keep Full
-            .publishOn(scheduler, 1) // Switch scheduler
-            .flatMapSequential(docsGroup -> sendBulkRequest(UUID.randomUUID(), docsGroup, indexName, context, scheduler),
-                maxConcurrentWorkItems)
-            .doFinally(s -> scheduler.dispose());
+            .flatMapSequential(docsGroup ->
+                    sendBulkRequest(UUID.randomUUID(), docsGroup, indexName, context)
+                        .subscribeOn(sendDocScheduler)
+                , maxConcurrentWorkItems, 1)
+            .publishOn(Schedulers.parallel())
+            .doFinally(s -> sendDocScheduler.dispose());
     }
 
     @SneakyThrows
@@ -101,7 +100,7 @@ public class DocumentReindexer {
      * TODO: Update the reindexing code to rely on _index field embedded in each doc section rather than requiring it in the
      * REST path.  See: https://opensearch.atlassian.net/browse/MIGRATIONS-2232
      */
-    Mono<WorkItemCursor> sendBulkRequest(UUID batchId, List<RfsDocument> docsBatch, String indexName, IDocumentReindexContext context, Scheduler scheduler) {
+    Mono<WorkItemCursor> sendBulkRequest(UUID batchId, List<RfsDocument> docsBatch, String indexName, IDocumentReindexContext context) {
         var lastDoc = docsBatch.get(docsBatch.size() - 1);
         log.atInfo().setMessage("Last doc is: Source Index " + indexName + " Lucene Doc Number " + lastDoc.progressCheckpointNum).log();
 
@@ -121,8 +120,7 @@ public class DocumentReindexer {
                 .log())
             // Prevent the error from stopping the entire stream, retries occurring within sendBulkRequest
             .onErrorResume(e -> Mono.empty())
-            .then(Mono.just(new WorkItemCursor(lastDoc.progressCheckpointNum))
-            .subscribeOn(scheduler));
+            .map(ignored -> new WorkItemCursor(lastDoc.progressCheckpointNum));
     }
 
     Flux<List<RfsDocument>> batchDocsBySizeOrCount(Flux<RfsDocument> docs) {

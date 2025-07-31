@@ -28,7 +28,7 @@ public class LuceneReader {
        If the startDocId is 0, it will start from the first document in the segment.
      */
     static Publisher<RfsLuceneDocument> readDocsByLeavesFromStartingPosition(LuceneDirectoryReader reader, int startDocId) {
-        var maxDocumentsToReadAtOnce = 100; // Arbitrary value
+        var maxDocumentsToReadAtOnce = 2; // Arbitrary value
         log.atInfo().setMessage("{} documents in {} leaves found in the current Lucene index")
             .addArgument(reader::maxDoc)
             .addArgument(() -> reader.leaves().size())
@@ -61,12 +61,13 @@ public class LuceneReader {
         if (originalLeaves.isEmpty()) {
             return Flux.empty();
         }
+        log.atInfo().setMessage("this thread is getting segments from starting segments").log();
 
         // Step 1: Sort the segments by name
         var sortedLeaves = originalLeaves.stream()
             .map(LuceneLeafReaderContext::reader)
             .sorted(SegmentNameSorter.INSTANCE)
-            .collect(Collectors.toList());
+            .toList();
 
         // Step 2: Build the list of ReaderAndBase objects with cumulative doc base
         var sortedReaderAndBase = new ArrayList<ReaderAndBase>();
@@ -90,6 +91,8 @@ public class LuceneReader {
             index = insertionPoint - 1;
             assert index >= 0;
         }
+
+        log.atInfo().setMessage("this thread done is getting segments from starting segments").log();
 
         // Step 5: Return the sublist starting from the first valid segment
         return Flux.fromIterable(sortedReaderAndBase.subList(index, sortedReaderAndBase.size()));
@@ -121,7 +124,8 @@ public class LuceneReader {
                 .log();
 
         return Flux.range(startDocIdInSegment, numDocsToProcessInSegment)
-                .flatMapSequentialDelayError(docIdx -> Mono.defer(() -> {
+                .flatMapSequential(docIdx -> Mono.defer(() -> {
+                        log.atInfo().setMessage("Reading doc from thread").log();
                     try {
                         if (liveDocs == null || liveDocs.get(docIdx)) {
                             // Get document, returns null to skip malformed docs

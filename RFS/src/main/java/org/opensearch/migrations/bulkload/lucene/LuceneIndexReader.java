@@ -15,6 +15,7 @@ import lombok.AllArgsConstructor;
 import lombok.Lombok;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 public interface LuceneIndexReader {
     /**
