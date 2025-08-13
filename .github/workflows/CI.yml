@@ -20,13 +20,21 @@ jobs:
   generate-cache-key:
     runs-on: ubuntu-latest
     outputs:
-      docker_cache_key: ${{ steps.generate_docker_cache_key.outputs.key }}
+      docker_cache_key_docker_compose: ${{ steps.generate_docker_cache_key_docker_compose.outputs.key }}
+      docker_cache_key_gradle_tests: ${{ steps.generate_docker_cache_key_gradle_tests.outputs.key }}
     steps:
       - uses: actions/checkout@v5
-      - name: Generate Docker Cache Key
-        id: generate_docker_cache_key
+      - name: Generate Docker Cache Key Docker Compose
+        id: generate_docker_cache_key_docker_compose
         run: |
           files=$(find . -type f \( -name 'docker-compose.yml' -o -name 'Dockerfile' \))
+          file_contents=$(cat $files)
+          key=$(echo "${file_contents}" | sha1sum | awk '{print $1}')
+          echo "key=${key}" >> "$GITHUB_OUTPUT"
+      - name: Generate Docker Cache Key Junit Tests
+        id: generate_docker_cache_key_gradle_tests
+        run: |
+          files=$(find . -type f \( -name 'SearchClusterContainer.java' \))
           file_contents=$(cat $files)
           key=$(echo "${file_contents}" | sha1sum | awk '{print $1}')
           echo "key=${key}" >> "$GITHUB_OUTPUT"
@@ -145,9 +153,9 @@ jobs:
       - name: Restore Docker Cache
         uses: AndreKurait/docker-cache@0.6.0
         with:
-          key: docker-${{ runner.os }}-${{ needs.generate-cache-key.outputs.docker_cache_key }}
-          # Delegate cache saving to python-e2e-tests
-          read-only: true
+          key: docker-${{ runner.os }}-${{ needs.generate-cache-key.outputs.docker_cache_key_gradle_tests }}-gradle-tests-${{ matrix.index }}
+          # Only save cache on push events
+          read-only: ${{ github.event_name != 'push' }}
 
       - name: Run Gradle tests with striping
         run: |
@@ -231,7 +239,7 @@ jobs:
       - name: Cache Docker Images
         uses: AndreKurait/docker-cache@0.6.0
         with:
-          key: docker-${{ runner.os }}-${{ needs.generate-cache-key.outputs.docker_cache_key }}
+          key: docker-${{ runner.os }}-${{ needs.generate-cache-key.outputs.docker_cache_key_docker_compose }}-python-e2e-tests
           # Only save cache on push events
           read-only: ${{ github.event_name != 'push' }}
       - name: Start Docker Solution
