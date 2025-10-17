@@ -9,7 +9,9 @@ import logging
 import os
 import pytest
 import tempfile
+import time
 import uuid
+import requests
 from click.testing import CliRunner
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -25,7 +27,7 @@ logger = logging.getLogger(__name__)
 @pytest.fixture(scope="session")
 def k3s_container():
     """Set up k3s container for all workflow tests"""
-    print("\nStarting k3s container for workflow tests...")
+    logger.info("\nStarting k3s container for workflow tests...")
 
     # Start k3s container
     container = K3SContainer(image="rancher/k3s:latest")
@@ -47,13 +49,373 @@ def k3s_container():
 
     yield container
 
-    print("\nCleaning up k3s container...")
+    logger.info("\nCleaning up k3s container...")
     # Clean up
     container.stop()
     if os.path.exists(kubeconfig_path):
         os.unlink(kubeconfig_path)
     if 'KUBECONFIG' in os.environ:
         del os.environ['KUBECONFIG']
+
+
+@pytest.fixture(scope="session")
+def argo_workflows(k3s_container):
+    """Install Argo Workflows in the k3s cluster"""
+    logger.info("\nInstalling Argo Workflows in k3s...")
+
+    # Argo Workflows version to install
+    argo_version = "v3.5.12"
+    argo_namespace = "argo"
+
+    v1 = client.CoreV1Api()
+    apps_v1 = client.AppsV1Api()
+
+    # Create argo namespace
+    namespace = client.V1Namespace(
+        metadata=client.V1ObjectMeta(name=argo_namespace)
+    )
+    try:
+        v1.create_namespace(body=namespace)
+        logger.info(f"Created namespace: {argo_namespace}")
+    except ApiException as e:
+        if e.status != 409:  # Ignore if already exists
+            raise
+        logger.info(f"Namespace {argo_namespace} already exists")
+
+    # Download and apply the Argo Workflows manifest
+    # Using install.yaml instead of quick-start-minimal.yaml for better resource management
+    manifest_url = (
+        f"https://github.com/argoproj/argo-workflows/releases/download/"
+        f"{argo_version}/install.yaml"
+    )
+
+    try:
+        logger.info(f"Downloading Argo Workflows manifest from {manifest_url}")
+        response = requests.get(manifest_url, timeout=30)
+        response.raise_for_status()
+        manifest_content = response.text
+
+        # Write manifest to temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            f.write(manifest_content)
+            manifest_path = f.name
+
+        # Apply the manifest using Kubernetes Python client
+        logger.info("Applying Argo Workflows manifest...")
+        from kubernetes import utils
+        k8s_client = client.ApiClient()
+
+        try:
+            utils.create_from_yaml(
+                k8s_client,
+                manifest_path,
+                namespace=argo_namespace
+            )
+            logger.info("Argo Workflows manifest applied successfully")
+        except Exception as apply_error:
+            # Some resources might already exist, which is okay
+            logger.info(f"Note during apply: {apply_error}")
+            logger.info("Continuing with installation verification...")
+
+        # Clean up temporary file
+        if os.path.exists(manifest_path):
+            os.unlink(manifest_path)
+
+    except Exception as e:
+        logger.info(f"Error installing Argo Workflows: {e}")
+        raise
+
+    # Wait for Argo Workflows pods to be ready
+    logger.info("Waiting for Argo Workflows pods to be ready...")
+    max_wait_time = 300  # 5 minutes
+    start_time = time.time()
+    last_log_time = start_time
+
+    while time.time() - start_time < max_wait_time:
+        elapsed = time.time() - start_time
+        
+        # Log status every 15 seconds
+        if time.time() - last_log_time >= 15:
+            logger.info(f"Still waiting... ({elapsed:.0f}s elapsed)")
+            last_log_time = time.time()
+            
+            try:
+                # Log deployment status
+                try:
+                    server_deployment = apps_v1.read_namespaced_deployment(
+                        name="argo-server",
+                        namespace=argo_namespace
+                    )
+                    logger.info(f"  argo-server: {server_deployment.status.ready_replicas or 0}/"
+                               f"{server_deployment.status.replicas or 0} ready, "
+                               f"{server_deployment.status.available_replicas or 0} available, "
+                               f"{server_deployment.status.unavailable_replicas or 0} unavailable")
+                except ApiException:
+                    logger.info("  argo-server: deployment not found yet")
+                
+                try:
+                    controller_deployment = apps_v1.read_namespaced_deployment(
+                        name="workflow-controller",
+                        namespace=argo_namespace
+                    )
+                    logger.info(f"  workflow-controller: {controller_deployment.status.ready_replicas or 0}/"
+                               f"{controller_deployment.status.replicas or 0} ready, "
+                               f"{controller_deployment.status.available_replicas or 0} available, "
+                               f"{controller_deployment.status.unavailable_replicas or 0} unavailable")
+                except ApiException:
+                    logger.info("  workflow-controller: deployment not found yet")
+                
+                # Log pod status
+                pods = v1.list_namespaced_pod(namespace=argo_namespace)
+                for pod in pods.items:
+                    container_statuses = []
+                    if pod.status.container_statuses:
+                        for cs in pod.status.container_statuses:
+                            if cs.state.waiting:
+                                container_statuses.append(f"{cs.name}:Waiting({cs.state.waiting.reason})")
+                            elif cs.state.running:
+                                container_statuses.append(f"{cs.name}:Running")
+                            elif cs.state.terminated:
+                                container_statuses.append(f"{cs.name}:Terminated({cs.state.terminated.reason})")
+                    logger.info(f"  Pod {pod.metadata.name}: {pod.status.phase} - {', '.join(container_statuses) if container_statuses else 'no containers'}")
+                
+                # Log recent warning events
+                events = v1.list_namespaced_event(namespace=argo_namespace)
+                warning_events = [e for e in events.items if e.type == "Warning" and 
+                                 (time.time() - e.last_timestamp.timestamp() < 30 if e.last_timestamp else False)]
+                if warning_events:
+                    logger.info("  Recent warnings:")
+                    for event in warning_events[:3]:  # Show up to 3 most recent warnings
+                        logger.info(f"    - {event.involved_object.name}: {event.message}")
+                        
+            except ApiException as e:
+                logger.info(f"  Error getting status: {e}")
+
+        try:
+            # Check if argo-server deployment is ready
+            server_deployment = apps_v1.read_namespaced_deployment(
+                name="argo-server",
+                namespace=argo_namespace
+            )
+
+            # Check if workflow-controller deployment is ready
+            controller_deployment = apps_v1.read_namespaced_deployment(
+                name="workflow-controller",
+                namespace=argo_namespace
+            )
+
+            server_ready = (
+                server_deployment.status.ready_replicas is not None and
+                server_deployment.status.ready_replicas >= 1
+            )
+
+            controller_ready = (
+                controller_deployment.status.ready_replicas is not None and
+                controller_deployment.status.ready_replicas >= 1
+            )
+
+            if server_ready and controller_ready:
+                logger.info("Argo Workflows is ready!")
+                break
+
+        except ApiException:
+            pass  # Deployments might not exist yet
+
+        time.sleep(5)
+    else:
+        # Argo failed to start - provide comprehensive diagnostics
+        logger.error("=" * 80)
+        logger.error("Argo Workflows pods did not become ready in time")
+        logger.error("=" * 80)
+        
+        try:
+            # Section 1: Deployment Status with Conditions
+            logger.error("\n" + "=" * 80)
+            logger.error("SECTION 1: DEPLOYMENT STATUS")
+            logger.error("=" * 80)
+            
+            for deployment_name in ["argo-server", "workflow-controller"]:
+                try:
+                    deployment = apps_v1.read_namespaced_deployment(
+                        name=deployment_name,
+                        namespace=argo_namespace
+                    )
+                    logger.error(f"\nDeployment: {deployment_name}")
+                    logger.error(f"  Replicas: {deployment.status.replicas or 0}")
+                    logger.error(f"  Ready: {deployment.status.ready_replicas or 0}")
+                    logger.error(f"  Available: {deployment.status.available_replicas or 0}")
+                    logger.error(f"  Unavailable: {deployment.status.unavailable_replicas or 0}")
+                    logger.error(f"  Updated: {deployment.status.updated_replicas or 0}")
+                    
+                    if deployment.status.conditions:
+                        logger.error("  Conditions:")
+                        for condition in deployment.status.conditions:
+                            logger.error(f"    - Type: {condition.type}")
+                            logger.error(f"      Status: {condition.status}")
+                            logger.error(f"      Reason: {condition.reason}")
+                            logger.error(f"      Message: {condition.message}")
+                except ApiException as e:
+                    logger.error(f"\nDeployment {deployment_name}: Not found or error - {e}")
+            
+            # Section 2: Pod Status with Detailed Container States
+            logger.error("\n" + "=" * 80)
+            logger.error("SECTION 2: POD STATUS")
+            logger.error("=" * 80)
+            
+            pods = v1.list_namespaced_pod(namespace=argo_namespace)
+            for pod in pods.items:
+                logger.error(f"\nPod: {pod.metadata.name}")
+                logger.error(f"  Phase: {pod.status.phase}")
+                logger.error(f"  Node: {pod.spec.node_name or 'Not assigned'}")
+                
+                # Pod conditions
+                if pod.status.conditions:
+                    logger.error("  Conditions:")
+                    for condition in pod.status.conditions:
+                        logger.error(f"    - {condition.type}: {condition.status}")
+                        if condition.reason:
+                            logger.error(f"      Reason: {condition.reason}")
+                        if condition.message:
+                            logger.error(f"      Message: {condition.message}")
+                
+                # Container statuses
+                if pod.status.container_statuses:
+                    logger.error("  Containers:")
+                    for cs in pod.status.container_statuses:
+                        logger.error(f"    - {cs.name}:")
+                        logger.error(f"      Image: {cs.image}")
+                        logger.error(f"      Ready: {cs.ready}")
+                        logger.error(f"      Restart Count: {cs.restart_count}")
+                        
+                        if cs.state.waiting:
+                            logger.error(f"      State: Waiting")
+                            logger.error(f"        Reason: {cs.state.waiting.reason}")
+                            if cs.state.waiting.message:
+                                logger.error(f"        Message: {cs.state.waiting.message}")
+                        elif cs.state.running:
+                            logger.error(f"      State: Running")
+                            logger.error(f"        Started: {cs.state.running.started_at}")
+                        elif cs.state.terminated:
+                            logger.error(f"      State: Terminated")
+                            logger.error(f"        Reason: {cs.state.terminated.reason}")
+                            logger.error(f"        Exit Code: {cs.state.terminated.exit_code}")
+                            if cs.state.terminated.message:
+                                logger.error(f"        Message: {cs.state.terminated.message}")
+                
+                # Init container statuses
+                if pod.status.init_container_statuses:
+                    logger.error("  Init Containers:")
+                    for ics in pod.status.init_container_statuses:
+                        logger.error(f"    - {ics.name}:")
+                        logger.error(f"      Image: {ics.image}")
+                        logger.error(f"      Ready: {ics.ready}")
+                        
+                        if ics.state.waiting:
+                            logger.error(f"      State: Waiting - {ics.state.waiting.reason}")
+                        elif ics.state.running:
+                            logger.error(f"      State: Running")
+                        elif ics.state.terminated:
+                            logger.error(f"      State: Terminated - {ics.state.terminated.reason} (exit {ics.state.terminated.exit_code})")
+            
+            # Section 3: Recent Events
+            logger.error("\n" + "=" * 80)
+            logger.error("SECTION 3: RECENT EVENTS (Last 5 minutes)")
+            logger.error("=" * 80)
+            
+            events = v1.list_namespaced_event(namespace=argo_namespace)
+            recent_events = []
+            current_time = time.time()
+            
+            for event in events.items:
+                if event.last_timestamp:
+                    event_time = event.last_timestamp.timestamp()
+                    if current_time - event_time < 300:  # Last 5 minutes
+                        recent_events.append((event_time, event))
+            
+            # Sort by timestamp (most recent first)
+            recent_events.sort(key=lambda x: x[0], reverse=True)
+            
+            if recent_events:
+                for event_time, event in recent_events[:20]:  # Show up to 20 most recent
+                    age = int(current_time - event_time)
+                    logger.error(f"\n  [{age}s ago] {event.type}: {event.involved_object.kind}/{event.involved_object.name}")
+                    logger.error(f"    Reason: {event.reason}")
+                    logger.error(f"    Message: {event.message}")
+                    if event.count and event.count > 1:
+                        logger.error(f"    Count: {event.count}")
+            else:
+                logger.error("  No recent events found")
+            
+            # Section 4: Container Logs (only for running/terminated containers)
+            logger.error("\n" + "=" * 80)
+            logger.error("SECTION 4: CONTAINER LOGS (Last 50 lines)")
+            logger.error("=" * 80)
+            
+            for pod in pods.items:
+                if pod.status.container_statuses:
+                    for cs in pod.status.container_statuses:
+                        # Only try to get logs if container has started
+                        if cs.state.running or cs.state.terminated:
+                            try:
+                                logger.error(f"\nLogs for {pod.metadata.name}/{cs.name}:")
+                                logger.error("-" * 80)
+                                logs = v1.read_namespaced_pod_log(
+                                    name=pod.metadata.name,
+                                    namespace=argo_namespace,
+                                    container=cs.name,
+                                    tail_lines=50
+                                )
+                                logger.error(logs)
+                            except ApiException as log_error:
+                                logger.error(f"Could not retrieve logs: {log_error.reason}")
+            
+            # Section 5: Node Status
+            logger.error("\n" + "=" * 80)
+            logger.error("SECTION 5: NODE STATUS")
+            logger.error("=" * 80)
+            
+            try:
+                nodes = v1.list_node()
+                for node in nodes.items:
+                    logger.error(f"\nNode: {node.metadata.name}")
+                    
+                    # Node conditions
+                    if node.status.conditions:
+                        logger.error("  Conditions:")
+                        for condition in node.status.conditions:
+                            logger.error(f"    - {condition.type}: {condition.status}")
+                            if condition.reason:
+                                logger.error(f"      Reason: {condition.reason}")
+                    
+                    # Resource capacity and allocatable
+                    if node.status.capacity:
+                        logger.error("  Capacity:")
+                        logger.error(f"    CPU: {node.status.capacity.get('cpu', 'unknown')}")
+                        logger.error(f"    Memory: {node.status.capacity.get('memory', 'unknown')}")
+                        logger.error(f"    Pods: {node.status.capacity.get('pods', 'unknown')}")
+                    
+                    if node.status.allocatable:
+                        logger.error("  Allocatable:")
+                        logger.error(f"    CPU: {node.status.allocatable.get('cpu', 'unknown')}")
+                        logger.error(f"    Memory: {node.status.allocatable.get('memory', 'unknown')}")
+                        logger.error(f"    Pods: {node.status.allocatable.get('pods', 'unknown')}")
+            except ApiException as e:
+                logger.error(f"Could not retrieve node information: {e}")
+            
+            logger.error("\n" + "=" * 80)
+            
+        except Exception as e:
+            logger.error(f"Failed to retrieve diagnostic information: {e}")
+        
+        raise TimeoutError("Argo Workflows pods did not become ready in time")
+
+    yield {
+        "namespace": argo_namespace,
+        "version": argo_version
+    }
+
+    # Cleanup is handled by k3s_container fixture
+    logger.info("\nArgo Workflows cleanup (handled by k3s container cleanup)")
 
 
 @pytest.fixture(scope="function")
@@ -70,7 +432,7 @@ def test_namespace(k3s_container):
 
     try:
         v1.create_namespace(body=namespace)
-        print(f"\nCreated test namespace: {namespace_name}")
+        logger.info(f"\nCreated test namespace: {namespace_name}")
     except ApiException as e:
         if e.status != 409:  # Ignore if already exists
             raise
@@ -78,7 +440,7 @@ def test_namespace(k3s_container):
     yield namespace_name
 
     # Clean up the namespace after the test
-    print(f"\nDeleting test namespace: {namespace_name}")
+    logger.info(f"\nDeleting test namespace: {namespace_name}")
     try:
         v1.delete_namespace(name=namespace_name)
     except ApiException as e:
@@ -397,6 +759,194 @@ class TestWorkflowCLICommands:
         result = runner.invoke(workflow_cli, ['util', 'completions', 'fish'])
         assert result.exit_code == 0
         assert "complete" in result.output
+
+
+@pytest.mark.slow
+class TestArgoWorkflows:
+    """Integration tests for Argo Workflows installation in k3s"""
+
+    def test_argo_workflows_installation(self, argo_workflows):
+        """Test that Argo Workflows is properly installed in k3s"""
+        argo_namespace = argo_workflows["namespace"]
+        argo_version = argo_workflows["version"]
+
+        logger.info(f"\nVerifying Argo Workflows {argo_version} installation in namespace {argo_namespace}")
+
+        v1 = client.CoreV1Api()
+        apps_v1 = client.AppsV1Api()
+
+        # Verify argo namespace exists
+        namespaces = v1.list_namespace()
+        namespace_names = [ns.metadata.name for ns in namespaces.items]
+        assert argo_namespace in namespace_names, f"Argo namespace {argo_namespace} not found"
+        logger.info(f"✓ Namespace {argo_namespace} exists")
+
+        # Verify argo-server deployment exists and is ready
+        server_deployment = apps_v1.read_namespaced_deployment(
+            name="argo-server",
+            namespace=argo_namespace
+        )
+        assert server_deployment is not None, "argo-server deployment not found"
+        assert server_deployment.status.ready_replicas >= 1, "argo-server deployment not ready"
+        logger.info(f"✓ argo-server deployment is ready ({server_deployment.status.ready_replicas} replicas)")
+
+        # Verify workflow-controller deployment exists and is ready
+        controller_deployment = apps_v1.read_namespaced_deployment(
+            name="workflow-controller",
+            namespace=argo_namespace
+        )
+        assert controller_deployment is not None, "workflow-controller deployment not found"
+        assert controller_deployment.status.ready_replicas >= 1, "workflow-controller deployment not ready"
+        logger.info(
+            "✓ workflow-controller deployment is ready (%s replicas)",
+            controller_deployment.status.ready_replicas
+        )
+
+        # Verify argo-server service exists
+        services = v1.list_namespaced_service(namespace=argo_namespace)
+        service_names = [svc.metadata.name for svc in services.items]
+        assert "argo-server" in service_names, "argo-server service not found"
+        logger.info("✓ argo-server service exists")
+
+        # Verify pods are running
+        pods = v1.list_namespaced_pod(namespace=argo_namespace)
+        running_pods = [pod for pod in pods.items if pod.status.phase == "Running"]
+        assert len(running_pods) >= 2, f"Expected at least 2 running pods, found {len(running_pods)}"
+        logger.info(f"✓ Found {len(running_pods)} running pods in {argo_namespace} namespace")
+
+        for pod in running_pods:
+            logger.info(f"  - {pod.metadata.name}: {pod.status.phase}")
+
+        logger.info(f"\n✓ Argo Workflows {argo_version} is successfully installed and running!")
+
+    def test_workflow_submit_hello_world(self, argo_workflows):
+        """Test submitting a hello-world workflow to Argo via Kubernetes API with output verification"""
+        argo_namespace = argo_workflows["namespace"]
+
+        logger.info(f"\nTesting workflow submission to Argo in namespace {argo_namespace}")
+
+        # Create unique message for this test
+        test_message = f"hello world from test {uuid.uuid4().hex[:8]}"
+
+        # Create workflow specification as a Kubernetes custom resource with output parameter
+        workflow_spec = {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Workflow",
+            "metadata": {
+                "generateName": "test-hello-world-",
+                "namespace": argo_namespace,
+                "labels": {
+                    "workflows.argoproj.io/completed": "false"
+                }
+            },
+            "spec": {
+                "templates": [
+                    {
+                        "name": "hello-world",
+                        "outputs": {
+                            "parameters": [
+                                {
+                                    "name": "message",
+                                    "valueFrom": {
+                                        "path": "/tmp/message.txt"
+                                    }
+                                }
+                            ]
+                        },
+                        "container": {
+                            "image": "busybox",
+                            "command": ["sh", "-c"],
+                            "args": [f'echo "{test_message}" | tee /tmp/message.txt']
+                        }
+                    }
+                ],
+                "entrypoint": "hello-world"
+            }
+        }
+
+        # Submit workflow using Kubernetes API
+        custom_api = client.CustomObjectsApi()
+
+        try:
+            logger.info("Submitting workflow via Kubernetes API...")
+
+            # Create the workflow custom resource
+            result = custom_api.create_namespaced_custom_object(
+                group="argoproj.io",
+                version="v1alpha1",
+                namespace=argo_namespace,
+                plural="workflows",
+                body=workflow_spec
+            )
+
+            workflow_name = result.get("metadata", {}).get("name")
+            workflow_uid = result.get("metadata", {}).get("uid")
+
+            assert workflow_name is not None, "Workflow name not returned"
+            assert workflow_name.startswith("test-hello-world-"), f"Unexpected workflow name: {workflow_name}"
+            assert workflow_uid is not None, "Workflow UID not returned"
+
+            logger.info("✓ Workflow submitted successfully!")
+            logger.info(f"  Name: {workflow_name}")
+            logger.info(f"  UID: {workflow_uid}")
+
+            # Wait for workflow to complete
+            logger.info("Waiting for workflow to complete...")
+            max_wait = 60  # 60 seconds timeout
+            start_time = time.time()
+            workflow_phase = "Unknown"
+
+            while time.time() - start_time < max_wait:
+                workflow = custom_api.get_namespaced_custom_object(
+                    group="argoproj.io",
+                    version="v1alpha1",
+                    namespace=argo_namespace,
+                    plural="workflows",
+                    name=workflow_name
+                )
+
+                workflow_phase = workflow.get("status", {}).get("phase", "Unknown")
+                logger.info(f"  Workflow phase: {workflow_phase}")
+
+                # Check if workflow reached a terminal state
+                if workflow_phase in ["Succeeded", "Failed", "Error"]:
+                    break
+
+                time.sleep(2)
+
+            assert workflow is not None, "Workflow not found in Kubernetes"
+            assert workflow["metadata"]["name"] == workflow_name
+            logger.info("✓ Workflow verified in Kubernetes")
+
+            # Verify workflow succeeded
+            assert workflow_phase == "Succeeded", f"Workflow did not succeed, phase: {workflow_phase}"
+            logger.info(f"✓ Workflow completed successfully with phase: {workflow_phase}")
+
+            # Extract and verify output parameter
+            output_message = None
+            nodes = workflow.get("status", {}).get("nodes", {})
+
+            for node_id, node in nodes.items():
+                outputs = node.get("outputs", {})
+                parameters = outputs.get("parameters", [])
+
+                for param in parameters:
+                    if param.get("name") == "message":
+                        output_message = param.get("value", "").strip()
+                        break
+
+                if output_message:
+                    break
+
+            assert output_message is not None, "Could not retrieve workflow output"
+            assert test_message in output_message, \
+                f"Output doesn't match expected message. Expected: '{test_message}', Got: '{output_message}'"
+
+            logger.info(f"✓ Container output verified: {output_message}")
+            logger.info("✓ Output verification successful - container executed correctly!")
+
+        except ApiException as e:
+            pytest.fail(f"Failed to submit workflow via Kubernetes API: {e}")
 
 
 def test_k3s_container_support():
