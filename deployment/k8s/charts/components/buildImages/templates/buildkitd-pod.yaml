@@ -49,12 +49,12 @@ spec:
           readOnly: true
       resources:
         requests:
-          cpu: "1000m"
-          memory: "5Gi"
+          cpu: "34000m"
+          memory: "32Gi"
           ephemeral-storage: "10Gi"
         limits:
-          cpu: "6000m"
-          memory: "8Gi"
+          cpu: "34000m"
+          memory: "64Gi"
           ephemeral-storage: "40Gi"
   volumes:
     - name: buildkitd-config
