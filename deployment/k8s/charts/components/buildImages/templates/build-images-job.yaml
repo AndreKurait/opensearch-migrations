@@ -30,6 +30,8 @@ spec:
           env:
             - name: GRADLE_OPTS
               value: "-Xms512m -Xmx4g"
+            - name: OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED
+              value: "true"
           command:
             - sh
             - -c
