@@ -10,8 +10,6 @@ volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: gp3
   encrypted: "true"
-  iops: "12000"
-  throughput: "500"
   fsType: xfs
 reclaimPolicy: Delete
 allowVolumeExpansion: false
