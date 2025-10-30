@@ -43,10 +43,11 @@ function makeParamsDict(
     options: BaseExpression<Serialized<z.infer<typeof RFS_OPTIONS>>>,
     sessionName: BaseExpression<string>
 ) {
-    return expr.mergeDicts(
+    const deserializedOptions = expr.deserializeRecord(options);
+    const baseParams = expr.mergeDicts(
         expr.mergeDicts(
             makeTargetParamDict(targetConfig),
-            expr.omit(expr.deserializeRecord(options), "loggingConfigurationOverrideConfigMap", "podReplicas")
+            expr.omit(deserializedOptions, "loggingConfigurationOverrideConfigMap", "podReplicas", "experimentalPreviousSnapshotName", "experimentalDeltaMode")
         ),
         expr.mergeDicts(
             expr.makeDict({
@@ -57,6 +58,22 @@ function makeParamsDict(
             }),
             makeRepoParamDict(expr.get(expr.deserializeRecord(snapshotConfig), "repoConfig"))
         )
+    );
+    
+    // Conditionally add experimental parameters if they exist
+    const experimentalPreviousSnapshotName = expr.dig(deserializedOptions, ["experimentalPreviousSnapshotName"], "");
+    const experimentalDeltaMode = expr.dig(deserializedOptions, ["experimentalDeltaMode"], "");
+    
+    return expr.ternary(
+        expr.not(expr.isEmpty(experimentalPreviousSnapshotName)),
+        expr.mergeDicts(
+            baseParams,
+            expr.makeDict({
+                experimentalPreviousSnapshotName: experimentalPreviousSnapshotName,
+                experimentalDeltaMode: experimentalDeltaMode
+            })
+        ),
+        baseParams
     );
 }
 

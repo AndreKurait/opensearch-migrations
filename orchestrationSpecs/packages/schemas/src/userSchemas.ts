@@ -59,6 +59,8 @@ export const RFS_OPTIONS = z.object({
     maxConnections: z.number().default(10),
     maxShardSizeBytes: z.number().default(80*1024*1024*1024),
     otelCollectorEndpoint: z.string().default("http://otel-collector:4317"),
+    experimentalPreviousSnapshotName: z.string().optional(),
+    experimentalDeltaMode: z.string().optional(),
 });
 
 
