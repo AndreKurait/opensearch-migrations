@@ -138,7 +138,7 @@ RUN chmod +x /root/configProcessor/*.sh
 
 # To use test workflows, flip the comments
 ENV CONFIG_PROCESSOR_DIR=/root/configProcessor
-#ENV CONFIG_PROCESSOR_DIR=/root/testConfigProcessor
+# ENV CONFIG_PROCESSOR_DIR=/root/testConfigProcessor
 
 # Once we're ready, we should replace the old workflows with the new ones.
 # Notice that the installWorkflows pulls from /root/workflows/templates -
