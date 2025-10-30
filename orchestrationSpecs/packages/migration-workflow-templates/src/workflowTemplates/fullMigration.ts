@@ -119,7 +119,7 @@ export const FullMigration = WorkflowBuilder.create({
                     autocreateSnapshotName: expr.concat(
                         b.inputs.sessionName,
                         expr.literal("-iteration-"),
-                        expr.asString(b.inputs.iterationNumber)
+                        expr.asString(expr.deserializeRecord(b.inputs.iterationNumber))
                     )
                 }))
             .addTask("runRfsIteration", DocumentBulkLoad, "runBulkLoad",
@@ -129,14 +129,14 @@ export const FullMigration = WorkflowBuilder.create({
                     // For non-first iterations, add experimental parameters
                     documentBackfillConfig: expr.serialize(
                         expr.ternary(
-                            new ComparisonExpression(">", expr.deserializeRecord(b.inputs.iterationNumber), expr.literal(1)),
+                            expr.greaterThan(expr.deserializeRecord(b.inputs.iterationNumber), expr.literal(1)),
                             expr.mergeDicts(
                                 expr.deserializeRecord(b.inputs.documentBackfillConfig),
                                 expr.makeDict({
                                     experimentalPreviousSnapshotName: expr.concat(
                                         b.inputs.sessionName,
                                         expr.literal("-iteration-"),
-                                        expr.asString(new InfixExpression<number, any, any>("-", expr.deserializeRecord(b.inputs.iterationNumber), expr.literal(1), typeToken<number>()))
+                                        expr.asString(new InfixExpression("-", expr.deserializeRecord(b.inputs.iterationNumber), expr.literal(1)))
                                     ),
                                     experimentalDeltaMode: expr.literal("UPDATES_AND_DELETES")
                                 })
@@ -160,20 +160,67 @@ export const FullMigration = WorkflowBuilder.create({
         .addRequiredInput("documentBackfillConfig", typeToken<z.infer<typeof RFS_OPTIONS>>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["ReindexFromSnapshot", "MigrationConsole"]))
 
-        .addSteps(b => {
-            // Create sequential steps for iterations 1-100
-            // Each step is in its own step group, ensuring sequential execution
-            let builder = b;
-            for (let i = 1; i <= 100; i++) {
-                builder = builder.addStep(`runRfsIteration${i}`, INTERNAL, "runSingleRfsIteration",
-                    c => c.register({
-                        ...selectInputsForRegister(builder, c),
-                        iterationNumber: expr.literal(i)
-                    })
-                );
-            }
-            return builder;
-        })
+        .addDag(b => b
+            .addTask("iteration1", INTERNAL, "runSingleRfsIteration",
+                c => c.register({
+                    ...selectInputsForRegister(b, c),
+                    iterationNumber: expr.literal(1)
+                }))
+            .addTask("iteration2", INTERNAL, "runSingleRfsIteration",
+                c => c.register({
+                    ...selectInputsForRegister(b, c),
+                    iterationNumber: expr.literal(2)
+                }),
+                {dependencies: ["iteration1"]})
+            .addTask("iteration3", INTERNAL, "runSingleRfsIteration",
+                c => c.register({
+                    ...selectInputsForRegister(b, c),
+                    iterationNumber: expr.literal(3)
+                }),
+                {dependencies: ["iteration2"]})
+            .addTask("iteration4", INTERNAL, "runSingleRfsIteration",
+                c => c.register({
+                    ...selectInputsForRegister(b, c),
+                    iterationNumber: expr.literal(4)
+                }),
+                {dependencies: ["iteration3"]})
+            .addTask("iteration5", INTERNAL, "runSingleRfsIteration",
+                c => c.register({
+                    ...selectInputsForRegister(b, c),
+                    iterationNumber: expr.literal(5)
+                }),
+                {dependencies: ["iteration4"]})
+            .addTask("iteration6", INTERNAL, "runSingleRfsIteration",
+                c => c.register({
+                    ...selectInputsForRegister(b, c),
+                    iterationNumber: expr.literal(6)
+                }),
+                {dependencies: ["iteration5"]})
+            .addTask("iteration7", INTERNAL, "runSingleRfsIteration",
+                c => c.register({
+                    ...selectInputsForRegister(b, c),
+                    iterationNumber: expr.literal(7)
+                }),
+                {dependencies: ["iteration6"]})
+            .addTask("iteration8", INTERNAL, "runSingleRfsIteration",
+                c => c.register({
+                    ...selectInputsForRegister(b, c),
+                    iterationNumber: expr.literal(8)
+                }),
+                {dependencies: ["iteration7"]})
+            .addTask("iteration9", INTERNAL, "runSingleRfsIteration",
+                c => c.register({
+                    ...selectInputsForRegister(b, c),
+                    iterationNumber: expr.literal(9)
+                }),
+                {dependencies: ["iteration8"]})
+            .addTask("iteration10", INTERNAL, "runSingleRfsIteration",
+                c => c.register({
+                    ...selectInputsForRegister(b, c),
+                    iterationNumber: expr.literal(10)
+                }),
+                {dependencies: ["iteration9"]})
+        )
     )
 
 
