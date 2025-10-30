@@ -160,55 +160,20 @@ export const FullMigration = WorkflowBuilder.create({
         .addRequiredInput("documentBackfillConfig", typeToken<z.infer<typeof RFS_OPTIONS>>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["ReindexFromSnapshot", "MigrationConsole"]))
 
-        .addSteps(b => b
-            .addStep("runRfsIterationWithSnapshot", INTERNAL, "runSingleRfsIteration",
-                c => c.register({
-                    ...selectInputsForRegister(b, c),
-                    iterationNumber: c.item
-                }),
-                {
-                    loopWith: makeParameterLoop(
-                        // Create an infinite array by using a large range
-                        // The loop will continue until manually cancelled
-                        expr.toArray(
-                            expr.literal(1), expr.literal(2), expr.literal(3), 
-                            expr.literal(4), expr.literal(5), expr.literal(6),
-                            expr.literal(7), expr.literal(8), expr.literal(9),
-                            expr.literal(10), expr.literal(11), expr.literal(12),
-                            expr.literal(13), expr.literal(14), expr.literal(15),
-                            expr.literal(16), expr.literal(17), expr.literal(18),
-                            expr.literal(19), expr.literal(20), expr.literal(21),
-                            expr.literal(22), expr.literal(23), expr.literal(24),
-                            expr.literal(25), expr.literal(26), expr.literal(27),
-                            expr.literal(28), expr.literal(29), expr.literal(30),
-                            expr.literal(31), expr.literal(32), expr.literal(33),
-                            expr.literal(34), expr.literal(35), expr.literal(36),
-                            expr.literal(37), expr.literal(38), expr.literal(39),
-                            expr.literal(40), expr.literal(41), expr.literal(42),
-                            expr.literal(43), expr.literal(44), expr.literal(45),
-                            expr.literal(46), expr.literal(47), expr.literal(48),
-                            expr.literal(49), expr.literal(50), expr.literal(51),
-                            expr.literal(52), expr.literal(53), expr.literal(54),
-                            expr.literal(55), expr.literal(56), expr.literal(57),
-                            expr.literal(58), expr.literal(59), expr.literal(60),
-                            expr.literal(61), expr.literal(62), expr.literal(63),
-                            expr.literal(64), expr.literal(65), expr.literal(66),
-                            expr.literal(67), expr.literal(68), expr.literal(69),
-                            expr.literal(70), expr.literal(71), expr.literal(72),
-                            expr.literal(73), expr.literal(74), expr.literal(75),
-                            expr.literal(76), expr.literal(77), expr.literal(78),
-                            expr.literal(79), expr.literal(80), expr.literal(81),
-                            expr.literal(82), expr.literal(83), expr.literal(84),
-                            expr.literal(85), expr.literal(86), expr.literal(87),
-                            expr.literal(88), expr.literal(89), expr.literal(90),
-                            expr.literal(91), expr.literal(92), expr.literal(93),
-                            expr.literal(94), expr.literal(95), expr.literal(96),
-                            expr.literal(97), expr.literal(98), expr.literal(99),
-                            expr.literal(100)
-                        )
-                    )
-                })
-        )
+        .addSteps(b => {
+            // Create sequential steps for iterations 1-100
+            // Each step is in its own step group, ensuring sequential execution
+            let builder = b;
+            for (let i = 1; i <= 100; i++) {
+                builder = builder.addStep(`runRfsIteration${i}`, INTERNAL, "runSingleRfsIteration",
+                    c => c.register({
+                        ...selectInputsForRegister(builder, c),
+                        iterationNumber: expr.literal(i)
+                    })
+                );
+            }
+            return builder;
+        })
     )
 
 
