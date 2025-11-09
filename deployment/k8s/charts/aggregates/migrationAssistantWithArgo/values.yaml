@@ -347,6 +347,20 @@ charts:
 
       config:
         customParsers: |
+          [MULTILINE_PARSER]
+              Name               traffic_replayer_multiline
+              Type               regex
+              Flush_timeout      1000
+              Rule      "start_state"   "^\[(?:TRACE|DEBUG|INFO |WARN |ERROR|FATAL)\]"  "cont"
+              Rule      "cont"          "^(?!\[(?:TRACE|DEBUG|INFO |WARN |ERROR|FATAL)\])"  "cont"
+          
+          [MULTILINE_PARSER]
+              Name               rfs_multiline
+              Type               regex
+              Flush_timeout      1000
+              Rule      "start_state"   "^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}"  "cont"
+              Rule      "cont"          "^(?!\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})"  "cont"
+          
           [PARSER]
               Name               logfmt_parser
               Format             logfmt
@@ -354,9 +368,9 @@ charts:
           [PARSER]
               Name               java_log_parser
               Format             regex
-              Regex              ^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (?<level>[A-Z]+)\s+(?<source>[\w\d]+:\d+) - (?<msg>.*)$
+              Regex              ^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) (?<level>[A-Z]+) (?<logger>\S+) \[(?<thread>[^\]]+)\] (?<msg>.*)$
               Time_Key           time
-              Time_Format        %Y-%m-%d %H:%M:%S
+              Time_Format        %Y-%m-%d %H:%M:%S,%L
     
 
         inputs: |
@@ -364,9 +378,9 @@ charts:
               Name               tail
               Tag                kube.*
               Path               /var/log/containers/*.log
-              multiline.parser   docker, cri
+              multiline.parser   docker, cri, traffic_replayer_multiline, rfs_multiline
               Refresh_Interval   5
-              Mem_Buf_Limit      5MB
+              Mem_Buf_Limit      100MB
               Skip_Long_Lines    Off
               Skip_Empty_Lines   On
 
