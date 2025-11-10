@@ -149,7 +149,6 @@ charts:
               log_stream_prefix   from-
               auto_create_group   true
               log_key             log
-              json_date_key       time
 
       # Remove logs PVC mount for EKS deployment
       extraVolumes:
