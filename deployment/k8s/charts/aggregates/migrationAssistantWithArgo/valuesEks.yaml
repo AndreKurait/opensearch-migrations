@@ -148,6 +148,8 @@ charts:
               log_group_name      /migration-assistant-${STAGE_NAME}-${AWS_REGION}/logs
               log_stream_prefix   from-
               auto_create_group   true
+              log_key             log
+              json_date_key       time
 
       # Remove logs PVC mount for EKS deployment
       extraVolumes:
