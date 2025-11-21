@@ -10,7 +10,7 @@ import yaml
 
 from console_link.environment import Environment
 from console_link.models.cluster import Cluster, HttpMethod
-from console_link.models.backfill_rfs import get_detailed_status_obj, BackfillOverallStatus
+from console_link.models.backfill_rfs import get_detailed_status_obj, BackfillOverallStatus, all_shards_finished_processing
 from tests.search_containers import SearchContainer, Version
 
 logging.basicConfig(level=logging.INFO)
@@ -292,3 +292,82 @@ def test_get_detailed_status_obj(env_with_cluster: Environment):
     assert status_obj.shard_in_progress == (IN_PROGRESS_DOC_COUNT * SHARD_COUNT +
                                             IN_PROGRESS_SUCCESSOR_COUNT), f"{status_obj}"
     assert status_obj.shard_waiting == UNCLAIMED_DOC_COUNT * SHARD_COUNT, f"{status_obj}"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "env_with_cluster",
+    [TEST_VERSION],
+    indirect=True
+)
+def test_all_shards_finished_processing_requires_at_least_one_shard(env_with_cluster: Environment):
+    """Test that all_shards_finished_processing returns False when no shards have been processed."""
+    assert env_with_cluster.target_cluster is not None
+    target_cluster = env_with_cluster.target_cluster
+
+    # Create index but don't add any documents (simulating the scenario from the task)
+    create_working_state_index(target_cluster)
+    
+    # Add only the shard_setup document
+    setup_doc = {
+        "completedAt": current_time,
+        "status": "completed"
+    }
+    target_cluster.call_api(
+        f"/{WORKING_STATE_INDEX}/_doc/shard_setup",
+        HttpMethod.PUT,
+        data=json.dumps(setup_doc),
+        headers={"Content-Type": "application/json"}
+    )
+    target_cluster.call_api("/_refresh", HttpMethod.POST)
+
+    # Should return False because no shards have been completed (total=0, complete=0)
+    result = all_shards_finished_processing(target_cluster)
+    assert result is False, "Expected False when no shards have been processed"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "env_with_cluster",
+    [TEST_VERSION],
+    indirect=True
+)
+def test_all_shards_finished_processing_returns_true_when_shards_completed(env_with_cluster: Environment):
+    """Test that all_shards_finished_processing returns True when at least one shard is completed."""
+    assert env_with_cluster.target_cluster is not None
+    target_cluster = env_with_cluster.target_cluster
+
+    create_working_state_index(target_cluster)
+    
+    # Add a completed shard
+    completed_doc = WorkingStateDoc(
+        index="test_index",
+        shard=0,
+        starting_doc_id=0,
+        completed=True,
+        expired=False,
+        status="Completed"
+    )
+    target_cluster.call_api(
+        f"/{WORKING_STATE_INDEX}/_doc/{completed_doc.get_id()}",
+        HttpMethod.PUT,
+        data=completed_doc.body(),
+        headers={"Content-Type": "application/json"}
+    )
+    
+    # Add shard_setup document
+    setup_doc = {
+        "completedAt": current_time,
+        "status": "completed"
+    }
+    target_cluster.call_api(
+        f"/{WORKING_STATE_INDEX}/_doc/shard_setup",
+        HttpMethod.PUT,
+        data=json.dumps(setup_doc),
+        headers={"Content-Type": "application/json"}
+    )
+    target_cluster.call_api("/_refresh", HttpMethod.POST)
+
+    # Should return True because we have 1 shard total and 1 completed
+    result = all_shards_finished_processing(target_cluster)
+    assert result is True, "Expected True when all shards are completed and at least one exists"

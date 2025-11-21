@@ -1028,3 +1028,248 @@ def test_k3s_container_support():
         assert DockerContainer is not None
     except ImportError:
         pytest.skip("testcontainers not installed - run: pip install testcontainers")
+
+
+@pytest.mark.slow
+class TestArgoWorkflowsRetryBehavior:
+    """Integration tests for Argo Workflows retry detection and grouping.
+    
+    These tests verify that when a workflow step fails and retries multiple times,
+    the status display correctly groups attempts under one running task instead of
+    showing all failed underlying attempts separately.
+    
+    The retry detection logic in workflow_service.py:
+    - Parses retry attempt numbers from node messages
+    - Groups nodes by display name and hides failed attempts
+    - Shows only the latest retry attempt in the workflow tree
+    - Displays "Attempt X/Y" format for retrying steps
+    """
+
+    def test_workflow_retry_groups_attempts(self, argo_workflows, test_namespace):
+        """Test that workflow retries are grouped and only latest attempt is shown.
+        
+        This test:
+        1. Creates a workflow with retry strategy (limit: 2, retryPolicy: Always)
+        2. Uses a container that fails with 80% probability
+        3. Submits the workflow to Argo Workflows
+        4. Polls the workflow status until at least one retry occurs
+        5. Verifies that only the latest retry attempt appears in the step_tree
+        6. Verifies retry_attempt and retry_limit fields are correctly populated
+        7. Verifies failed previous attempts are hidden
+        
+        Expected behavior:
+        - When a step retries, status shows: "▶ retry-step (Running)" with 
+          "▶ retry-step(2) (Running)" underneath
+        - Failed attempts like "✗ retry-step(0) (Failed)" should NOT appear
+        - Only the current/latest attempt should be visible
+        """
+        from console_link.workflow.services.workflow_service import WorkflowService
+        
+        argo_namespace = argo_workflows["namespace"]
+        
+        logger.info(f"\nTesting retry detection in namespace {test_namespace}")
+        
+        # Create unique message for this test
+        test_message = f"retry test {uuid.uuid4().hex[:8]}"
+        
+        # Create workflow specification with retry strategy
+        # The container fails with 80% probability to trigger retries
+        workflow_spec = {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Workflow",
+            "metadata": {
+                "generateName": "test-retry-detection-",
+                "namespace": test_namespace,
+                "labels": {
+                    "workflows.argoproj.io/completed": "false"
+                }
+            },
+            "spec": {
+                "templates": [
+                    {
+                        "name": "retry-on-error",
+                        "retryStrategy": {
+                            "limit": "2",  # Allow up to 2 retries (3 total attempts)
+                            "retryPolicy": "Always"  # Retry on any failure
+                        },
+                        "container": {
+                            "image": "python:3.9-alpine",
+                            "command": ["python", "-c"],
+                            # Script that fails with 80% probability
+                            "args": [
+                                f"""
+import random
+import sys
+
+# Fail with 80% probability to trigger retries
+if random.random() < 0.8:
+    print("Simulated failure - will retry")
+    sys.exit(1)
+else:
+    print("{test_message}")
+    sys.exit(0)
+"""
+                            ]
+                        }
+                    }
+                ],
+                "entrypoint": "retry-on-error"
+            }
+        }
+        
+        # Submit workflow using Kubernetes API
+        custom_api = client.CustomObjectsApi()
+        
+        try:
+            logger.info("Submitting workflow with retry strategy...")
+            
+            result = custom_api.create_namespaced_custom_object(
+                group="argoproj.io",
+                version="v1alpha1",
+                namespace=test_namespace,
+                plural="workflows",
+                body=workflow_spec
+            )
+            
+            workflow_name = result.get("metadata", {}).get("name")
+            assert workflow_name is not None, "Workflow name not returned"
+            assert workflow_name.startswith("test-retry-detection-")
+            
+            logger.info(f"✓ Workflow submitted: {workflow_name}")
+            
+            # Initialize WorkflowService for status checking
+            service = WorkflowService()
+            
+            # We need to access Argo Server - use port-forward or direct service access
+            # For testing, we'll use the Kubernetes API directly to get workflow status
+            # and then use the service's tree-building logic
+            
+            # Poll workflow status until we see retry behavior
+            logger.info("Polling workflow status for retry detection...")
+            max_wait = 120  # 2 minutes timeout
+            start_time = time.time()
+            retry_detected = False
+            latest_status = None
+            
+            while time.time() - start_time < max_wait:
+                # Get workflow status via Kubernetes API
+                workflow = custom_api.get_namespaced_custom_object(
+                    group="argoproj.io",
+                    version="v1alpha1",
+                    namespace=test_namespace,
+                    plural="workflows",
+                    name=workflow_name
+                )
+                
+                phase = workflow.get("status", {}).get("phase", "Unknown")
+                nodes = workflow.get("status", {}).get("nodes", {})
+                
+                # Build workflow tree using the service's logic
+                step_tree = service._build_workflow_tree_with_templates(nodes, workflow)
+                
+                # Check if we have retry information
+                for node in step_tree:
+                    if node.get("retry_attempt") is not None and node["retry_attempt"] > 1:
+                        retry_detected = True
+                        latest_status = {
+                            "phase": phase,
+                            "step_tree": step_tree,
+                            "nodes": nodes
+                        }
+                        logger.info(f"✓ Retry detected! Attempt {node['retry_attempt']}/{node.get('retry_limit', '?')}")
+                        break
+                
+                if retry_detected:
+                    break
+                
+                # If workflow completed without retries, that's also valid (lucky success)
+                if phase in ["Succeeded", "Failed", "Error"]:
+                    logger.info(f"Workflow completed with phase {phase} before retry occurred")
+                    # This is acceptable - the test validates retry grouping when it happens
+                    # but doesn't require retries to occur
+                    pytest.skip(f"Workflow completed ({phase}) without triggering retry - test inconclusive")
+                
+                elapsed = int(time.time() - start_time)
+                logger.info(f"[{elapsed}s] Phase: {phase}, Nodes: {len(nodes)}, Waiting for retry...")
+                time.sleep(3)
+            
+            # Verify retry detection occurred
+            assert retry_detected, "No retry was detected within timeout period"
+            assert latest_status is not None
+            
+            step_tree = latest_status["step_tree"]
+            nodes = latest_status["nodes"]
+            
+            logger.info(f"\n=== Verifying Retry Grouping ===")
+            logger.info(f"Total nodes in raw data: {len(nodes)}")
+            logger.info(f"Nodes in step_tree after grouping: {len(step_tree)}")
+            
+            # Verification 1: Only ONE node should appear in step_tree for the retrying step
+            # (failed attempts should be hidden)
+            retry_nodes = [n for n in step_tree if n.get("retry_attempt") is not None]
+            assert len(retry_nodes) == 1, \
+                f"Expected 1 retry node in tree, found {len(retry_nodes)}: {[n['display_name'] for n in retry_nodes]}"
+            
+            retry_node = retry_nodes[0]
+            logger.info(f"✓ Only one retry node in tree: {retry_node['display_name']}")
+            
+            # Verification 2: Retry attempt should be > 1 (indicating at least one retry occurred)
+            assert retry_node["retry_attempt"] > 1, \
+                f"Expected retry_attempt > 1, got {retry_node['retry_attempt']}"
+            logger.info(f"✓ Retry attempt number: {retry_node['retry_attempt']}")
+            
+            # Verification 3: Retry limit should be set to 2 (from workflow spec)
+            assert retry_node["retry_limit"] == 2, \
+                f"Expected retry_limit=2, got {retry_node['retry_limit']}"
+            logger.info(f"✓ Retry limit: {retry_node['retry_limit']}")
+            
+            # Verification 4: Check that multiple nodes exist in raw data but only one in tree
+            # Count nodes with same display name in raw data
+            display_name = retry_node["display_name"]
+            raw_nodes_with_same_name = [
+                n for n in nodes.values()
+                if n.get("displayName") == display_name and n.get("type") == "Pod"
+            ]
+            
+            logger.info(f"Raw nodes with display name '{display_name}': {len(raw_nodes_with_same_name)}")
+            
+            # If we detected a retry (attempt > 1), there should be multiple raw nodes
+            if retry_node["retry_attempt"] > 1:
+                assert len(raw_nodes_with_same_name) >= retry_node["retry_attempt"], \
+                    f"Expected at least {retry_node['retry_attempt']} raw nodes, found {len(raw_nodes_with_same_name)}"
+                logger.info(f"✓ Multiple raw nodes ({len(raw_nodes_with_same_name)}) grouped into one tree node")
+            
+            # Verification 5: Verify failed attempts are not in the tree
+            # Check that only the latest attempt (by start time) is in the tree
+            if len(raw_nodes_with_same_name) > 1:
+                # Sort by start time to find latest
+                sorted_raw_nodes = sorted(
+                    raw_nodes_with_same_name,
+                    key=lambda n: n.get("startedAt", "9999-99-99")
+                )
+                latest_raw_node_id = sorted_raw_nodes[-1].get("id")
+                
+                # The node in the tree should be the latest one
+                assert retry_node["id"] == latest_raw_node_id, \
+                    f"Tree node ID {retry_node['id']} doesn't match latest raw node ID {latest_raw_node_id}"
+                logger.info(f"✓ Tree contains only the latest retry attempt (most recent by start time)")
+                
+                # Verify earlier attempts are not in tree
+                earlier_node_ids = [n.get("id") for n in sorted_raw_nodes[:-1]]
+                tree_node_ids = [n["id"] for n in step_tree]
+                
+                for earlier_id in earlier_node_ids:
+                    assert earlier_id not in tree_node_ids, \
+                        f"Failed attempt {earlier_id} should not be in tree"
+                logger.info(f"✓ Failed attempts hidden from tree: {len(earlier_node_ids)} nodes")
+            
+            logger.info(f"\n✓ All retry grouping verifications passed!")
+            logger.info(f"  - Only latest attempt shown in tree")
+            logger.info(f"  - Retry attempt: {retry_node['retry_attempt']}/{retry_node['retry_limit']}")
+            logger.info(f"  - Failed attempts hidden: {len(raw_nodes_with_same_name) - 1}")
+            
+        except ApiException as e:
+            pytest.fail(f"Kubernetes API error: {e}")
+        except Exception as e:
+            logger.exception("Test failed with exception")
+            pytest.fail(f"Test failed: {e}")

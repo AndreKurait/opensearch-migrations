@@ -244,12 +244,20 @@ def _get_step_rich_label(node: dict) -> str:
     step_name = node['display_name']
     step_phase = node['phase']
     step_type = node['type']
+    retry_attempt = node.get('retry_attempt')
+    retry_limit = node.get('retry_limit')
 
-    # Color based on phase
+    # Check if this is a retrying step
+    is_retrying = retry_attempt is not None and retry_limit is not None
+    
+    # Check if retries are exhausted (all attempts failed)
+    is_exhausted = is_retrying and retry_attempt == retry_limit and step_phase == 'Failed'
+
+    # Color based on phase (treat retrying steps as Running, unless exhausted)
     if step_phase == 'Succeeded':
         color = "green"
         symbol = "✓"
-    elif step_phase == 'Running':
+    elif step_phase == 'Running' or (is_retrying and step_phase in ('Running', 'Failed') and not is_exhausted):
         color = "yellow"
         symbol = "⟳" if step_type == 'Suspend' else "▶"
     elif step_phase in ('Failed', 'Error'):
@@ -273,6 +281,12 @@ def _get_step_rich_label(node: dict) -> str:
             return f"[{color}]{symbol} {step_name} (Approved)[/{color}]"
         else:
             return f"[{color}]{symbol} {step_name} ({step_phase})[/{color}]"
+    # Special handling for exhausted retries
+    elif is_exhausted:
+        return f"[{color}]{symbol} {step_name} (Failed ({retry_limit}/{retry_limit} attempts))[/{color}]"
+    # Special handling for active retrying steps
+    elif is_retrying:
+        return f"[{color}]{symbol} {step_name} - Attempt {retry_attempt}/{retry_limit}[/{color}]"
     # Special handling for Skipped steps with approval-related names
     elif step_phase == 'Skipped' and 'approval' in step_name.lower():
         return f"[{color}]{symbol} {step_name} (Not Required)[/{color}]"

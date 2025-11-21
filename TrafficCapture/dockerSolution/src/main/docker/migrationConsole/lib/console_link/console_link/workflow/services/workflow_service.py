@@ -5,6 +5,7 @@ making it reusable by CLI commands, REST APIs, or other interfaces.
 """
 
 import logging
+import re
 import time
 from typing import Dict, Any, Optional, Tuple, TypedDict, List
 
@@ -80,6 +81,9 @@ class WorkflowNode(TypedDict):
     children: List[str]
     parent: Optional[str]
     depth: int
+    message: Optional[str]  # Contains retry attempt info from Argo
+    retry_attempt: Optional[int]  # Current retry attempt number (1-indexed)
+    retry_limit: Optional[int]  # Maximum retry attempts allowed
 
 
 class WorkflowStatusResult(TypedDict):
@@ -335,8 +339,8 @@ class WorkflowService:
             nodes_dict = status.get("nodes", {})
             steps = self._extract_workflow_steps(nodes_dict)
 
-            # Build hierarchical tree structure
-            step_tree = self._build_workflow_tree(nodes_dict)
+            # Build hierarchical tree structure - pass full workflow for template access
+            step_tree = self._build_workflow_tree_with_templates(nodes_dict, workflow)
             step_tree = self._sort_nodes_intelligently(step_tree)
 
             return WorkflowStatusResult(
@@ -640,22 +644,116 @@ class WorkflowService:
                 return True
         return False
 
-    def _build_workflow_tree(self, nodes: Dict[str, Any]) -> List[WorkflowNode]:
-        """Build a tree structure from Argo workflow nodes.
+    def _extract_retry_info(self, node: Dict[str, Any]) -> Tuple[Optional[int], Optional[int]]:
+        """Extract current retry attempt and limit from Argo node data.
+
+        Args:
+            node: Argo workflow node dictionary
+
+        Returns:
+            Tuple of (current_attempt, retry_limit) or (None, None) if not a retry node
+        """
+        message = node.get("message", "")
+        
+        # Pattern 1: "Retrying in X seconds... (Y/Z)"
+        # Example: "Retrying in 30 seconds... (3/200)"
+        pattern1 = r"Retrying in \d+ seconds\.\.\. \((\d+)/(\d+)\)"
+        match = re.search(pattern1, message)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+        
+        # Pattern 2: "Retry (X/Y)"
+        # Example: "Retry (3/200)"
+        pattern2 = r"Retry \((\d+)/(\d+)\)"
+        match = re.search(pattern2, message)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+        
+        # Pattern 3: Check if node has retryStrategy in template
+        # This would require accessing the workflow template, which we don't have here
+        # So we rely on message parsing for now
+        
+        return None, None
+
+    def _is_retrying_step(self, node: Dict[str, Any]) -> bool:
+        """Determine if a node is currently in a retry state.
+
+        Args:
+            node: Argo workflow node dictionary
+
+        Returns:
+            True if node is currently retrying
+        """
+        phase = node.get("phase", "")
+        message = node.get("message", "")
+        
+        # Check if message contains retry indicators
+        retry_indicators = [
+            "Retrying in",
+            "Retry (",
+            "retrying"
+        ]
+        
+        has_retry_message = any(indicator in message for indicator in retry_indicators)
+        
+        # Node is retrying if it's Running or Failed with retry message
+        return (phase in ["Running", "Failed"]) and has_retry_message
+
+    def _build_workflow_tree_with_templates(
+        self, 
+        nodes: Dict[str, Any],
+        workflow: Dict[str, Any]
+    ) -> List[WorkflowNode]:
+        """Build a tree structure from Argo workflow nodes with template information.
 
         Args:
             nodes: Dictionary of workflow nodes from Argo API
+            workflow: Full workflow object containing storedTemplates
 
         Returns:
             List of WorkflowNode objects representing the tree structure
         """
+        # Extract stored templates for retry strategy lookup
+        stored_templates = workflow.get("status", {}).get("storedTemplates", {})
+        
+        return self._build_workflow_tree(nodes, stored_templates)
+
+    def _build_workflow_tree(
+        self, 
+        nodes: Dict[str, Any],
+        stored_templates: Optional[Dict[str, Any]] = None
+    ) -> List[WorkflowNode]:
+        """Build a tree structure from Argo workflow nodes.
+
+        Args:
+            nodes: Dictionary of workflow nodes from Argo API
+            stored_templates: Optional stored templates from workflow status
+
+        Returns:
+            List of WorkflowNode objects representing the tree structure
+        """
+        if stored_templates is None:
+            stored_templates = {}
         # First pass: Create WorkflowNode objects for all relevant nodes
         workflow_nodes: Dict[str, WorkflowNode] = {}
+        
+        # Track retry nodes by their template scope to extract retry strategy
+        retry_nodes: Dict[str, List[str]] = {}  # template_scope -> [node_ids]
 
         for node_id, node in nodes.items():
             node_type = node.get("type", "")
-            # Include Pod and Suspend steps, plus Skipped steps to show conditional logic
-            if node_type in ["Pod", "Suspend", "Skipped"]:
+            # Include Pod, Suspend, Skipped, and Retry steps
+            if node_type in ["Pod", "Suspend", "Skipped", "Retry"]:
+                # Extract retry information from message
+                retry_attempt, retry_limit = self._extract_retry_info(node)
+                
+                # Track retry nodes by template scope
+                template_scope = node.get("templateScope", "")
+                if node_type == "Retry" or retry_attempt is not None:
+                    if template_scope not in retry_nodes:
+                        retry_nodes[template_scope] = []
+                    retry_nodes[template_scope].append(node_id)
+                
                 workflow_nodes[node_id] = WorkflowNode(
                     id=node_id,
                     name=node.get("name", ""),
@@ -667,16 +765,22 @@ class WorkflowService:
                     boundary_id=node.get("boundaryID"),
                     children=node.get("children", []),
                     parent=None,
-                    depth=0
+                    depth=0,
+                    message=node.get("message"),
+                    retry_attempt=retry_attempt,
+                    retry_limit=retry_limit
                 )
 
-        # Second pass: Establish parent-child relationships
+        # Second pass: Infer retry info from node relationships for nodes without message-based retry info
+        self._infer_retry_info_from_relationships(workflow_nodes, nodes, stored_templates)
+
+        # Third pass: Establish parent-child relationships
         for node_id, wf_node in workflow_nodes.items():
             # Set parent based on boundaryID
             if wf_node["boundary_id"] and wf_node["boundary_id"] in workflow_nodes:
                 wf_node["parent"] = wf_node["boundary_id"]
 
-        # Third pass: Calculate depth levels
+        # Fourth pass: Calculate depth levels
         def calculate_depth(node_id: str, visited: set) -> int:
             """Recursively calculate depth for a node."""
             if node_id in visited:
@@ -698,6 +802,157 @@ class WorkflowService:
 
         # Return as list (will be sorted by _sort_nodes_intelligently)
         return list(workflow_nodes.values())
+
+    def _infer_retry_info_from_relationships(
+        self, 
+        workflow_nodes: Dict[str, WorkflowNode],
+        raw_nodes: Dict[str, Any],
+        stored_templates: Dict[str, Any]
+    ):
+        """Infer retry attempt numbers from node relationships when message doesn't contain it.
+        
+        When Argo retries a step, it creates multiple nodes with the same displayName.
+        We can count these to determine retry attempts and hide failed attempts,
+        showing only the latest retry.
+        
+        Args:
+            workflow_nodes: Dictionary of WorkflowNode objects being built
+            raw_nodes: Raw node data from Argo API
+            stored_templates: Stored templates from workflow status
+        """
+        # Group nodes by display name and boundary (parent context)
+        # Strip retry suffixes like (0), (1), (2) from display names for grouping
+        nodes_by_display_name: Dict[Tuple[str, str], List[str]] = {}
+        nodes_to_remove: List[str] = []  # Track nodes to hide (failed retries)
+        
+        for node_id, wf_node in workflow_nodes.items():
+            display_name = wf_node["display_name"]
+            boundary_id = wf_node["boundary_id"] or ""
+            
+            # Strip retry suffix pattern like (0), (1), (2) from display name
+            # Pattern: name(N) where N is a number
+            base_display_name = re.sub(r'\(\d+\)$', '', display_name)
+            
+            logger.debug(f"Node {node_id}: display_name='{display_name}', base='{base_display_name}', phase={wf_node['phase']}")
+            
+            key = (base_display_name, boundary_id)
+            
+            if key not in nodes_by_display_name:
+                nodes_by_display_name[key] = []
+            nodes_by_display_name[key].append(node_id)
+        
+        # For each group with multiple nodes (retries), assign attempt numbers
+        for (base_display_name, boundary_id), node_ids in nodes_by_display_name.items():
+            if len(node_ids) > 1:
+                # DEBUG: Log grouping information
+                logger.info(f"Found retry group: base_display_name={base_display_name}, boundary_id={boundary_id}, count={len(node_ids)}")
+                for nid in node_ids:
+                    logger.info(f"  - Node {nid}: display_name={workflow_nodes[nid]['display_name']}, phase={workflow_nodes[nid]['phase']}")
+                
+                # Sort by start time to get chronological order
+                sorted_node_ids = sorted(
+                    node_ids,
+                    key=lambda nid: workflow_nodes[nid].get("started_at") or "9999-99-99"
+                )
+                
+                # Try to extract retry limit from the Retry-type parent node or template
+                retry_limit = self._extract_retry_limit_from_template(
+                    raw_nodes, 
+                    sorted_node_ids[0],
+                    boundary_id,
+                    stored_templates
+                )
+                
+                # If we couldn't find retry_limit from template, use the count of nodes as the limit
+                if retry_limit is None:
+                    retry_limit = len(node_ids)
+                
+                logger.info(f"  Retry limit determined: {retry_limit}")
+                
+                # Find the latest (current) retry attempt
+                latest_node_id = sorted_node_ids[-1]
+                latest_node = workflow_nodes[latest_node_id]
+                
+                # Assign attempt numbers (1-indexed) and mark old attempts for removal
+                for attempt_num, node_id in enumerate(sorted_node_ids, start=1):
+                    wf_node = workflow_nodes[node_id]
+                    
+                    # Only set if not already set from message
+                    if wf_node["retry_attempt"] is None:
+                        wf_node["retry_attempt"] = attempt_num
+                        logger.info(f"  Setting retry_attempt={attempt_num} for node {node_id}")
+                    if wf_node["retry_limit"] is None and retry_limit:
+                        wf_node["retry_limit"] = retry_limit
+                        logger.info(f"  Setting retry_limit={retry_limit} for node {node_id}")
+                    
+                    # Keep only the latest retry attempt, hide all others
+                    if node_id != latest_node_id:
+                        logger.info(f"  Marking node {node_id} for removal (not latest)")
+                        nodes_to_remove.append(node_id)
+                
+                # Update the display_name of the latest node to remove the suffix
+                latest_node["display_name"] = base_display_name
+                logger.info(f"  Updated latest node display_name to: {base_display_name}")
+        
+        # Remove hidden nodes from the workflow_nodes dict
+        for node_id in nodes_to_remove:
+            del workflow_nodes[node_id]
+
+    def _extract_retry_limit_from_template(
+        self,
+        raw_nodes: Dict[str, Any],
+        node_id: str,
+        boundary_id: str,
+        stored_templates: Dict[str, Any]
+    ) -> Optional[int]:
+        """Extract retry limit from workflow template stored in nodes.
+        
+        Args:
+            raw_nodes: Raw node data from Argo API
+            node_id: ID of the node to check
+            boundary_id: Boundary ID (parent context)
+            stored_templates: Stored templates from workflow status
+            
+        Returns:
+            Retry limit if found, None otherwise
+        """
+        # Check if the boundary node is a Retry type
+        if boundary_id and boundary_id in raw_nodes:
+            boundary_node = raw_nodes[boundary_id]
+            if boundary_node.get("type") == "Retry":
+                # The message might contain retry info
+                message = boundary_node.get("message", "")
+                match = re.search(r"Retry \((\d+)/(\d+)\)", message)
+                if match:
+                    return int(match.group(2))
+        
+        # Check the node itself for template info
+        node = raw_nodes.get(node_id, {})
+        template_name = node.get("templateName", "")
+        template_scope = node.get("templateScope", "")
+        
+        # Look for stored template with retry strategy
+        # Template key format: "templateScope/templateName"
+        if template_scope and template_name:
+            template_key = f"{template_scope}/{template_name}"
+            if template_key in stored_templates:
+                template = stored_templates[template_key]
+                retry_strategy = template.get("retryStrategy", {})
+                if retry_strategy:
+                    limit = retry_strategy.get("limit")
+                    if limit is not None:
+                        return int(limit)
+        
+        # Fallback: check if template_name alone exists in stored_templates
+        if template_name and template_name in stored_templates:
+            template = stored_templates[template_name]
+            retry_strategy = template.get("retryStrategy", {})
+            if retry_strategy:
+                limit = retry_strategy.get("limit")
+                if limit is not None:
+                    return int(limit)
+        
+        return None
 
     def _sort_nodes_intelligently(self, nodes: List[WorkflowNode]) -> List[WorkflowNode]:
         """Sort nodes considering both temporal and structural order.
