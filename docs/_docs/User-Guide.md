@@ -1,1 +1,0 @@
-We've changed the layout of our wiki, [[our new user guide|Home]]

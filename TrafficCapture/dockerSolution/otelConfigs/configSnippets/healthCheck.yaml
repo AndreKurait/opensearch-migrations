@@ -1,5 +1,0 @@
-extensions:
-  health_check:
-
-service:
-  extensions: [ health_check ]

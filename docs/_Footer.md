@@ -1,1 +1,0 @@
-If the documentation is unclear or there is a bug, please [open an issue](https://github.com/opensearch-project/opensearch-migrations/issues).

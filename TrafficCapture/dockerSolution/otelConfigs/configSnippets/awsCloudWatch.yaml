@@ -1,8 +1,0 @@
-exporters:
-  awsemf:
-    namespace: 'OpenSearchMigrations'
-
-service:
-  pipelines:
-    metrics:
-      exporters: [ awsemf ]

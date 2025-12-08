@@ -1,5 +1,0 @@
-exporters:
-  logging:
-    verbosity: detailed
-    sampling_initial: 5
-    sampling_thereafter: 200
