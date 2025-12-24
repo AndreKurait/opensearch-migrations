@@ -28,9 +28,14 @@ class RegistryImageBuildUtils {
                 from {
                     image = baseImage
                     platforms {
-                        platform {
-                            architecture = project.rootProject.ext.imageArch
-                            os = 'linux'
+                        // Support comma-separated architectures for multi-arch builds
+                        def imageArch = project.rootProject.ext.imageArch.toString()
+                        def archList = imageArch.contains(',') ? imageArch.split(',').collect { it.trim() } : [imageArch]
+                        archList.each { arch ->
+                            platform {
+                                architecture = arch
+                                os = 'linux'
+                            }
                         }
                     }
                 }
@@ -134,9 +139,15 @@ class RegistryImageBuildUtils {
                 "--build-arg ${key}=${value}"
             }
 
+            // Support comma-separated architectures for multi-arch builds (e.g., "amd64,arm64")
+            def imageArch = project.ext.imageArch.toString()
+            def platformArg = imageArch.contains(',') ?
+                    "--platform " + imageArch.split(',').collect { "linux/${it.trim()}" }.join(',') :
+                    "--platform linux/${imageArch}"
+
             def fullArgs = [
                     "docker buildx build",
-                    "--platform linux/${project.ext.imageArch}",
+                    platformArg,
                     "--builder ${builder}",
                     "-t ${registryDestination}",
                     "--push",

@@ -288,6 +288,9 @@ def call(Map config = [:]) {
                         script {
                             withCredentials([string(credentialsId: 'migrations-test-account-id', variable: 'MIGRATIONS_TEST_ACCOUNT_ID')]) {
                                 withAWS(role: 'JenkinsDeploymentRole', roleAccount: MIGRATIONS_TEST_ACCOUNT_ID, region: "us-east-1", duration: 3600, roleSessionName: 'jenkins-session') {
+                                    // Install QEMU for cross-architecture builds (arm64 on amd64 host)
+                                    sh "docker run --privileged --rm tonistiigi/binfmt --install all"
+
                                     def builderExists = sh(
                                             script: "docker buildx ls | grep -q '^ecr-builder'",
                                             returnStatus: true
@@ -298,7 +301,7 @@ def call(Map config = [:]) {
                                     } else {
                                         sh "docker buildx create --name ecr-builder --driver docker-container"
                                     }
-                                    sh "./gradlew buildImagesToRegistry -PregistryEndpoint=${env.registryEndpoint} -PimageArch=amd64 -Pbuilder=ecr-builder"
+                                    sh "./gradlew buildImagesToRegistry -PregistryEndpoint=${env.registryEndpoint} -PimageArch=amd64,arm64 -Pbuilder=ecr-builder"
                                 }
                             }
                         }
