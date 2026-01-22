@@ -265,11 +265,10 @@ jobs:
           - ./deployment/cdk/opensearch-service-migration
           - ./deployment/migration-assistant-solution
           - ./frontend
-          # TODO - get these enabled
-#          - ./orchestrationSpecs/packages/argo-workflow-builders
-#          - ./orchestrationSpecs/packages/config-processor
-#          - ./orchestrationSpecs/packages/migration-workflow-templates
-#          - ./orchestrationSpecs/packages/schemas
+          - ./orchestrationSpecs/packages/argo-workflow-builders
+          - ./orchestrationSpecs/packages/config-processor
+          - ./orchestrationSpecs/packages/migration-workflow-templates
+          - ./orchestrationSpecs/packages/schemas
     defaults:
       run:
         working-directory: ${{ matrix.npm-project }}
