@@ -57,3 +57,49 @@ updates:
       github-actions-all:
         patterns:
           - "*"
+
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/migrationConsole/lib/console_link"
+    schedule:
+      interval: "weekly"
+    groups:
+      console-link-pip:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pip"
+    directory: "/migrationConsole/lib/integ_test"
+    schedule:
+      interval: "weekly"
+    groups:
+      integ-test-pip:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pip"
+    directory: "/migrationConsole/cluster_tools"
+    schedule:
+      interval: "weekly"
+    groups:
+      cluster-tools-pip:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pip"
+    directory: "/libraries/testAutomation"
+    schedule:
+      interval: "weekly"
+    groups:
+      test-automation-pip:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pip"
+    directory: "/test/cleanupDeployment"
+    schedule:
+      interval: "weekly"
+    groups:
+      cleanup-deployment-pip:
+        patterns:
+          - "*"
