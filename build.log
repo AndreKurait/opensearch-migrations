@@ -1,0 +1,3146 @@
+Calculating task graph as configuration cache cannot be reused because an input to build file 'build.gradle' has changed.
+> Task :buildSrc:extractPluginRequests UP-TO-DATE
+> Task :buildSrc:generatePluginAdapters UP-TO-DATE
+> Task :buildSrc:compileJava UP-TO-DATE
+> Task :buildSrc:compileGroovy UP-TO-DATE
+> Task :buildSrc:compileGroovyPlugins UP-TO-DATE
+> Task :buildSrc:pluginDescriptors UP-TO-DATE
+> Task :buildSrc:processResources UP-TO-DATE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+Configuring Jib builds for architecture: multi
+> Task :assemble UP-TO-DATE
+> Task :testHelperFixtures:processResources NO-SOURCE
+> Task :buildImages:assemble UP-TO-DATE
+> Task :console_link:assemble UP-TO-DATE
+> Task :testHelperFixtures:generateEffectiveLombokConfig UP-TO-DATE
+> Task :awsUtilities:processTestFixturesResources NO-SOURCE
+> Task :awsUtilities:processResources NO-SOURCE
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :coreUtilities:processResources NO-SOURCE
+> Task :awsUtilities:processTestResources UP-TO-DATE
+> Task :awsUtilities:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :awsUtilities:generateEffectiveLombokConfig UP-TO-DATE
+> Task :testHelperFixtures:processTestFixturesResources UP-TO-DATE
+> Task :coreUtilities:generateEffectiveLombokConfig UP-TO-DATE
+> Task :testHelperFixtures:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :awsUtilities:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :coreUtilities:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :testHelperFixtures:compileJava NO-SOURCE
+> Task :testHelperFixtures:classes UP-TO-DATE
+> Task :coreUtilities:processTestFixturesResources NO-SOURCE
+> Task :coreUtilities:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :coreUtilities:processTestResources UP-TO-DATE
+> Task :CreateSnapshot:generateEffectiveLombokConfig UP-TO-DATE
+> Task :awsUtilities:compileJava UP-TO-DATE
+> Task :RFS:generateEffectiveLombokConfig UP-TO-DATE
+> Task :awsUtilities:classes UP-TO-DATE
+> Task :testHelperFixtures:compileTestFixturesJava UP-TO-DATE
+> Task :awsUtilities:compileTestFixturesJava NO-SOURCE
+> Task :awsUtilities:testFixturesClasses UP-TO-DATE
+> Task :awsUtilities:delombok UP-TO-DATE
+> Task :awsUtilities:compileTestJava UP-TO-DATE
+> Task :testHelperFixtures:jar UP-TO-DATE
+> Task :awsUtilities:testClasses UP-TO-DATE
+> Task :awsUtilities:javadoc UP-TO-DATE
+> Task :testHelperFixtures:testFixturesClasses UP-TO-DATE
+> Task :awsUtilities:jar UP-TO-DATE
+> Task :awsUtilities:assemble UP-TO-DATE
+> Task :awsUtilities:testFixturesJar UP-TO-DATE
+> Task :testHelperFixtures:testFixturesJar UP-TO-DATE
+> Task :RFS:shadowLucene6 UP-TO-DATE
+> Task :RFS:generateLucene9EffectiveLombokConfig UP-TO-DATE
+> Task :RFS:shadowLucene5 UP-TO-DATE
+> Task :RFS:shadowLucene7 UP-TO-DATE
+> Task :RFS:compileLucene9Java UP-TO-DATE
+> Task :RFS:processLucene9Resources UP-TO-DATE
+> Task :awsUtilities:test UP-TO-DATE
+> Task :RFS:lucene9Classes UP-TO-DATE
+> Task :CreateSnapshot:processResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:generateEffectiveLombokConfig UP-TO-DATE
+> Task :RFS:processResources UP-TO-DATE
+> Task :transformation:generateEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:processResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:processResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:generateEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:compileJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:processResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:generateEffectiveLombokConfig UP-TO-DATE
+> Task :RFS:shadowLucene9 UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:compileJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:classes UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:processResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:generateEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:compileJava UP-TO-DATE
+> Task :transformation:classes UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:compileJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:classes UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:jar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:compileJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:classes UP-TO-DATE
+> Task :transformation:jar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:jar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:processResources UP-TO-DATE
+> Task :transformation:standardJavascriptTransforms:packageJs UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:generateEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:jar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:processResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:generateEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:generateEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:processResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:processResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:classes UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:compileJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:compileJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:classes UP-TO-DATE
+> Task :buildImages:spotlessJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:generateEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:classes UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:compileJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:classes UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:jar UP-TO-DATE
+> Task :buildImages:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:jar UP-TO-DATE
+> Task :buildImages:spotlessCheck UP-TO-DATE
+> Task :buildImages:check UP-TO-DATE
+> Task :buildImages:build UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:processResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:jar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:processResources UP-TO-DATE
+> Task :CreateSnapshot:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :CreateSnapshot:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:jar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:generateEffectiveLombokConfig UP-TO-DATE
+> Task :CreateSnapshot:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :CreateSnapshot:processTestResources UP-TO-DATE
+> Task :RFS:processTestFixturesResources NO-SOURCE
+> Task :RFS:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:compileJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:classes UP-TO-DATE
+> Task :dashboardsSanitizer:processResources UP-TO-DATE
+> Task :dashboardsSanitizer:generateEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:compileJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:classes UP-TO-DATE
+> Task :dashboardsSanitizer:compileJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:jar UP-TO-DATE
+> Task :dashboardsSanitizer:classes UP-TO-DATE
+> Task :dashboardsSanitizer:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :dashboardsSanitizer:processTestFixturesResources NO-SOURCE
+> Task :dashboardsSanitizer:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:jar UP-TO-DATE
+> Task :dashboardsSanitizer:delombok UP-TO-DATE
+> Task :dashboardsSanitizer:processTestResources UP-TO-DATE
+> Task :dashboardsSanitizer:jar UP-TO-DATE
+> Task :dashboardsSanitizer:javadoc UP-TO-DATE
+> Task :dashboardsSanitizer:startScripts UP-TO-DATE
+> Task :dashboardsSanitizer:compileTestFixturesJava NO-SOURCE
+> Task :DataGenerator:generateEffectiveLombokConfig UP-TO-DATE
+> Task :dashboardsSanitizer:testFixturesClasses UP-TO-DATE
+> Task :dashboardsSanitizer:distTar UP-TO-DATE
+> Task :dashboardsSanitizer:distZip UP-TO-DATE
+> Task :dashboardsSanitizer:assemble UP-TO-DATE
+> Task :DataGenerator:processResources NO-SOURCE
+> Task :dashboardsSanitizer:testFixturesJar UP-TO-DATE
+> Task :dashboardsSanitizer:compileTestJava UP-TO-DATE
+> Task :dashboardsSanitizer:testClasses UP-TO-DATE
+> Task :DataGenerator:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :DataGenerator:processTestFixturesResources NO-SOURCE
+> Task :DataGenerator:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :dashboardsSanitizer:test UP-TO-DATE
+> Task :DataGenerator:processTestResources UP-TO-DATE
+> Task :deployment:assemble UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:generateEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:generateEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:compileJava UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:processResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:processResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:classes UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:jar UP-TO-DATE
+> Task :console_link:spotlessJava UP-TO-DATE
+> Task :console_link:spotlessJavaCheck UP-TO-DATE
+> Task :console_link:spotlessCheck UP-TO-DATE
+> Task :console_link:check UP-TO-DATE
+> Task :console_link:build UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:processTestFixturesResources NO-SOURCE
+> Task :DocumentsFromSnapshotMigration:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :MetadataMigration:generateEffectiveLombokConfig UP-TO-DATE
+> Task :MetadataMigration:processResources UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:processTestResources UP-TO-DATE
+> Task :deployment:spotlessJava UP-TO-DATE
+> Task :deployment:spotlessJavaCheck UP-TO-DATE
+> Task :deployment:spotlessCheck UP-TO-DATE
+> Task :deployment:check UP-TO-DATE
+> Task :deployment:build UP-TO-DATE
+> Task :CreateSnapshot:spotlessJava UP-TO-DATE
+> Task :CreateSnapshot:spotlessJavaCheck UP-TO-DATE
+> Task :CreateSnapshot:spotlessCheck UP-TO-DATE
+> Task :frontend:syncVersionFile_frontend UP-TO-DATE
+> Task :jenkinsTests:compileJava NO-SOURCE
+> Task :jenkinsTests:compileGroovy NO-SOURCE
+> Task :awsUtilities:spotlessJava UP-TO-DATE
+> Task :jenkinsTests:processResources NO-SOURCE
+> Task :jenkinsTests:classes UP-TO-DATE
+> Task :awsUtilities:spotlessJavaCheck UP-TO-DATE
+> Task :awsUtilities:spotlessCheck UP-TO-DATE
+> Task :awsUtilities:check UP-TO-DATE
+> Task :awsUtilities:build UP-TO-DATE
+> Task :jenkinsTests:jar UP-TO-DATE
+> Task :jenkinsTests:assemble UP-TO-DATE
+> Task :jenkinsTests:compileTestJava NO-SOURCE
+> Task :DataGenerator:spotlessJava UP-TO-DATE
+> Task :DataGenerator:spotlessJavaCheck UP-TO-DATE
+> Task :DataGenerator:spotlessCheck UP-TO-DATE
+> Task :jenkinsTests:compileTestGroovy UP-TO-DATE
+> Task :jenkinsTests:javadoc NO-SOURCE
+> Task :jenkinsTests:processTestResources NO-SOURCE
+> Task :jenkinsTests:testClasses UP-TO-DATE
+> Task :kiro-cli:assemble UP-TO-DATE
+> Task :kiro-cli:spotlessJava UP-TO-DATE
+> Task :kiro-cli:spotlessJavaCheck UP-TO-DATE
+> Task :kiro-cli:spotlessCheck UP-TO-DATE
+> Task :kiro-cli:check UP-TO-DATE
+> Task :kiro-cli:build UP-TO-DATE
+> Task :libraries:assemble UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:spotlessJava UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:spotlessJavaCheck UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:spotlessCheck UP-TO-DATE
+> Task :jenkinsTests:spotlessJava UP-TO-DATE
+> Task :jenkinsTests:spotlessJavaCheck UP-TO-DATE
+> Task :jenkinsTests:spotlessCheck UP-TO-DATE
+> Task :MetadataMigration:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :MetadataMigration:processTestFixturesResources NO-SOURCE
+> Task :MetadataMigration:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :MetadataMigration:processTestResources UP-TO-DATE
+> Task :migrationConsole:compileJava NO-SOURCE
+> Task :migrationConsole:processResources NO-SOURCE
+> Task :migrationConsole:classes UP-TO-DATE
+> Task :migrationConsole:jar UP-TO-DATE
+> Task :migrationConsole:assemble UP-TO-DATE
+> Task :dashboardsSanitizer:spotlessJava UP-TO-DATE
+> Task :dashboardsSanitizer:spotlessJavaCheck UP-TO-DATE
+> Task :dashboardsSanitizer:spotlessCheck UP-TO-DATE
+> Task :dashboardsSanitizer:check UP-TO-DATE
+> Task :dashboardsSanitizer:build UP-TO-DATE
+> Task :migrationConsole:compileTestFixturesJava NO-SOURCE
+> Task :migrationConsole:processTestFixturesResources NO-SOURCE
+> Task :migrationConsole:testFixturesClasses UP-TO-DATE
+> Task :migrationConsole:testFixturesJar UP-TO-DATE
+> Task :migrationConsole:compileTestJava NO-SOURCE
+> Task :migrationConsole:javadoc NO-SOURCE
+> Task :migrationConsole:processTestResources NO-SOURCE
+> Task :migrationConsole:testClasses UP-TO-DATE
+> Task :migrationConsole:test NO-SOURCE
+> Task :console_link:buildOpenApiDockerImage UP-TO-DATE
+> Task :console_link:generateOpenApiSpec UP-TO-DATE
+> Task :migrationConsole:spotlessJava UP-TO-DATE
+> Task :migrationConsole:spotlessJavaCheck UP-TO-DATE
+> Task :migrationConsole:spotlessCheck UP-TO-DATE
+> Task :migrationConsole:check UP-TO-DATE
+> Task :migrationConsole:build UP-TO-DATE
+> Task :RFS:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :RFS:prepareShadowJars UP-TO-DATE
+> Task :RFS:processTestResources UP-TO-DATE
+> Task :testHelperFixtures:assemble UP-TO-DATE
+> Task :MetadataMigration:spotlessJava UP-TO-DATE
+> Task :MetadataMigration:spotlessJavaCheck UP-TO-DATE
+> Task :MetadataMigration:spotlessCheck UP-TO-DATE
+> Task :testHelperFixtures:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :testHelperFixtures:compileTestJava UP-TO-DATE
+> Task :testHelperFixtures:delombok NO-SOURCE
+> Task :testHelperFixtures:javadoc NO-SOURCE
+> Task :coreUtilities:spotlessJava
+> Task :testHelperFixtures:processTestResources NO-SOURCE
+> Task :testHelperFixtures:testClasses UP-TO-DATE
+> Task :coreUtilities:spotlessJavaCheck
+> Task :coreUtilities:spotlessCheck
+> Task :testHelperFixtures:test UP-TO-DATE
+> Task :TrafficCapture:compileJava NO-SOURCE
+> Task :TrafficCapture:processResources NO-SOURCE
+> Task :TrafficCapture:classes UP-TO-DATE
+> Task :TrafficCapture:jar UP-TO-DATE
+> Task :TrafficCapture:assemble UP-TO-DATE
+> Task :TrafficCapture:compileTestJava NO-SOURCE
+> Task :TrafficCapture:javadoc NO-SOURCE
+> Task :TrafficCapture:processTestResources NO-SOURCE
+> Task :TrafficCapture:testClasses UP-TO-DATE
+> Task :TrafficCapture:test NO-SOURCE
+> Task :transformation:assemble UP-TO-DATE
+> Task :libraries:spotlessJava UP-TO-DATE
+> Task :libraries:spotlessJavaCheck UP-TO-DATE
+> Task :libraries:spotlessCheck UP-TO-DATE
+> Task :libraries:check UP-TO-DATE
+> Task :libraries:build UP-TO-DATE
+> Task :transformation:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:compileTestFixturesJava NO-SOURCE
+> Task :transformation:processTestFixturesResources NO-SOURCE
+> Task :transformation:testFixturesClasses UP-TO-DATE
+> Task :transformation:testFixturesJar UP-TO-DATE
+> Task :transformation:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:compileTestJava UP-TO-DATE
+> Task :transformation:delombok UP-TO-DATE
+> Task :transformation:javadoc UP-TO-DATE
+> Task :transformation:processTestResources UP-TO-DATE
+> Task :transformation:testClasses UP-TO-DATE
+> Task :transformation:test UP-TO-DATE
+> Task :deployment:migration-assistant-solution:compileJava NO-SOURCE
+> Task :deployment:migration-assistant-solution:processResources NO-SOURCE
+> Task :deployment:migration-assistant-solution:classes UP-TO-DATE
+> Task :deployment:migration-assistant-solution:jar UP-TO-DATE
+> Task :deployment:migration-assistant-solution:assemble UP-TO-DATE
+> Task :deployment:migration-assistant-solution:spotlessJava UP-TO-DATE
+> Task :frontend:nodeSetup UP-TO-DATE
+> Task :deployment:migration-assistant-solution:spotlessJavaCheck UP-TO-DATE
+> Task :spotlessMisc
+> Task :deployment:migration-assistant-solution:spotlessCheck UP-TO-DATE
+> Task :deployment:migration-assistant-solution:compileTestFixturesJava NO-SOURCE
+> Task :deployment:migration-assistant-solution:processTestFixturesResources NO-SOURCE
+> Task :deployment:migration-assistant-solution:testFixturesClasses UP-TO-DATE
+> Task :spotlessMiscCheck
+> Task :deployment:migration-assistant-solution:compileTestJava NO-SOURCE
+> Task :deployment:migration-assistant-solution:testFixturesJar UP-TO-DATE
+> Task :deployment:migration-assistant-solution:javadoc NO-SOURCE
+> Task :deployment:migration-assistant-solution:processTestResources NO-SOURCE
+> Task :deployment:migration-assistant-solution:testClasses UP-TO-DATE
+> Task :deployment:migration-assistant-solution:test NO-SOURCE
+> Task :deployment:migration-assistant-solution:check UP-TO-DATE
+> Task :deployment:migration-assistant-solution:build UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:processResources NO-SOURCE
+> Task :libraries:kafkaCommandLineFormatter:generateEffectiveLombokConfig UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:compileJava UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:classes UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:jar UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:assemble UP-TO-DATE
+> Task :testHelperFixtures:spotlessJava UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :testHelperFixtures:spotlessJavaCheck UP-TO-DATE
+> Task :testHelperFixtures:spotlessCheck UP-TO-DATE
+> Task :testHelperFixtures:check UP-TO-DATE
+> Task :testHelperFixtures:build UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:processTestFixturesResources NO-SOURCE
+> Task :libraries:kafkaCommandLineFormatter:compileTestFixturesJava NO-SOURCE
+> Task :libraries:kafkaCommandLineFormatter:testFixturesClasses UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:compileTestJava NO-SOURCE
+> Task :libraries:kafkaCommandLineFormatter:delombok UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:testFixturesJar UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:processTestResources NO-SOURCE
+> Task :libraries:kafkaCommandLineFormatter:testClasses UP-TO-DATE
+> Task :libraries:kafkaUtils:generateEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:generateEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:generateEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:protobufDummy UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:javadoc UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:test NO-SOURCE
+> Task :TrafficCapture:captureProtobufs:extractProto UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:extractIncludeProto UP-TO-DATE
+> Task :libraries:kafkaUtils:processResources UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:processResources NO-SOURCE
+> Task :TrafficCapture:captureProtobufs:generateProto UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:processResources NO-SOURCE
+> Task :TrafficCapture:captureProtobufs:compileJava UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:processResources UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:classes UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:jar UP-TO-DATE
+> Task :libraries:kafkaUtils:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :libraries:kafkaUtils:processTestFixturesResources NO-SOURCE
+> Task :libraries:kafkaUtils:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :libraries:kafkaUtils:processTestResources NO-SOURCE
+> Task :libraries:kafkaUtils:spotlessJava UP-TO-DATE
+> Task :libraries:kafkaUtils:spotlessJavaCheck UP-TO-DATE
+> Task :libraries:kafkaUtils:spotlessCheck UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:processTestFixturesResources NO-SOURCE
+> Task :TrafficCapture:captureKafkaOffloader:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:processTestResources UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:spotlessJava UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:spotlessJavaCheck UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:spotlessCheck UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:check UP-TO-DATE
+> Task :libraries:kafkaCommandLineFormatter:build UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:processTestFixturesResources NO-SOURCE
+> Task :TrafficCapture:captureOffloader:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:processTestResources UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:assemble UP-TO-DATE
+> Task :frontend:npmSetup UP-TO-DATE
+> Task :frontend:syncBackendClientDefinition UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:extractIncludeTestFixturesProto UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:extractTestFixturesProto UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:generateTestFixturesProto NO-SOURCE
+> Task :TrafficCapture:captureProtobufs:compileTestFixturesJava NO-SOURCE
+> Task :TrafficCapture:captureProtobufs:processTestFixturesResources NO-SOURCE
+> Task :TrafficCapture:captureProtobufs:testFixturesClasses UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:testFixturesJar UP-TO-DATE
+> Task :spotlessJson UP-TO-DATE
+> Task :spotlessJsonCheck UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:extractIncludeTestProto UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:extractTestProto UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:javadoc UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:processTestResources NO-SOURCE
+> Task :TrafficCapture:captureProtobufs:generateTestProto NO-SOURCE
+> Task :TrafficCapture:captureProtobufs:compileTestJava NO-SOURCE
+> Task :TrafficCapture:captureProtobufs:testClasses UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:test NO-SOURCE
+> Task :TrafficCapture:dockerSolution:compileJava NO-SOURCE
+> Task :TrafficCapture:dockerSolution:processResources NO-SOURCE
+> Task :TrafficCapture:dockerSolution:classes UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:jar UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:spotlessJava UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:assemble UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:compileTestFixturesJava NO-SOURCE
+> Task :TrafficCapture:captureKafkaOffloader:spotlessJavaCheck UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:spotlessCheck UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:processTestFixturesResources NO-SOURCE
+> Task :TrafficCapture:dockerSolution:testFixturesClasses UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:compileTestJava NO-SOURCE
+> Task :TrafficCapture:dockerSolution:javadoc NO-SOURCE
+> Task :TrafficCapture:dockerSolution:processTestResources NO-SOURCE
+> Task :TrafficCapture:dockerSolution:testClasses UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:testFixturesJar UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:generateEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:test NO-SOURCE
+> Task :TrafficCapture:nettyWireLogging:processResources NO-SOURCE
+> Task :TrafficCapture:nettyWireLogging:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:processTestFixturesResources NO-SOURCE
+> Task :TrafficCapture:nettyWireLogging:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:processTestResources UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:generateEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:processResources UP-TO-DATE
+> Task :spotlessYaml
+> Task :spotlessYamlCheck
+> Task :spotlessCheck
+> Task :check
+> Task :build
+> Task :TrafficCapture:trafficCaptureProxyServer:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:processTestFixturesResources NO-SOURCE
+> Task :TrafficCapture:trafficCaptureProxyServer:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:processTestResources UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:generateEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:processResources UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:spotlessJava UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:spotlessJavaCheck UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:spotlessCheck UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:check UP-TO-DATE
+> Task :TrafficCapture:dockerSolution:build UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:processTestFixturesResources NO-SOURCE
+> Task :TrafficCapture:trafficReplayer:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:processTestResources UP-TO-DATE
+> Task :transformation:standardJavascriptTransforms:assemble UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:spotlessJava UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:spotlessJavaCheck UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:spotlessCheck UP-TO-DATE
+> Task :transformation:standardJavascriptTransforms:nodeSetup UP-TO-DATE
+> Task :transformation:standardJavascriptTransforms:npmSetup SKIPPED
+> Task :TrafficCapture:captureOffloader:spotlessJava UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:spotlessJavaCheck UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:assemble UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:spotlessJava UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:spotlessJavaCheck UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:spotlessCheck UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:check UP-TO-DATE
+> Task :TrafficCapture:captureProtobufs:build UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:assemble UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:spotlessJava UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:spotlessJavaCheck UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:assemble UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:spotlessJava UP-TO-DATE
+> Task :RFS:spotlessJava UP-TO-DATE
+> Task :RFS:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:spotlessJavaCheck UP-TO-DATE
+> Task :RFS:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:compileTestFixturesJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:testFixturesClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:delombok UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:processTestResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:assemble UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:javadoc UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:compileTestFixturesJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:testFixturesClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:delombok UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:javadoc UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:processTestResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:assemble UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:spotlessJava UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:spotlessJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:spotlessJavaCheck UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:spotlessJavaCheck UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:delombok UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:compileTestFixturesJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:testFixturesClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:javadoc UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:processTestResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:assemble UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:compileTestFixturesJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:testFixturesClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:delombok UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:javadoc UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:processTestResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:assemble UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:spotlessJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:compileTestFixturesJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:testFixturesClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:delombok UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:javadoc UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:processTestResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:assemble UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:spotlessJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:compileTestFixturesJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:testFixturesClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:delombok UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:javadoc UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:processTestResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:assemble UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:spotlessJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:compileTestFixturesJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:testFixturesClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:compileTestJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:delombok UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:javadoc UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:processTestResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:testClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:test UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:assemble UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:spotlessJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:compileTestFixturesJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:testFixturesClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:compileTestJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:delombok UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:javadoc UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:processTestResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:testClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:test UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:assemble UP-TO-DATE
+> Task :coreUtilities:compileJava
+> Task :coreUtilities:classes
+> Task :coreUtilities:jar
+> Task :coreUtilities:assemble
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:spotlessJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:spotlessJava UP-TO-DATE
+> Task :RFS:compileJava UP-TO-DATE
+> Task :CreateSnapshot:compileJava UP-TO-DATE
+> Task :CreateSnapshot:classes UP-TO-DATE
+> Task :CreateSnapshot:jar UP-TO-DATE
+> Task :RFS:classes UP-TO-DATE
+> Task :RFS:jar UP-TO-DATE
+> Task :CreateSnapshot:startScripts
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:spotlessJava UP-TO-DATE
+> Task :TrafficCapture:spotlessJava UP-TO-DATE
+> Task :CreateSnapshot:compileTestFixturesJava NO-SOURCE
+> Task :CreateSnapshot:testFixturesClasses UP-TO-DATE
+> Task :CreateSnapshot:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:spotlessJava UP-TO-DATE
+> Task :DataGenerator:compileJava UP-TO-DATE
+> Task :DataGenerator:classes UP-TO-DATE
+> Task :DataGenerator:jar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:spotlessJava UP-TO-DATE
+> Task :DataGenerator:compileTestFixturesJava NO-SOURCE
+> Task :DataGenerator:testFixturesClasses UP-TO-DATE
+> Task :DataGenerator:testFixturesJar UP-TO-DATE
+> Task :DataGenerator:startScripts
+
+> Task :jenkinsTests:test
+Test classes directory: [/Users/akurait/workplace/opensearch-migrations-main/jenkinsTests/build/classes/java/test, /Users/akurait/workplace/opensearch-migrations-main/jenkinsTests/build/classes/groovy/test]
+
+Looking for compiled test classes...
+Directory does not exist: /Users/akurait/workplace/opensearch-migrations-main/jenkinsTests/build/classes/java/test
+Found compiled test class: /Users/akurait/workplace/opensearch-migrations-main/jenkinsTests/build/classes/groovy/test/JenkinsPipelineTestRunner$_setUp_closure1.class
+Found compiled test class: /Users/akurait/workplace/opensearch-migrations-main/jenkinsTests/build/classes/groovy/test/JenkinsPipelineTestRunner.class
+
+> Task :coreUtilities:compileTestFixturesJava
+> Task :coreUtilities:testFixturesClasses
+> Task :coreUtilities:testFixturesJar
+
+> Task :transformation:standardJavascriptTransforms:installDependencies
+
+up to date, audited 379 packages in 3s
+
+62 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+> Task :RFS:compileTestFixturesJava UP-TO-DATE
+> Task :CreateSnapshot:compileTestJava UP-TO-DATE
+> Task :CreateSnapshot:testClasses UP-TO-DATE
+> Task :RFS:testFixturesClasses UP-TO-DATE
+> Task :RFS:testFixturesJar UP-TO-DATE
+
+> Task :coreUtilities:delombok
+/Users/akurait/workplace/opensearch-migrations-main/coreUtilities/src/main/java/org/opensearch/migrations/tracing/BaseSpanContext.java:18: warning: Not generating getRootInstrumentationScope(): A method with that name already exists
+    @Getter
+    ^
+/Users/akurait/workplace/opensearch-migrations-main/coreUtilities/src/main/java/org/opensearch/migrations/tracing/BaseSpanContext.java:24: warning: Not generating getObservedExceptionToIncludeInMetrics(): A method with that name already exists
+    @Getter
+    ^
+/Users/akurait/workplace/opensearch-migrations-main/coreUtilities/src/main/java/org/opensearch/migrations/tracing/BaseSpanContext.java:26: warning: Not generating getCurrentSpan(): A method with that name already exists
+    @Getter
+    ^
+
+> Task :frontend:npmInstall UP-TO-DATE
+> Task :DataGenerator:compileTestJava UP-TO-DATE
+> Task :DataGenerator:testClasses UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:compileJava UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:classes UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:jar UP-TO-DATE
+> Task :CreateSnapshot:distTar
+> Task :DocumentsFromSnapshotMigration:compileTestFixturesJava NO-SOURCE
+> Task :DocumentsFromSnapshotMigration:testFixturesClasses UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:testFixturesJar UP-TO-DATE
+> Task :MetadataMigration:compileJava UP-TO-DATE
+> Task :MetadataMigration:classes UP-TO-DATE
+> Task :MetadataMigration:jar UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:compileTestJava UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:startScripts
+> Task :CreateSnapshot:delombok
+> Task :DataGenerator:distTar
+
+> Task :jenkinsTests:test
+
+JenkinsPipelineTestRunner STANDARD_OUT
+    Changed working directory to: /Users/akurait/workplace/opensearch-migrations-main/vars
+
+JenkinsPipelineTestRunner > testTrafficReplayPipeline() STARTED
+
+> Task :coreUtilities:compileTestJava
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :coreUtilities:testClasses
+> Task :DocumentsFromSnapshotMigration:testClasses UP-TO-DATE
+> Task :frontend:generateBackendClient UP-TO-DATE
+> Task :frontend:buildFrontend UP-TO-DATE
+> Task :frontend:assemble UP-TO-DATE
+
+> Task :frontend:checkGeneratedFilesTracked
+OK: No unstaged or untracked files under frontend/src/generated/
+
+> Task :transformation:standardJavascriptTransforms:spotlessJava UP-TO-DATE
+> Task :MetadataMigration:startScripts
+> Task :DataGenerator:delombok
+> Task :CreateSnapshot:javadoc
+> Task :DocumentsFromSnapshotMigration:distTar
+
+> Task :jenkinsTests:test
+
+JenkinsPipelineTestRunner > testTrafficReplayPipeline() STANDARD_OUT
+    Attempting to load script: trafficReplayDefaultE2ETest.groovy
+    Full script path: /Users/akurait/workplace/opensearch-migrations-main/jenkinsTests/./trafficReplayDefaultE2ETest.groovy
+    Script file exists: false
+    Script loaded successfully
+    Setup complete
+    Starting pipeline test
+    Pipeline called with config: [sourceContext:
+        {
+          "source-single-node-ec2": {
+            "suffix": "ec2-source-<STAGE>",
+            "networkStackSuffix": "ec2-source-<STAGE>",
+            "distVersion": "7.10.2",
+            "cidr": "12.0.0.0/16",
+            "distributionUrl": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-oss-7.10.2-linux-x86_64.tar.gz",
+            "captureProxyEnabled": true,
+            "securityDisabled": true,
+            "minDistribution": false,
+            "cpuArch": "x64",
+            "isInternal": true,
+            "singleNodeCluster": true,
+            "networkAvailabilityZones": 2,
+            "dataNodeCount": 1,
+            "managerNodeCount": 0,
+            "serverAccessType": "ipv4",
+            "restrictServerAccessTo": "0.0.0.0/0"
+          }
+        }
+        , migrationContext:
+        {
+          "migration-default": {
+            "stage": "<STAGE>",
+            "vpcId": "<VPC_ID>",
+            "engineVersion": "OS_2.19",
+            "domainName": "os-cluster-<STAGE>",
+            "dataNodeCount": 2,
+            "openAccessPolicyEnabled": true,
+            "domainRemovalPolicy": "DESTROY",
+            "artifactBucketRemovalPolicy": "DESTROY",
+            "trafficReplayerServiceEnabled": true,
+            "trafficReplayerExtraArgs": "--speedup-factor 10.0 --transformer-config-encoded W3siVHlwZU1hcHBpbmdTYW5pdGl6YXRpb25UcmFuc2Zvcm1lclByb3ZpZGVyIjp7InNvdXJjZVByb3BlcnRpZXMiOnsidmVyc2lvbiI6eyJtYWpvciI6NywibWlub3IiOjEwfX19fV0=",
+            "reindexFromSnapshotServiceEnabled": true,
+            "sourceClusterEndpoint": "<SOURCE_CLUSTER_ENDPOINT>",
+            "tlsSecurityPolicy": "TLS_1_2",
+            "enforceHTTPS": true,
+            "nodeToNodeEncryptionEnabled": true,
+            "encryptionAtRestEnabled": true,
+            "vpcEnabled": true,
+            "vpcAZCount": 2,
+            "mskAZCount": 2,
+            "migrationAssistanceEnabled": true,
+            "replayerOutputEFSRemovalPolicy": "DESTROY",
+            "migrationConsoleServiceEnabled": true,
+            "otelCollectorEnabled": true
+          }
+        }
+        , sourceContextId:source-single-node-ec2, migrationContextId:migration-default, defaultStageId:aws-integ, jobName:traffic-replay-default-e2e-test]
+    Pipeline execution complete
+       trafficReplayDefaultE2ETest.call({})
+          trafficReplayDefaultE2ETest.defaultIntegPipeline({sourceContext=
+        {
+          "source-single-node-ec2": {
+            "suffix": "ec2-source-<STAGE>",
+            "networkStackSuffix": "ec2-source-<STAGE>",
+            "distVersion": "7.10.2",
+            "cidr": "12.0.0.0/16",
+            "distributionUrl": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-oss-7.10.2-linux-x86_64.tar.gz",
+            "captureProxyEnabled": true,
+            "securityDisabled": true,
+            "minDistribution": false,
+            "cpuArch": "x64",
+            "isInternal": true,
+            "singleNodeCluster": true,
+            "networkAvailabilityZones": 2,
+            "dataNodeCount": 1,
+            "managerNodeCount": 0,
+            "serverAccessType": "ipv4",
+            "restrictServerAccessTo": "0.0.0.0/0"
+          }
+        }
+        , migrationContext=
+        {
+          "migration-default": {
+            "stage": "<STAGE>",
+            "vpcId": "<VPC_ID>",
+            "engineVersion": "OS_2.19",
+            "domainName": "os-cluster-<STAGE>",
+            "dataNodeCount": 2,
+            "openAccessPolicyEnabled": true,
+            "domainRemovalPolicy": "DESTROY",
+            "artifactBucketRemovalPolicy": "DESTROY",
+            "trafficReplayerServiceEnabled": true,
+            "trafficReplayerExtraArgs": "--speedup-factor 10.0 --transformer-config-encoded W3siVHlwZU1hcHBpbmdTYW5pdGl6YXRpb25UcmFuc2Zvcm1lclByb3ZpZGVyIjp7InNvdXJjZVByb3BlcnRpZXMiOnsidmVyc2lvbiI6eyJtYWpvciI6NywibWlub3IiOjEwfX19fV0=",
+            "reindexFromSnapshotServiceEnabled": true,
+            "sourceClusterEndpoint": "<SOURCE_CLUSTER_ENDPOINT>",
+            "tlsSecurityPolicy": "TLS_1_2",
+            "enforceHTTPS": true,
+            "nodeToNodeEncryptionEnabled": true,
+            "encryptionAtRestEnabled": true,
+            "vpcEnabled": true,
+            "vpcAZCount": 2,
+            "mskAZCount": 2,
+            "migrationAssistanceEnabled": true,
+            "replayerOutputEFSRemovalPolicy": "DESTROY",
+            "migrationConsoleServiceEnabled": true,
+            "otelCollectorEnabled": true
+          }
+        }
+        , sourceContextId=source-single-node-ec2, migrationContextId=migration-default, defaultStageId=aws-integ, jobName=traffic-replay-default-e2e-test})
+
+JenkinsPipelineTestRunner > testTrafficReplayPipeline() PASSED
+
+> Task :jenkinsTests:check
+> Task :jenkinsTests:build
+> Task :MetadataMigration:compileTestFixturesJava NO-SOURCE
+> Task :MetadataMigration:testFixturesClasses UP-TO-DATE
+> Task :MetadataMigration:testFixturesJar UP-TO-DATE
+> Task :MetadataMigration:compileTestJava UP-TO-DATE
+> Task :DocumentsFromSnapshotMigration:delombok
+
+> Task :frontend:lintFrontend
+
+> transformation-playground@0.1.0 lint
+> next lint
+
+
+> Task :coreUtilities:javadoc
+> Task :DataGenerator:javadoc
+> Task :MetadataMigration:distTar
+> Task :MetadataMigration:testClasses UP-TO-DATE
+> Task :RFS:assemble UP-TO-DATE
+> Task :RFS:compileTestJava UP-TO-DATE
+> Task :transformation:spotlessJava UP-TO-DATE
+> Task :RFS:testClasses UP-TO-DATE
+> Task :TrafficCapture:spotlessJavaCheck UP-TO-DATE
+> Task :TrafficCapture:spotlessCheck UP-TO-DATE
+> Task :TrafficCapture:check UP-TO-DATE
+> Task :TrafficCapture:build UP-TO-DATE
+> Task :transformation:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:spotlessCheck UP-TO-DATE
+> Task :transformation:check UP-TO-DATE
+> Task :transformation:build UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:compileJava UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:compileJava UP-TO-DATE
+> Task :libraries:kafkaUtils:compileJava UP-TO-DATE
+> Task :libraries:kafkaUtils:classes UP-TO-DATE
+> Task :libraries:kafkaUtils:jar UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:classes UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:jar UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:classes UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:jar UP-TO-DATE
+> Task :libraries:kafkaUtils:startScripts
+> Task :libraries:kafkaUtils:distTar
+> Task :DocumentsFromSnapshotMigration:javadoc
+> Task :MetadataMigration:delombok
+
+> Task :coreUtilities:test
+
+PruferTreeGeneratorTest > testThatArbitrarySequencePrintsExpectedTree() PASSED
+
+ArgLogUtilsTest > testTargetPasswordArgRedacted() PASSED
+
+ArgLogUtilsTest > testTargetPasswordCamelCaseRedacted() PASSED
+
+ArgLogUtilsTest > testPasswordFlagAtEnd() PASSED
+
+ArgLogUtilsTest > testMultiplePasswordFlags() PASSED
+
+ArgLogUtilsTest > testNoPasswordArgs() PASSED
+
+OnlineRadixSorterTest > testOnlineRadixSorter_inOrder() PASSED
+
+OnlineRadixSorterTest > testGetAwaitingStrings() PASSED
+
+OnlineRadixSorterTest > testOnlineRadixSorter_outOfOrder() PASSED
+
+> Task :libraries:kafkaUtils:distZip
+> Task :libraries:kafkaUtils:assemble
+> Task :libraries:kafkaUtils:compileTestFixturesJava NO-SOURCE
+> Task :libraries:kafkaUtils:testFixturesClasses UP-TO-DATE
+> Task :libraries:kafkaUtils:testFixturesJar UP-TO-DATE
+> Task :libraries:kafkaUtils:compileTestJava NO-SOURCE
+> Task :libraries:kafkaUtils:delombok UP-TO-DATE
+> Task :libraries:kafkaUtils:javadoc UP-TO-DATE
+> Task :libraries:kafkaUtils:testClasses UP-TO-DATE
+> Task :libraries:kafkaUtils:test NO-SOURCE
+> Task :libraries:kafkaUtils:check UP-TO-DATE
+> Task :libraries:kafkaUtils:build
+> Task :TrafficCapture:captureKafkaOffloader:assemble UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:compileTestFixturesJava NO-SOURCE
+> Task :TrafficCapture:captureKafkaOffloader:testFixturesClasses UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:testFixturesJar UP-TO-DATE
+> Task :TrafficCapture:captureKafkaOffloader:compileTestJava UP-TO-DATE
+
+> Task :CreateSnapshot:test
+
+TestCreateSnapshot > testSnapshotCreateWithIndexAllowlist() PASSED
+
+TestCreateSnapshot > testRepoRegisterAndSnapshotCreateRequests() PASSED
+
+> Task :frontend:lintFrontend
+✔ No ESLint warnings or errors
+
+> Task :frontend:check
+> Task :frontend:build
+> Task :TrafficCapture:captureKafkaOffloader:testClasses UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:assemble UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:compileTestFixturesJava UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:testFixturesClasses UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:testFixturesJar UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:compileTestJava UP-TO-DATE
+> Task :CreateSnapshot:distZip
+> Task :CreateSnapshot:assemble
+> Task :TrafficCapture:captureOffloader:testClasses UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:compileJava UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:classes UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:jar UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:assemble UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:compileTestFixturesJava NO-SOURCE
+> Task :TrafficCapture:nettyWireLogging:testFixturesClasses UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:testFixturesJar UP-TO-DATE
+> Task :TrafficCapture:nettyWireLogging:compileTestJava UP-TO-DATE
+
+> Task :RFS:delombok
+warning: unknown enum constant javax.annotation.meta.When.MAYBE
+  reason: class file for javax.annotation.meta.When not found
+
+> Task :MetadataMigration:javadoc
+> Task :DataGenerator:distZip
+> Task :DataGenerator:assemble
+> Task :TrafficCapture:nettyWireLogging:testClasses UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:compileJava UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:classes UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:jar UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:startScripts
+> Task :TrafficCapture:captureKafkaOffloader:delombok
+
+> Task :RFS:delombok
+warning: unknown enum constant javax.annotation.meta.When.MAYBE
+  reason: class file for javax.annotation.meta.When not found
+warning: unknown enum constant javax.annotation.meta.When.MAYBE
+  reason: class file for javax.annotation.meta.When not found
+warning: unknown enum constant javax.annotation.meta.When.MAYBE
+  reason: class file for javax.annotation.meta.When not found
+warning: unknown enum constant javax.annotation.meta.When.MAYBE
+  reason: class file for javax.annotation.meta.When not found
+
+> Task :TrafficCapture:captureOffloader:delombok
+> Task :DocumentsFromSnapshotMigration:distZip
+> Task :DocumentsFromSnapshotMigration:assemble
+> Task :TrafficCapture:nettyWireLogging:delombok
+
+> Task :coreUtilities:test
+
+IInstrumentationAttributesTest > getPopulatedAttributesAreOverrideCorrectly() PASSED
+
+JsonCommandLineParserConvertersTest > testBadConverterConstructor() PASSED
+
+JsonCommandLineParserConvertersTest > testListConverters() PASSED
+
+JsonCommandLineParserConvertersTest > testConverterWithCommand() PASSED
+
+JsonCommandLineParserConvertersTest > testBasicConverters() PASSED
+
+JsonCommandLineParserConvertersTest > testConverterWithSplitter() PASSED
+
+JsonCommandLineParserConvertersTest > testConverterWithStringConstructor() PASSED
+
+JsonCommandLineParserConvertersTest > testConverterException() PASSED
+
+JsonCommandLineParserConvertersTest > testConverterNotCalledForNonJsonValues() PASSED
+
+JsonCommandLineParserConvertersTest > testConverterWithNullValue() PASSED
+
+JsonCommandLineParserConvertersTest > testMixedConvertersAndDelegates() PASSED
+
+> Task :TrafficCapture:captureKafkaOffloader:javadoc
+> Task :TrafficCapture:trafficCaptureProxyServer:distTar
+> Task :TrafficCapture:trafficCaptureProxyServer:compileTestFixturesJava NO-SOURCE
+> Task :TrafficCapture:trafficCaptureProxyServer:testFixturesClasses UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:testFixturesJar UP-TO-DATE
+> Task :TrafficCapture:trafficCaptureProxyServer:compileTestJava UP-TO-DATE
+> Task :MetadataMigration:distZip
+> Task :MetadataMigration:assemble
+> Task :TrafficCapture:trafficCaptureProxyServer:testClasses UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:compileJava UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:classes UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:jar UP-TO-DATE
+> Task :TrafficCapture:captureOffloader:javadoc
+> Task :TrafficCapture:trafficReplayer:startScripts
+
+> Task :coreUtilities:test
+
+TextTrackedFutureTest > futureWithThreeStages() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :MetadataMigration:test
+
+MetadataMigrationTest > testMain_expectTopLevelHelp() PASSED
+
+MetadataMigrationTest > testMain_expectNoPasswordLogged() PASSED
+
+> Task :TrafficCapture:nettyWireLogging:javadoc
+> Task :TrafficCapture:trafficReplayer:distTar
+
+> Task :MetadataMigration:test
+
+ItemsTest > testItemOrdering() PASSED
+
+ItemsTest > testEmpty() PASSED
+
+ItemsTest > testFull() PASSED
+
+ItemsTest > testWithFailures() PASSED
+
+ItemsTest > testIndexTemplatesFailures() PASSED
+
+ItemsTest > testFailureTypes() PASSED
+
+ConfigureResultTest > testAsJsonOutput() PASSED
+
+ConfigureResultTest > testAsCliOutput() PASSED
+
+ConfigureResultTest > testGetters() PASSED
+
+> Task :TrafficCapture:trafficCaptureProxyServer:delombok
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :RFS:javadoc
+warning: unknown enum constant When.MAYBE
+  reason: class file for javax.annotation.meta.When not found
+
+> Task :TrafficCapture:trafficCaptureProxyServer:javadoc
+
+> Task :MetadataMigration:test
+
+MigrationItemResultTest > testAsString_noItems() PASSED
+
+MigrationItemResultTest > testAsString_nothing() PASSED
+
+ClustersTest > testAsString_withRemoteSourceAndTarget() PASSED
+
+MigrationItemResultTest > testAsString_fullResults_withNoMessage() PASSED
+
+MigrationItemResultTest > testAsString_fullResults_withMessage() PASSED
+
+ClustersTest > testOutput_withS3Source() PASSED
+
+ClustersTest > testOutput_Empty() PASSED
+
+ClustersTest > testOutput_withLocalSource() PASSED
+
+MetadataMigrationTest > jsonOutputIsParsable() PASSED
+
+MetadataMigrationTest > testMain_expectCommandHelp() PASSED
+
+EvaluateTest > evaluate_failsUnexpectedException() PASSED
+
+EvaluateTest > evaluate_failsUnexpectedExceptionInnerMessage() PASSED
+
+EvaluateTest > evaluate_failsInvalidParameters() PASSED
+
+ClusterReaderExtractorTest > testExtractClusterReader_invalidS3Snapshot_missingRegion() PASSED
+
+ClusterReaderExtractorTest > testExtractClusterReader_invalidS3Snapshot_missingLocalDirPath() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :coreUtilities:test
+
+CommonScopedMetricInstrumentsTest > testThatBadSizeThrowsException() PASSED
+
+> Task :TrafficCapture:trafficCaptureProxyServer:distZip
+> Task :TrafficCapture:trafficCaptureProxyServer:assemble
+> Task :TrafficCapture:trafficReplayer:compileTestFixturesJava UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:testFixturesClasses UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:testFixturesJar UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:compileTestJava UP-TO-DATE
+> Task :TrafficCapture:trafficReplayer:distZip
+> Task :TrafficCapture:trafficReplayer:assemble
+> Task :TrafficCapture:trafficReplayer:testClasses UP-TO-DATE
+> Task :transformation:standardJavascriptTransforms:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:standardJavascriptTransforms:spotlessCheck UP-TO-DATE
+
+> Task :RFS:javadoc
+1 warning
+
+> Task :coreUtilities:test
+
+EnvVarParameterPullerTest > testNoEnvironmentVariablesSet() PASSED
+
+EnvVarParameterPullerTest > testToEnvVarNameConversion() PASSED
+
+EnvVarParameterPullerTest > testInvalidIntegerValue() PASSED
+
+EnvVarParameterPullerTest > testInjectDoubleParameter() PASSED
+
+EnvVarParameterPullerTest > testEmptyStringEnvironmentVariable() PASSED
+
+EnvVarParameterPullerTest > testKebabCaseParameterNameConversion() PASSED
+
+EnvVarParameterPullerTest > testCamelCaseToSnakeCaseConversion() PASSED
+
+EnvVarParameterPullerTest > testInjectStringParameter() PASSED
+
+EnvVarParameterPullerTest > testInjectIntParameter() PASSED
+
+EnvVarParameterPullerTest > testDefaultEnvGetterUsesSystemEnv() PASSED
+
+EnvVarParameterPullerTest > testInvalidDoubleValue() PASSED
+
+EnvVarParameterPullerTest > testInjectMultipleParameters() PASSED
+
+EnvVarParameterPullerTest > testNestedParametersDelegateInjection() PASSED
+
+EnvVarParameterPullerTest > testBooleanParsing() PASSED
+
+EnvVarParameterPullerTest > testLambdaEnvGetter() PASSED
+
+EnvVarParameterPullerTest > testMixedParametersAndNestedParameters() PASSED
+
+EnvVarParameterPullerTest > testInjectBooleanParameter() PASSED
+
+EnvVarParameterPullerTest > testInjectLongParameter() PASSED
+
+EnvVarParameterPullerTest > testMultipleNamingVariationsForSameField() PASSED
+
+TrackedFutureTest > test() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :TrafficCapture:captureOffloader:test
+
+StreamChannelConnectionCaptureSerializerTest > testWriteIsHandledForBufferWithNioBufAllocatedLargerThanWritten(int) > [1] 1 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testWriteIsHandledForBufferWithNioBufAllocatedLargerThanWritten(int) > [2] 16 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testEmptyPacketIsHandledForSmallCodedOutputStream() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testLargeReadPacketIsSplit() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testInitializationWithRealIds() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testAssertionErrorDuringInitializationWhenInitializeWithTooLargeId() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testCloseObservationAfterWriteWillFlushWhenSpaceNeeded() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testWithLimitlessCodedOutputStreamHolder() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testExceptionWhenStreamTooSmallForObservation() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testBasicDataConsistencyWhenChunking() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testWriteObservationWithSpaceForOneByteAtATime() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [1] 2, 2 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [2] 3, 2 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [3] 4, 2 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [4] 1, 10 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [5] 2, 10 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [6] 3, 10 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [7] 127, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [8] 128, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [9] 129, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [10] 130, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [11] 131, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [12] 132, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [13] 16381, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [14] 16382, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [15] 16383, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [16] 16384, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [17] 16385, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [18] 16386, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [19] 16387, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [20] 16388, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [21] 16389, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [22] 2097150, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [23] 2097151, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [24] 2097152, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [25] 2097153, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [26] 2097154, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [27] 2097155, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [28] 2097156, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [29] 2097157, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [30] 2097158, 10000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [31] 268435455, 100000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [32] 268435456, 100000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [33] 268435457, 100000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [34] 268435458, 100000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [35] 268435459, 100000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [36] 268435460, 100000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [37] 268435461, 100000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > test_computeMaxLengthDelimitedFieldSizeForSpace(int, int) > [38] 268435462, 100000000 PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testEndOfSegmentsIndicationAddedWhenChunking() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testEndOfSegmentsIndicationNotAddedWhenNotChunking() PASSED
+
+StreamChannelConnectionCaptureSerializerTest > testThatReadCanBeDeserialized() PASSED
+
+> Task :transformation:standardJavascriptTransforms:test
+
+> js-module@1.0.0 test
+> jest --coverage
+
+PASS test/knn-nmslib-to-faiss-metadata.test.js
+PASS test/knn-to-serverless-metadata.test.js
+PASS test/typeMappingsSanitizer.test.js
+  ● Console
+
+    console.log
+      Context:  null
+
+      at log (src/typeMappingsSanitizer.js:473:13)
+
+    console.error
+      Context Missing source_properties:  null
+
+      475 |     // Validate context, todo: include more validation
+      476 |     if (!context?.source_properties?.version?.major) {
+    > 477 |         console.error("Context Missing source_properties: ", JSON.stringify(context, mapToPlainObjectReplacer, 2));
+          |                 ^
+      478 |         throw new Error("No source_properties defined - required to transform correctly!");
+      479 |     }
+      480 |     // Support bulk processing
+
+      at error (src/typeMappingsSanitizer.js:477:17)
+      at test/typeMappingsSanitizer.test.js:5:22
+      at Object.<anonymous> (node_modules/expect/build/toThrowMatchers.js:74:11)
+      at Object.throwingMatcher [as toThrow] (node_modules/expect/build/index.js:320:21)
+      at Object.<anonymous> (test/typeMappingsSanitizer.test.js:5:34)
+
+PASS test/es-string-text-keyword-metadata.test.js
+PASS test/metadataUpdater.test.js
+------------------------------------|---------|----------|---------|---------|-----------------------------------
+File                                | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                 
+------------------------------------|---------|----------|---------|---------|-----------------------------------
+All files                           |    42.2 |    40.65 |      50 |   41.83 |                                   
+ dataStreamBackingIndexTransform.js |       0 |        0 |       0 |       0 | 21-61                             
+ es-string-text-keyword-metadata.js |     100 |     93.1 |     100 |     100 | 89-97                             
+ es-vector-knn-metadata.js          |       0 |        0 |       0 |       0 | 9-83                              
+ knn-nmslib-to-faiss-metadata.js    |      90 |       75 |     100 |   97.14 | 15                                
+ knn-to-serverless-metadata.js      |   93.05 |    89.39 |     100 |   98.36 | 39                                
+ metadataUpdater.js                 |   97.72 |    86.48 |     100 |   97.22 | 42                                
+ typeMappingsSanitizer.js           |    6.96 |     3.16 |     8.1 |    6.98 | 2-287,300-445,452,458-468,481-485 
+------------------------------------|---------|----------|---------|---------|-----------------------------------
+
+Test Suites: 5 passed, 5 total
+Tests:       45 passed, 45 total
+Snapshots:   0 total
+Time:        4.021 s
+Ran all test suites.
+
+> Task :transformation:standardJavascriptTransforms:check
+> Task :transformation:standardJavascriptTransforms:build
+> Task :transformation:transformationPlugins:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:check UP-TO-DATE
+> Task :transformation:transformationPlugins:build UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:check UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:build UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:compileTestJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:testClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:test NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:check UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformer:build UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:compileTestJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:testClasses UP-TO-DATE
+
+> Task :TrafficCapture:nettyWireLogging:test
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatAPostInASinglePacketBlocksFutureActivity_withLeakDetection(boolean) > [1] true PASSED
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatAPostInASinglePacketBlocksFutureActivity_withLeakDetection(boolean) > [2] false PASSED
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatHealthCheckCaptureCanBeSuppressed(boolean) > [1] false PASSED
+
+HeaderValueFilteringCapturePredicateTest > suppresses() PASSED
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatHealthCheckCaptureCanBeSuppressed(boolean) > [2] true PASSED
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatAPostInTinyPacketsBlocksFutureActivity(boolean) > [1] true PASSED
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatAPostInTinyPacketsBlocksFutureActivity(boolean) > [2] false PASSED
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatAPostInTinyPacketsBlocksFutureActivity_withLeakDetection(boolean) > [1] true PASSED
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatAPostInTinyPacketsBlocksFutureActivity_withLeakDetection(boolean) > [2] false PASSED
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatAPostInASinglePacketBlocksFutureActivity(boolean) > [1] true PASSED
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatAPostInASinglePacketBlocksFutureActivity(boolean) > [2] false PASSED
+
+ConditionallyReliableLoggingHttpHandlerTest > testThatSuppressedCaptureWorks() SKIPPED
+
+> Task :DataGenerator:test
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :MetadataMigration:test
+
+ClusterReaderExtractorTest > testExtractClusterReader_validS3Snapshot() PASSED
+
+ClusterReaderExtractorTest > testExtractClusterReader_validLocalSnapshot() PASSED
+
+ClusterReaderExtractorTest > testExtractClusterReader_noSnapshotOrRemote() PASSED
+
+ClusterReaderExtractorTest > testExtractClusterReader_validLocalSnapshot_missingVersion() PASSED
+
+ClusterReaderExtractorTest > testExtractClusterReader_validRemote() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :TrafficCapture:nettyWireLogging:test
+
+RootWireLoggingContextTest > testThatAPostProducesGatheringRequestTrace_WithoutClosingChannel() PASSED
+
+RootWireLoggingContextTest > testThatAGetProducesGatheringRequestTrace_WithClosingChannel() PASSED
+
+RootWireLoggingContextTest > testThatAGetProducesGatheringRequestTrace_WithoutClosingChannel() PASSED
+
+> Task :DocumentsFromSnapshotMigration:test
+> Task :TrafficCapture:trafficReplayer:delombok
+
+> Task :coreUtilities:test
+
+JsonCommandLineParserTest > testSimpleJsonFile(Path) PASSED
+
+JsonCommandLineParserTest > testReservedFlagValidation() PASSED
+
+JsonCommandLineParserTest > testCommandWithGlobalArgsAndDelegate() PASSED
+
+JsonCommandLineParserTest > testJsonFileCommandAfterFlag(Path) PASSED
+
+JsonCommandLineParserTest > testTypoInParameterName() PASSED
+
+JsonCommandLineParserTest > testUnrecognizedJsonKey() PASSED
+
+JsonCommandLineParserTest > testTraditionalCommandParsing() PASSED
+
+JsonCommandLineParserTest > testJsonCommandAfterFlag() PASSED
+
+JsonCommandLineParserTest > testInvalidCommandInJson() PASSED
+
+JsonCommandLineParserTest > testMissingJsonArgument() PASSED
+
+JsonCommandLineParserTest > testJsonCommandBeforeFlag() PASSED
+
+JsonCommandLineParserTest > testListParameter() PASSED
+
+JsonCommandLineParserTest > testParametersDelegate() PASSED
+
+JsonCommandLineParserTest > testAddCommandWithoutAnnotationThrows() PASSED
+
+JsonCommandLineParserTest > testTraditionalVsJsonEquivalence() PASSED
+
+JsonCommandLineParserTest > testSimpleTraditionalParsing() PASSED
+
+JsonCommandLineParserTest > testInvalidCommand() PASSED
+
+JsonCommandLineParserTest > testSimpleJsonBase64() PASSED
+
+JsonCommandLineParserTest > testUnexpectedArgumentWhenNoCommands() PASSED
+
+JsonCommandLineParserTest > testSimpleJsonInline() PASSED
+
+JsonCommandLineParserTest > testTooManyArguments() PASSED
+
+JsonCommandLineParserTest > testMultipleCommands() PASSED
+
+JsonCommandLineParserTest > testBase64WithCommand() PASSED
+
+JsonCommandLineParserTest > testMultipleUnrecognizedJsonKeys() PASSED
+
+JsonCommandLineParserTest > testJsonFileNotFound() PASSED
+
+JsonCommandLineParserTest > testMissingJsonFileArgument() PASSED
+
+JsonCommandLineParserTest > testUnrecognizedJsonKeyWithCommand() PASSED
+
+JsonCommandLineParserTest > testAddCommandWithAnnotation() PASSED
+
+JsonCommandLineParserTest > testCamelCaseAndDashCase() PASSED
+
+JsonCommandLineParserTest > testRealWorldScenario(Path) PASSED
+
+JsonCommandLineParserTest > testJsonFileCommandBeforeFlag(Path) PASSED
+
+JsonCommandLineParserTest > testNullValues() PASSED
+
+JsonCommandLineParserTest > testJsonCommandInJson() PASSED
+
+JsonCommandLineParserTest > testAllDataTypes() PASSED
+
+JsonCommandLineParserTest > testDefaultValuesPreserved() PASSED
+
+Received shutdown signal.  Trying to shutdown cleanly
+Received shutdown signal.  Trying to shutdown cleanly
+Done stopping the proxy.
+Done stopping the proxy.
+
+> Task :MetadataMigration:test
+
+MigrateTest > migrate_failsUnexpectedExceptionInnerMessage() PASSED
+
+MigrateTest > migrate_failsUnexpectedException() PASSED
+
+MigrateTest > migrate_failsInvalidParameters() PASSED
+
+> Task :CreateSnapshot:check
+> Task :CreateSnapshot:build
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:compileTestJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:testClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:test NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:check UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformer:build UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:compileTestJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:testClasses UP-TO-DATE
+
+> Task :TrafficCapture:captureKafkaOffloader:test
+
+KafkaCaptureFactoryTest > testLargeRequestIsWithinKafkaMessageSizeLimit() PASSED
+
+KafkaCaptureFactoryTest > testOffloaderFlushCommitIsNonBlockingOnKafkaProducer() PASSED
+
+KafkaCaptureFactoryTest > testLinearOffloadingIsSuccessful() PASSED
+
+> Task :DataGenerator:check
+> Task :DataGenerator:build
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:compileTestJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:testClasses UP-TO-DATE
+
+> Task :TrafficCapture:captureOffloader:test
+
+CodedOutputStreamSizeUtilTest > testBytesNeededForObservationAndClosingIndex() PASSED
+
+CodedOutputStreamSizeUtilTest > test_computeByteBufRemainingSize_EmptyByteBuf() PASSED
+
+CodedOutputStreamSizeUtilTest > test_computeByteBufRemainingSize_largeBuf() PASSED
+
+CodedOutputStreamSizeUtilTest > testGetSizeOfTimestamp() PASSED
+
+CodedOutputStreamSizeUtilTest > test_computeByteBufRemainingSize() PASSED
+
+CodedOutputStreamSizeUtilTest > testBytesNeededForObservationAndClosingIndex_WithZeroContent() PASSED
+
+CodedOutputStreamSizeUtilTest > test_computeByteBufRemainingSize_ByteBufAtCapacity() PASSED
+
+CodedOutputStreamSizeUtilTest > testMaxBytesNeededForASegmentedObservation() PASSED
+
+CodedOutputStreamSizeUtilTest > test_computeByteBufRemainingSize_emptyBufWithCapacity() PASSED
+
+CodedOutputStreamSizeUtilTest > testBytesNeededForObservationAndClosingIndex_VariousIndices() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :DocumentsFromSnapshotMigration:test
+
+RfsMigrateDocumentsTest > testGetSuccessorNextAcquisitionLeaseExponent(int, int, double, String) > [1] 2, 1, 0.024, Should decrease successorExponent when shard prep time is less than decrease threshold for lease duration PASSED
+
+RfsMigrateDocumentsTest > testGetSuccessorNextAcquisitionLeaseExponent(int, int, double, String) > [2] 0, 0, 0.024, Should return 0 for successorExponent when shard prep time is less than decrease threshold for lease duration and existingLeaseExponent is 0 PASSED
+
+RfsMigrateDocumentsTest > testGetSuccessorNextAcquisitionLeaseExponent(int, int, double, String) > [3] 1, 1, 0.099, Should return existingLeaseExponent when shard prep time is less than increase threshold for lease duration PASSED
+
+RfsMigrateDocumentsTest > testGetSuccessorNextAcquisitionLeaseExponent(int, int, double, String) > [4] 1, 1, 0.1, Should return existingLeaseExponent when shard prep time is equal to increase threshold for lease duration PASSED
+
+RfsMigrateDocumentsTest > testGetSuccessorNextAcquisitionLeaseExponent(int, int, double, String) > [5] 1, 2, 0.101, Should return existingLeaseExponent + 1 when shard prep time is greater than increase threshold for lease duration PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :TrafficCapture:trafficCaptureProxyServer:test
+
+TestHeaderRewrites > testBodyDoesntRewrite() PASSED
+
+TestHeaderRewrites > testHeaderRewrites() PASSED
+
+HeaderRemoverHandlerTest > throwsOnHostFormatError() PASSED
+
+HeaderRemoverHandlerTest > simpleCheck() PASSED
+
+HeaderRemoverHandlerTest > multipleRequestsCheck_headerRemover_withComplexBody_andVerifiedChunkedResponse() PASSED
+
+HeaderRemoverHandlerTest > individualBytesCheck() PASSED
+
+HeaderRemoverHandlerTest > fragmentedCheckConsecutive(String) > [1] 8,22,22,22,22,9999 PASSED
+
+HeaderRemoverHandlerTest > fragmentedCheckInterlaced(String) > [1] 8,22,22,22,22,9999 PASSED
+
+HeaderRemoverHandlerTest > trivialSingleByte() PASSED
+
+HeaderRemoverHandlerTest > newlinesArePreserved() PASSED
+
+HeaderAdderHandlerTest > simpleCheck() PASSED
+
+HeaderAdderHandlerTest > individualBytesCheck() PASSED
+
+HeaderAdderHandlerTest > multipleRequestsCheck_headerAdder_withComplexBody_andResponse() PASSED
+
+HeaderAdderHandlerTest > fragmentedBytesCheck(String) > [1] 8,27,9999 PASSED
+
+HeaderAdderHandlerTest > fragmentedBytesCheck(String) > [2] 8,12,16,999 PASSED
+
+HeaderRemoverHandlerTest > randomFragmentedCheckInterlaced() PASSED
+
+CaptureProxySetupTest > testBuildKafkaPropertiesBaseCase() PASSED
+
+CaptureProxySetupTest > testNoProtocolConfigDefaultsToSecureOnesOnly() PASSED
+
+CaptureProxySetupTest > testBuildKafkaPropertiesWithMSKAuth() PASSED
+
+CaptureProxySetupTest > testTlsParametersAreProperlyRead() PASSED
+
+CaptureProxySetupTest > testBuildKafkaPropertiesWithPropertyFile() PASSED
+
+HeaderRemoverHandlerTest > randomFragmentedCheckConsecutive() PASSED
+
+> Task :TrafficCapture:trafficReplayer:javadoc
+
+> Task :RFS:test
+
+BitSetConverterTest > testSparseBitSetConversion(String) > Lucene 5 - Sparse BitSet Conversion PASSED
+
+BitSetConverterTest > testSparseBitSetConversion(String) > Lucene 6 - Sparse BitSet Conversion PASSED
+
+BitSetConverterTest > testSparseBitSetConversion(String) > Lucene 7 - Sparse BitSet Conversion PASSED
+
+BitSetConverterTest > testSparseBitSetConversion(String) > Lucene 9 - Sparse BitSet Conversion PASSED
+
+BitSetConverterTest > testConvertNull(String) > Lucene 5 - Null Input PASSED
+
+BitSetConverterTest > testConvertNull(String) > Lucene 6 - Null Input PASSED
+
+BitSetConverterTest > testConvertNull(String) > Lucene 7 - Null Input PASSED
+
+BitSetConverterTest > testConvertNull(String) > Lucene 9 - Null Input PASSED
+
+BitSetConverterTest > testLargeBitSetConversionWithRandomSeed(String) > Lucene 5 - Large BitSet Conversion PASSED
+
+BitSetConverterTest > testLargeBitSetConversionWithRandomSeed(String) > Lucene 6 - Large BitSet Conversion PASSED
+
+BitSetConverterTest > testLargeBitSetConversionWithRandomSeed(String) > Lucene 7 - Large BitSet Conversion PASSED
+
+S3RepoTest > GetSnapshotRepoDataFilePath_DoesNotExist() PASSED
+
+S3RepoTest > GetSnapshotRepoDataFilePath_AsExpected() PASSED
+
+S3RepoTest > GetShardDirPath_AsExpected() PASSED
+
+S3RepoTest > GetIndexMetadataFilePath_AsExpected() PASSED
+
+S3RepoTest > GetSnapshotMetadataFilePath_AsExpected() PASSED
+
+S3RepoTest > GetShardMetadataFilePath_AsExpected() PASSED
+
+S3RepoTest > listFilesInS3Root_ReturnsStrippedKeys() PASSED
+
+S3RepoTest > GetBlobFilePath_AsExpected() PASSED
+
+S3RepoTest > getSnapshotRepoDataFilePath_WithEmptyFileName() PASSED
+
+S3RepoTest > GetGlobalMetadataFilePath_AsExpected() PASSED
+
+S3RepoTest > GetRepoRootDir_AsExpected() PASSED
+
+BitSetConverterTest > testLargeBitSetConversionWithRandomSeed(String) > Lucene 9 - Large BitSet Conversion PASSED
+
+BitSetConverterTest > testConvertWithNullClasses(String) > Lucene 5 - Null Classes Fallback PASSED
+
+BitSetConverterTest > testConvertWithNullClasses(String) > Lucene 6 - Null Classes Fallback PASSED
+
+BitSetConverterTest > testConvertWithNullClasses(String) > Lucene 7 - Null Classes Fallback PASSED
+
+BitSetConverterTest > testConvertWithNullClasses(String) > Lucene 9 - Null Classes Fallback PASSED
+
+BitSetConverterTest > testAlternatingPatterns(String) > Lucene 5 - Alternating Patterns PASSED
+
+BitSetConverterTest > testAlternatingPatterns(String) > Lucene 6 - Alternating Patterns PASSED
+
+BitSetConverterTest > testAlternatingPatterns(String) > Lucene 7 - Alternating Patterns PASSED
+
+BitSetConverterTest > testAlternatingPatterns(String) > Lucene 9 - Alternating Patterns PASSED
+
+BitSetConverterTest > testConvertAllBitsSet(String) > Lucene 5 - All Bits Set PASSED
+
+BitSetConverterTest > testConvertAllBitsSet(String) > Lucene 6 - All Bits Set PASSED
+
+BitSetConverterTest > testConvertAllBitsSet(String) > Lucene 7 - All Bits Set PASSED
+
+BitSetConverterTest > testConvertAllBitsSet(String) > Lucene 9 - All Bits Set PASSED
+
+BitSetConverterTest > testConvertEmptyBitSets(String) > Lucene 5 - Empty BitSets PASSED
+
+BitSetConverterTest > testConvertEmptyBitSets(String) > Lucene 6 - Empty BitSets PASSED
+
+BitSetConverterTest > testConvertEmptyBitSets(String) > Lucene 7 - Empty BitSets PASSED
+
+BitSetConverterTest > testConvertEmptyBitSets(String) > Lucene 9 - Empty BitSets PASSED
+
+BitSetConverterTest > testBoundaryConditions(String) > Lucene 5 - Boundary Conditions PASSED
+
+BitSetConverterTest > testBoundaryConditions(String) > Lucene 6 - Boundary Conditions PASSED
+
+BitSetConverterTest > testBoundaryConditions(String) > Lucene 7 - Boundary Conditions PASSED
+
+BitSetConverterTest > testBoundaryConditions(String) > Lucene 9 - Boundary Conditions PASSED
+
+BitSetConverterTest > testEdgeCases(String) > Lucene 5 - Edge Cases PASSED
+
+BitSetConverterTest > testEdgeCases(String) > Lucene 6 - Edge Cases PASSED
+
+BitSetConverterTest > testEdgeCases(String) > Lucene 7 - Edge Cases PASSED
+
+BitSetConverterTest > testEdgeCases(String) > Lucene 9 - Edge Cases PASSED
+
+BitSetConverterTest > testConvertFixedBitSet(String) > Lucene 5 - FixedBitSet Conversion PASSED
+
+BitSetConverterTest > testConvertFixedBitSet(String) > Lucene 6 - FixedBitSet Conversion PASSED
+
+BitSetConverterTest > testConvertFixedBitSet(String) > Lucene 7 - FixedBitSet Conversion PASSED
+
+BitSetConverterTest > testConvertFixedBitSet(String) > Lucene 9 - FixedBitSet Conversion PASSED
+
+BitSetConverterTest > testConvertCustomBits(String) > Lucene 5 - Custom Bits Implementation PASSED
+
+BitSetConverterTest > testConvertCustomBits(String) > Lucene 6 - Custom Bits Implementation PASSED
+
+BitSetConverterTest > testConvertCustomBits(String) > Lucene 7 - Custom Bits Implementation PASSED
+
+BitSetConverterTest > testConvertCustomBits(String) > Lucene 9 - Custom Bits Implementation PASSED
+
+BitSetConverterTest > testConvertSparseFixedBitSet(String) > Lucene 5 - SparseFixedBitSet Conversion PASSED
+
+BitSetConverterTest > testConvertSparseFixedBitSet(String) > Lucene 6 - SparseFixedBitSet Conversion PASSED
+
+BitSetConverterTest > testConvertSparseFixedBitSet(String) > Lucene 7 - SparseFixedBitSet Conversion PASSED
+
+BitSetConverterTest > testConvertSparseFixedBitSet(String) > Lucene 9 - SparseFixedBitSet Conversion PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndConflictThenIgnored(Version) > [1] OPENSEARCH 1.3.20 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndConflictThenIgnored(Version) > [2] OPENSEARCH 2.19.4 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndConflictThenIgnored(Version) > [3] OPENSEARCH 3.0.0 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndConflictThenIgnored(Version) > [4] ELASTICSEARCH 7.10.2 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndConflictThenIgnored(Version) > [5] ELASTICSEARCH 5.6.16 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndConflictThenIgnored(Version) > [6] ELASTICSEARCH 6.8.23 PASSED
+
+TransformFunctionsTest > convertFlatSettingsToTree_ConflictResolutionIntricacies() PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndErrorThenLogged(Version) > [1] OPENSEARCH 1.3.20 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndErrorThenLogged(Version) > [2] OPENSEARCH 2.19.4 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndErrorThenLogged(Version) > [3] OPENSEARCH 3.0.0 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndErrorThenLogged(Version) > [4] ELASTICSEARCH 7.10.2 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndErrorThenLogged(Version) > [5] ELASTICSEARCH 5.6.16 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResultAndErrorThenLogged(Version) > [6] ELASTICSEARCH 6.8.23 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [1] OPENSEARCH 1.3.20, IGNORED, {"result": "noop"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [2] OPENSEARCH 1.3.20, CREATED, {"result": "created"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [3] OPENSEARCH 1.3.20, UPDATED, {"result": "updated"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [4] OPENSEARCH 2.19.4, IGNORED, {"result": "noop"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [5] OPENSEARCH 2.19.4, CREATED, {"result": "created"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [6] OPENSEARCH 2.19.4, UPDATED, {"result": "updated"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [7] OPENSEARCH 3.0.0, IGNORED, {"result": "noop"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [8] OPENSEARCH 3.0.0, CREATED, {"result": "created"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [9] OPENSEARCH 3.0.0, UPDATED, {"result": "updated"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [10] ELASTICSEARCH 7.10.2, IGNORED, {"result": "noop"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [11] ELASTICSEARCH 7.10.2, CREATED, {"result": "created"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [12] ELASTICSEARCH 7.10.2, UPDATED, {"result": "updated"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [13] ELASTICSEARCH 5.6.16, IGNORED, {"result": "noop"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [14] ELASTICSEARCH 5.6.16, CREATED, {"result": "created"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [15] ELASTICSEARCH 5.6.16, UPDATED, {"result": "updated"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [16] ELASTICSEARCH 6.8.23, IGNORED, {"result": "noop"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [17] ELASTICSEARCH 6.8.23, CREATED, {"result": "created"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenGetResult(Version, DocumentModificationResult, String) > [18] ELASTICSEARCH 6.8.23, UPDATED, {"result": "updated"} PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 1 PASSED
+
+TransformFunctionsTest > removeIntermediateMappingsLevels_AsExpected() PASSED
+
+TransformFunctionsTest > convertFlatSettingsToTree_WithConflictingKeys_OrderIndependent() PASSED
+
+TransformFunctionsTest > convertFlatSettingsToTree_WithoutConflicts_CreatesNestedStructure() PASSED
+
+TransformFunctionsTest > getMappingsFromBeneathIntermediate_AsExpected() PASSED
+
+ObjectNodeUtilsTest > testRemoveFieldsByPath_nestedField() PASSED
+
+ObjectNodeUtilsTest > testRemoveFieldsByPath_topLevelField() PASSED
+
+ObjectNodeUtilsTest > testRemoveFieldsByPath_nestedFieldThatDNE() PASSED
+
+ObjectNodeUtilsTest > testRemoveFieldsByPath_topLevelFieldThatDNE() PASSED
+
+RestClientTest > testMutualTlsFailsWithoutClientCert() PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 2 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 3 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 4 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 5 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 6 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 7 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 8 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 9 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 10 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 11 PASSED
+
+OpenSearchWorkCoodinatorTest > testWhenInvokedWithHttpErrorThenLogged(Version, Function) > 12 PASSED
+
+JacksonParserVsReadObjectBenchmark > testJacksonMarshalling() PASSED
+
+RestClientTest > testGetEmitsInstrumentation() PASSED
+
+JacksonParserVsReadObjectBenchmark > testJacksonParser() PASSED
+
+RestClientTest > testMutualTlsSuccess() PASSED
+
+S3UriTest > S3Uri_AsExpected(String, String, String, String) > [1] s3://bucket-name, bucket-name, , s3://bucket-name PASSED
+
+S3UriTest > S3Uri_AsExpected(String, String, String, String) > [2] s3://bucket-name/, bucket-name, , s3://bucket-name PASSED
+
+S3UriTest > S3Uri_AsExpected(String, String, String, String) > [3] s3://bucket-name/with/suffix, bucket-name, with/suffix, s3://bucket-name/with/suffix PASSED
+
+S3UriTest > S3Uri_AsExpected(String, String, String, String) > [4] s3://bucket-name/with/suffix/, bucket-name, with/suffix, s3://bucket-name/with/suffix PASSED
+
+TransformerMapperTest > testGetTransformer_strict_notFound() PASSED
+
+ConnectionContextTest > testCoordinatorArgsIsEnabled_WhenHostIsSet_ReturnsTrue() PASSED
+
+ConnectionContextTest > testTargetArgsDefaultValues() PASSED
+
+ConnectionContextTest > testCoordinatorArgsDefaultValues() PASSED
+
+ConnectionContextTest > testSourceArgsDefaultValues() PASSED
+
+ConnectionContextTest > testCoordinatorArgsToConnectionContext_FailsWithPartialSigV4Auth() PASSED
+
+ConnectionContextTest > testValidConnectionContextCreation(ConnectionContextTestParams, Protocol, Class, boolean) > [1] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@c262f2f, HTTP, class org.opensearch.migrations.bulkload.common.http.NoAuthTransformer, true PASSED
+
+ConnectionContextTest > testValidConnectionContextCreation(ConnectionContextTestParams, Protocol, Class, boolean) > [2] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@505f45cc, HTTPS, class org.opensearch.migrations.bulkload.common.http.BasicAuthTransformer, true PASSED
+
+TransformerMapperTest > testGetTransformer_loose_found() PASSED
+
+ConnectionContextTest > testValidConnectionContextCreation(ConnectionContextTestParams, Protocol, Class, boolean) > [3] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@6f0c45f4, HTTPS, class org.opensearch.migrations.bulkload.common.http.SigV4AuthTransformer, true PASSED
+
+ConnectionContextTest > testValidConnectionContextCreation(ConnectionContextTestParams, Protocol, Class, boolean) > [4] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@3321291a, HTTPS, class org.opensearch.migrations.bulkload.common.http.NoAuthTransformer, false PASSED
+
+ConnectionContextTest > testValidConnectionContextCreation(ConnectionContextTestParams, Protocol, Class, boolean) > [5] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@76af34b5, HTTP, class org.opensearch.migrations.bulkload.common.http.NoAuthTransformer, true PASSED
+
+ConnectionContextTest > testCoordinatorArgsToConnectionContext_WithSigV4Auth() PASSED
+
+ConnectionContextTest > testCoordinatorArgsIsEnabled_WhenHostIsNull_ReturnsFalse() PASSED
+
+ConnectionContextTest > testCoordinatorArgsToConnectionContext_WithNoAuth() PASSED
+
+ConnectionContextTest > testCoordinatorArgsToConnectionContext_FailsWithPartialBasicAuth() PASSED
+
+ConnectionContextTest > testInvalidConnectionContextCreation(ConnectionContextTestParams, Class) > [1] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@4597e6e3, class java.lang.IllegalArgumentException PASSED
+
+ConnectionContextTest > testInvalidConnectionContextCreation(ConnectionContextTestParams, Class) > [2] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@6cd45b6c, class java.lang.IllegalArgumentException PASSED
+
+ConnectionContextTest > testInvalidConnectionContextCreation(ConnectionContextTestParams, Class) > [3] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@4bfa5eb9, class java.lang.IllegalArgumentException PASSED
+
+ConnectionContextTest > testInvalidConnectionContextCreation(ConnectionContextTestParams, Class) > [4] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@58186f9f, class java.lang.IllegalArgumentException PASSED
+
+TransformerMapperTest > testGetTransformer_strict_found() PASSED
+
+ConnectionContextTest > testInvalidConnectionContextCreation(ConnectionContextTestParams, Class) > [5] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@1f39269d, class java.lang.IllegalArgumentException PASSED
+
+ConnectionContextTest > testInvalidConnectionContextCreation(ConnectionContextTestParams, Class) > [6] org.opensearch.migrations.bulkload.common.http.ConnectionContextTestParams@754de353, class java.lang.IllegalArgumentException PASSED
+
+ConnectionContextTest > testCoordinatorArgsToConnectionContext_WithBasicAuth() PASSED
+
+TransformerMapperTest > testGetTransformer_loose_notFound() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:test
+
+JsonJMESPathTransformerProviderTest > testSimpleTransform() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :MetadataMigration:test
+
+ConfigureTest > configureSource_notImplemented() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :RFS:test
+
+LuceneDocumentsReaderTest > ReadDocumentsStartingFromCheckpointForOneSegments_AsExpected() PASSED
+
+OpenSearchClientTest > testCreateIndex_alreadyExists() PASSED
+
+LuceneDocumentsReaderTest > ReadDocumentsStartingFromCheckpointForManySegments_AsExpected() PASSED
+
+LuceneDocumentsReaderTest > ReadDocuments_ES5_Origin_AsExpected() PASSED
+
+LuceneDocumentsReaderTest > ReadDocuments_AsExpected(Snapshot, Version) > [1] org.opensearch.migrations.bulkload.common.TestResources$Snapshot@4f8eb97c, ELASTICSEARCH 6.8.0 PASSED
+
+LuceneDocumentsReaderTest > ReadDocuments_AsExpected(Snapshot, Version) > [2] org.opensearch.migrations.bulkload.common.TestResources$Snapshot@359ae83a, ELASTICSEARCH 7.10.0 PASSED
+
+LuceneDocumentsReaderTest > ReadDocuments_AsExpected(Snapshot, Version) > [3] org.opensearch.migrations.bulkload.common.TestResources$Snapshot@376ba8e3, ELASTICSEARCH 7.10.0 PASSED
+
+InvalidResponseTest > testGetIllegalArguments() PASSED
+
+InvalidResponseTest > testGetIllegalArguments_WithSettingsException() PASSED
+
+InvalidResponseTest > testGetIllegalArguments_WithMixedExceptionTypes() PASSED
+
+InvalidResponseTest > testGetIllegalArguments_inRootCause() PASSED
+
+InvalidResponseTest > testGetIllegalArguments_inRootCauseAndSuppressed() PASSED
+
+InvalidResponseTest > testGetIllegalArguments_noIllegalArguments() PASSED
+
+IndexOpTest > testDeleteOp() PASSED
+
+OpenSearchClient_ES_5_6_Test > testCreateIndex() PASSED
+
+[INFO ] 2026-01-23 18:46:04,746572 [Test worker] JavascriptTransformerTest - Starting initScript1 run
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:test
+
+JavascriptTransformerTest > testMapOperations() PASSED
+
+JavascriptTransformerTest > testCustomMap() PASSED
+
+JavascriptTransformerTest > testPromiseHandling() PASSED
+
+JavascriptTransformerTest > testObjectOperations() PASSED
+
+[INFO ] 2026-01-23 18:46:05,232606 [Test worker] JavascriptTransformerTest - Run 0: PT0.449066167S
+[INFO ] 2026-01-23 18:46:05,286573 [Test worker] JavascriptTransformerTest - Run 1: PT0.053690875S
+[INFO ] 2026-01-23 18:46:05,299983 [Test worker] JavascriptTransformerTest - Run 2: PT0.013176959S
+
+> Task :TrafficCapture:trafficReplayer:test
+
+RefSafeStreamUtilsTest > refSafeMap_shouldMapAndReleaseResources() PASSED
+
+RefSafeStreamUtilsTest > refSafeTransform_shouldTransformAndReleaseResources() PASSED
+
+RefSafeStreamUtilsTest > refSafeMap_shouldHandleExceptionDuringMapping() PASSED
+
+[INFO ] 2026-01-23 18:46:05,371090 [Test worker] JavascriptTransformerTest - Run 3: PT0.043995S
+[INFO ] 2026-01-23 18:46:05,438114 [Test worker] JavascriptTransformerTest - Run 4: PT0.066795209S
+[INFO ] 2026-01-23 18:46:05,459027 [Test worker] JavascriptTransformerTest - Run 5: PT0.020662875S
+[INFO ] 2026-01-23 18:46:05,492087 [Test worker] JavascriptTransformerTest - Run 6: PT0.032804292S
+[INFO ] 2026-01-23 18:46:05,516834 [Test worker] JavascriptTransformerTest - Run 7: PT0.024513125S
+[INFO ] 2026-01-23 18:46:05,559681 [Test worker] JavascriptTransformerTest - Run 8: PT0.04262S
+[INFO ] 2026-01-23 18:46:05,570796 [Test worker] JavascriptTransformerTest - Run 9: PT0.010877583S
+[INFO ] 2026-01-23 18:46:05,634884 [Test worker] JavascriptTransformerTest - Run 10: PT0.063834166S
+[INFO ] 2026-01-23 18:46:05,643684 [Test worker] JavascriptTransformerTest - Run 11: PT0.008385625S
+[INFO ] 2026-01-23 18:46:05,671622 [Test worker] JavascriptTransformerTest - Run 12: PT0.027746208S
+[INFO ] 2026-01-23 18:46:05,680003 [Test worker] JavascriptTransformerTest - Run 13: PT0.00816325S
+[INFO ] 2026-01-23 18:46:05,688302 [Test worker] JavascriptTransformerTest - Run 14: PT0.008075666S
+[INFO ] 2026-01-23 18:46:05,738813 [Test worker] JavascriptTransformerTest - Run 15: PT0.050317791S
+[INFO ] 2026-01-23 18:46:05,769407 [Test worker] JavascriptTransformerTest - Run 16: PT0.030377125S
+[INFO ] 2026-01-23 18:46:05,783477 [Test worker] JavascriptTransformerTest - Run 17: PT0.01385625S
+[INFO ] 2026-01-23 18:46:05,846482 [Test worker] JavascriptTransformerTest - Run 18: PT0.0627805S
+[INFO ] 2026-01-23 18:46:05,854338 [Test worker] JavascriptTransformerTest - Run 19: PT0.007627667S
+[INFO ] 2026-01-23 18:46:05,854748 [Test worker] JavascriptTransformerTest - Starting initScript2 run
+[INFO ] 2026-01-23 18:46:05,929103 [Test worker] JavascriptTransformerTest - Run 0: PT0.024508167S
+[INFO ] 2026-01-23 18:46:06,120562 [Test worker] JavascriptTransformerTest - Run 1: PT0.191211542S
+
+> Task :RFS:test
+
+OpenSearchClient_ES_5_6_Test > testBulkRequestHasTypedoc() PASSED
+
+FanOutCompositeTransformerTest > testCompositeTransformer() PASSED
+
+[INFO ] 2026-01-23 18:46:06,165973 [Test worker] JavascriptTransformerTest - Run 2: PT0.045062708S
+[INFO ] 2026-01-23 18:46:06,180117 [Test worker] JavascriptTransformerTest - Run 3: PT0.013930791S
+[INFO ] 2026-01-23 18:46:06,195576 [Test worker] JavascriptTransformerTest - Run 4: PT0.014997417S
+[INFO ] 2026-01-23 18:46:06,308983 [Test worker] JavascriptTransformerTest - Run 5: PT0.113156458S
+[INFO ] 2026-01-23 18:46:06,316652 [Test worker] JavascriptTransformerTest - Run 6: PT0.007447542S
+[INFO ] 2026-01-23 18:46:06,372546 [Test worker] JavascriptTransformerTest - Run 7: PT0.055673041S
+[INFO ] 2026-01-23 18:46:06,451066 [Test worker] JavascriptTransformerTest - Run 8: PT0.078260875S
+[INFO ] 2026-01-23 18:46:06,471476 [Test worker] JavascriptTransformerTest - Run 9: PT0.019861584S
+[INFO ] 2026-01-23 18:46:06,477963 [Test worker] JavascriptTransformerTest - Run 10: PT0.006253083S
+[INFO ] 2026-01-23 18:46:06,524281 [Test worker] JavascriptTransformerTest - Run 11: PT0.046104958S
+[INFO ] 2026-01-23 18:46:06,578663 [Test worker] JavascriptTransformerTest - Run 12: PT0.05415925S
+[INFO ] 2026-01-23 18:46:06,584055 [Test worker] JavascriptTransformerTest - Run 13: PT0.005151459S
+[INFO ] 2026-01-23 18:46:06,589360 [Test worker] JavascriptTransformerTest - Run 14: PT0.005106375S
+[INFO ] 2026-01-23 18:46:06,594703 [Test worker] JavascriptTransformerTest - Run 15: PT0.005144417S
+[INFO ] 2026-01-23 18:46:06,600003 [Test worker] JavascriptTransformerTest - Run 16: PT0.00511525S
+[INFO ] 2026-01-23 18:46:06,605315 [Test worker] JavascriptTransformerTest - Run 17: PT0.00512525S
+[INFO ] 2026-01-23 18:46:06,686229 [Test worker] JavascriptTransformerTest - Run 18: PT0.080725375S
+[INFO ] 2026-01-23 18:46:06,715567 [Test worker] JavascriptTransformerTest - Run 19: PT0.029119709S
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:test
+
+JavascriptTransformerTest > testInlinedScriptPerformance() PASSED
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:check
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJMESPathMessageTransformerProvider:build
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:compileTestJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:testClasses UP-TO-DATE
+> Task :coreUtilities:check
+> Task :coreUtilities:build
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:check UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerInterface:build UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:check UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonMessageTransformerLoaders:build UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:compileTestFixturesJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:testFixturesClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:compileTestJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:delombok UP-TO-DATE
+
+> Task :TrafficCapture:trafficCaptureProxyServer:test
+
+NettyScanningHttpProxyTest > testRoundTrip() PASSED
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:javadoc UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:processTestResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:testClasses UP-TO-DATE
+
+> Task :TrafficCapture:trafficReplayer:test
+
+JsonAccumulatorTest > testAccumulationShort(String, int) > [1] tiny, 2 PASSED
+
+JsonAccumulatorTest > testAccumulationShort(String, int) > [2] tiny, 20000 PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :RFS:test
+
+WorkCoordinatorErrantAcquisitonsRetryTest > doubledLeaseIntervalCausesExtraRetry() PASSED
+
+GlobalMetadataCreator_OS_2_11Test > testCreate() PASSED
+
+BulkResponseParserTest > testGetFailedPositions_firstFailLastSuccess() PASSED
+
+BulkResponseParserTest > testFindSuccessDocs() PASSED
+
+BulkResponseParserTest > testGetFailedPositions_allFailed() PASSED
+
+BulkResponseParserTest > testGetFailedPositions_allSuccess() PASSED
+
+IndexCreator_OS_2_11Test > testCreate_withRetryToRemoveValues() PASSED
+
+IndexCreator_OS_2_11Test > testCreate_invalidResponse_unprocessableIllegalArguments() PASSED
+
+IndexCreator_OS_2_11Test > testCreate_invalidResponse_noIllegalArguments() PASSED
+
+IndexCreator_OS_2_11Test > testCreate() PASSED
+
+WorkCoordinatorErrantAcquisitonsRetryTest > testSecondPhaseLeaseAcquisitionFailureKeepsRetrying(Class, Function) > [1] class org.opensearch.migrations.bulkload.workcoordination.OpenSearchWorkCoordinator$AssignedWorkDocumentNotFoundException, org.opensearch.migrations.bulkload.workcoordination.WorkCoordinatorErrantAcquisitonsRetryTest$$Lambda$885/0x0000000401407ac8@3408c95b PASSED
+
+BulkResponseParserTest > testFindSuccessDocs_truncatedResponse() PASSED
+
+BulkResponseParserTest > testGetFailedPositions_mixed() PASSED
+
+BulkResponseParserTest > testGetFailedPositions_firstSuccessLastFail() PASSED
+
+WorkCoordinatorErrantAcquisitonsRetryTest > testSecondPhaseLeaseAcquisitionFailureKeepsRetrying(Class, Function) > [2] class org.opensearch.migrations.bulkload.workcoordination.OpenSearchWorkCoordinator$AssignedWorkDocumentNotFoundException, org.opensearch.migrations.bulkload.workcoordination.WorkCoordinatorErrantAcquisitonsRetryTest$$Lambda$1115/0x0000000401600950@386dd761 PASSED
+
+WorkCoordinatorErrantAcquisitonsRetryTest > testSecondPhaseLeaseAcquisitionFailureKeepsRetrying(Class, Function) > [3] class org.opensearch.migrations.bulkload.workcoordination.OpenSearchWorkCoordinator$MalformedAssignedWorkDocumentException, org.opensearch.migrations.bulkload.workcoordination.WorkCoordinatorErrantAcquisitonsRetryTest$$Lambda$885/0x0000000401407ac8@42530cd6 PASSED
+
+WorkCoordinatorErrantAcquisitonsRetryTest > testSecondPhaseLeaseAcquisitionFailureKeepsRetrying(Class, Function) > [4] class org.opensearch.migrations.bulkload.workcoordination.OpenSearchWorkCoordinator$MalformedAssignedWorkDocumentException, org.opensearch.migrations.bulkload.workcoordination.WorkCoordinatorErrantAcquisitonsRetryTest$$Lambda$885/0x0000000401407ac8@2121d0ed PASSED
+
+FailedRequestsLoggerTest > testLogBulkFailure_withMdcAssertions() PASSED
+
+FailedRequestsLoggerTest > testBulkFailureLogsToCorrectLoggers() PASSED
+
+OpenSearchClientTest > testCreateIndex_errorOnCreation_retried() PASSED
+
+OpenSearchClientTest > testNonBulkRequest_doesNotAddGzipHeaders() PASSED
+
+OpenSearchClientTest > testCreateIndex() PASSED
+
+OpenSearchClientTest > testCreateIndex_errorOnCreation_notRetriedOnBadRequest() PASSED
+
+OpenSearchClientTest > testBulkRequest_doesNotAddGzipHeaders_whenNotSupported() PASSED
+
+OpenSearchClientTest > testBulkRequest_recordsTotalFailures() PASSED
+
+OpenSearchClientTest > testBulkRequest_warningLogContainsDetails_onError() PASSED
+
+OpenSearchClientTest > testBulkRequest_addsGzipHeaders_whenSupported() PASSED
+
+OpenSearchClientTest > testBulkRequest_truncatesLargeLog_onError() PASSED
+
+OpenSearchClientTest > testBulkRequest_succeedAfterRetries() PASSED
+
+SigV4AuthTransformerTest > testTransformWithPayloadMultipleTimes() PASSED
+
+SigV4AuthTransformerTest > testTransform() PASSED
+
+> Task :TrafficCapture:captureKafkaOffloader:check
+> Task :TrafficCapture:captureKafkaOffloader:build
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:assemble UP-TO-DATE
+
+> Task :TrafficCapture:trafficReplayer:test
+
+RefSafeHolderTest > testCloseWithNonNullResource() PASSED
+
+RefSafeHolderTest > testCloseWithNullResource() PASSED
+
+HttpByteBufFormatterTest > httpPostPacketToHttpParsedString() PASSED
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:spotlessJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:spotlessJavaCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:spotlessCheck UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:generateTestFixturesEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:compileTestFixturesJava NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:processTestFixturesResources NO-SOURCE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:testFixturesClasses UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:testFixturesJar UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:generateTestEffectiveLombokConfig UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:compileTestJava UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:delombok UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:javadoc UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:processTestResources UP-TO-DATE
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:testClasses UP-TO-DATE
+
+> Task :TrafficCapture:trafficReplayer:test
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [1] TRUNCATED, BYTE_ARRAY, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [2] TRUNCATED, BYTE_ARRAY, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [3] FULL_BYTES, BYTE_ARRAY, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [4] FULL_BYTES, BYTE_ARRAY, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [5] PARSED_HTTP, BYTE_ARRAY, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [6] PARSED_HTTP, BYTE_ARRAY, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [7] PARSED_HTTP_SORTED_HEADERS, BYTE_ARRAY, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [8] PARSED_HTTP_SORTED_HEADERS, BYTE_ARRAY, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [9] TRUNCATED, UNPOOLED_BYTEBUF, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [10] TRUNCATED, UNPOOLED_BYTEBUF, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [11] FULL_BYTES, UNPOOLED_BYTEBUF, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [12] FULL_BYTES, UNPOOLED_BYTEBUF, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [13] PARSED_HTTP, UNPOOLED_BYTEBUF, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [14] PARSED_HTTP, UNPOOLED_BYTEBUF, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [15] PARSED_HTTP_SORTED_HEADERS, UNPOOLED_BYTEBUF, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [16] PARSED_HTTP_SORTED_HEADERS, UNPOOLED_BYTEBUF, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [17] TRUNCATED, POOLED_BYTEBUF, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [18] TRUNCATED, POOLED_BYTEBUF, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [19] FULL_BYTES, POOLED_BYTEBUF, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [20] FULL_BYTES, POOLED_BYTEBUF, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [21] PARSED_HTTP, POOLED_BYTEBUF, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [22] PARSED_HTTP, POOLED_BYTEBUF, Empty PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [23] PARSED_HTTP_SORTED_HEADERS, POOLED_BYTEBUF, SimpleGetRequest PASSED
+
+HttpByteBufFormatterTest > httpPacketBufsToString(PacketPrintFormat, BufferType, BufferContent) > [24] PARSED_HTTP_SORTED_HEADERS, POOLED_BYTEBUF, Empty PASSED
+
+HttpByteBufFormatterTest > httpMessageTruncate(int) > [1] 0 PASSED
+
+HttpByteBufFormatterTest > httpMessageTruncate(int) > [2] 12 PASSED
+
+HttpByteBufFormatterTest > httpMessageTruncate(int) > [3] 652 PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [1] 200, 200, false, false, 0, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [2] 200, 200, null, null, 0, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [3] 200, 200, null, false, 0, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [4] 200, 200, true, true, 0, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [5] 200, 200, true, null, 0, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [6] 200, 200, true, false, 0, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [7] 200, 200, false, true, 0, RETRY PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [8] 200, 404, false, false, 0, RETRY PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [9] 200, 404, true, true, 0, RETRY PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [10] 200, 200, false, true, 5, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [11] 200, 404, false, false, 5, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [12] 200, 404, true, true, 5, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [13] 404, 200, false, false, 0, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [14] 200, 401, false, false, 0, DONE PASSED
+
+OpenSearchDefaultRetryTest > testBulkResults(int, int, String, String, int, RetryDirective) > [15] 200, 403, false, false, 0, DONE PASSED
+
+OpenSearchDefaultRetryTest > testNonBulkResults(int, int, RetryDirective) > [1] 200, 200, DONE PASSED
+
+OpenSearchDefaultRetryTest > testNonBulkResults(int, int, RetryDirective) > [2] 200, 404, RETRY PASSED
+
+OpenSearchDefaultRetryTest > testNonBulkResults(int, int, RetryDirective) > [3] 404, 200, DONE PASSED
+
+OpenSearchDefaultRetryTest > testNonBulkResults(int, int, RetryDirective) > [4] 200, 401, DONE PASSED
+
+OpenSearchDefaultRetryTest > testNonBulkResults(int, int, RetryDirective) > [5] 200, 403, DONE PASSED
+
+PayloadNotFoundTest > testTransformsPropagateExceptionProperly() PASSED
+
+OpenSearchDefaultRetryTest > testStatusCodeResults(int, int, RetryDirective) > [1] 200, 200, DONE PASSED
+
+OpenSearchDefaultRetryTest > testStatusCodeResults(int, int, RetryDirective) > [2] 200, 404, RETRY PASSED
+
+OpenSearchDefaultRetryTest > testStatusCodeResults(int, int, RetryDirective) > [3] 404, 200, DONE PASSED
+
+OpenSearchDefaultRetryTest > testStatusCodeResults(int, int, RetryDirective) > [4] 200, 401, DONE PASSED
+
+OpenSearchDefaultRetryTest > testStatusCodeResults(int, int, RetryDirective) > [5] 200, 403, DONE PASSED
+
+JsonEmitterTest > testEmitterWorksRoundTrip() PASSED
+
+ActiveContextMonitorTest > testThatCommonAncestorsAreShownJustEnough() PASSED
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:check
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformer:build
+
+> Task :TrafficCapture:trafficReplayer:test
+
+ActiveContextMonitorTest > test() PASSED
+
+ActiveContextMonitorTest > testThatNewerItemsArentInspected() PASSED
+
+HttpRetryTest > testTransientRequestFailuresAreRetriedAndCanSucceed() PASSED
+
+SimpleCapturedTrafficToHttpTransactionAccumulatorTest > generateAndTest(String, int, int, List, List) > easyTransactionsAreHandledCorrectly PASSED
+
+SimpleCapturedTrafficToHttpTransactionAccumulatorTest > generateAndTest(String, int, int, List, List) > transactionStartingWithSegmentsAreHandledCorrectly PASSED
+
+SimpleCapturedTrafficToHttpTransactionAccumulatorTest > generateAndTest(String, int, int, List, List) > skippedTrafficStreamWithNextStartingOnSegmentsAreHandledCorrectly PASSED
+
+ListKeyAdaptingCaseInsensitiveHeadersMapTest > testPutCanAdapt() PASSED
+
+HttpRetryTest > testPersistentRequestFailuresAreRetriedThenFailed() PASSED
+
+SigV4AuthTransformerFactoryTest > testSignatureProperlyApplied(String) > [1] content-type PASSED
+
+SigV4AuthTransformerFactoryTest > testSignatureProperlyApplied(String) > [2] Content-Type PASSED
+
+SigV4AuthTransformerFactoryTest > testSignatureProperlyApplied(String) > [3] CoNteNt-Type PASSED
+
+SigV4AuthTransformerFactoryTest > testSignatureProperlyAppliedNoPayload() PASSED
+
+> Task :DocumentsFromSnapshotMigration:check
+> Task :DocumentsFromSnapshotMigration:build
+
+> Task :MetadataMigration:test
+
+TransformersTest > testEmptyCliOutput() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:test
+
+PayloadRepackingTest > testSimplePayloadTransform(boolean, boolean) > [1] true, true PASSED
+
+PayloadRepackingTest > testSimplePayloadTransform(boolean, boolean) > [2] true, false PASSED
+
+PayloadRepackingTest > testSimplePayloadTransform(boolean, boolean) > [3] false, true PASSED
+
+PayloadRepackingTest > testSimplePayloadTransform(boolean, boolean) > [4] false, false PASSED
+
+[INFO ] 2026-01-23 18:46:21,213984 [Test worker] JavascriptTransformer - Context:  {
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "minor": 10,
+      "major": 7
+    }
+  },
+  "regex_mappings": [
+    {
+      "targetIndexPattern": "time-$1-$2",
+      "sourceIndexPattern": "time-(.*)",
+      "sourceTypePattern": "(.*)"
+    }
+  ],
+  "index_mappings": {
+    "indexb": {
+      "type2": "indexb",
+      "type1": "indexb"
+    },
+    "indexa": {
+      "type2": "indexa_2",
+      "type1": "indexa_1"
+    },
+    "socialTypes": {
+      "user": "communal",
+      "tweet": "communal"
+    }
+  }
+}
+
+
+> Task :MetadataMigration:test
+
+TransformersTest > testMultipleTransformersJsonOutput() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :TrafficCapture:trafficReplayer:test
+
+ExpiringTrafficStreamMapSequentialTest > testLinearConnectionsAreExpired() PASSED
+
+ExpiringTrafficStreamMapSequentialTest > testLinearConnectionsWithGreaterGranulatityAreExpired() PASSED
+
+ExpiringTrafficStreamMapSequentialTest > testLinearActivityWillPersist() PASSED
+
+[INFO ] 2026-01-23 18:46:21,486520 [Test worker] JavascriptTransformer - Context:  {
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "minor": 6,
+      "major": 5
+    }
+  },
+  "regex_mappings": [
+    {
+      "targetIndexPattern": "$1",
+      "sourceIndexPattern": "(.+)",
+      "sourceTypePattern": "_doc"
+    },
+    {
+      "targetIndexPattern": "$1_$2",
+      "sourceIndexPattern": "(.+)",
+      "sourceTypePattern": "(.+)"
+    }
+  ],
+  "index_mappings": {}
+}
+
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:test
+
+JsonJSTransformerProviderTest > testCreateTransformer_invalidBindings() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[INFO ] 2026-01-23 18:46:22,125832 [Test worker] JavascriptTransformer - Context:  {
+  "index_mappings": {
+    "indexc": {
+      "type2": "indexc"
+    },
+    "indexb": {
+      "type2": "indexb",
+      "type1": "indexb"
+    },
+    "indexa": {
+      "type2": "indexa_2",
+      "type1": "indexa_1"
+    }
+  },
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "major": 7,
+      "minor": 10
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceTypePattern": "(.*)",
+      "targetIndexPattern": "time-$1-$2",
+      "sourceIndexPattern": "time-(.*)"
+    },
+    {
+      "sourceTypePattern": "_doc",
+      "targetIndexPattern": "$1",
+      "sourceIndexPattern": "(.*)"
+    }
+  ]
+}
+
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:test
+
+TypeMappingsSanitizationTransformerTest > testCreateIndexWithIncludeTypeName() PASSED
+
+TypeMappingsSanitizationTransformerTest > test_unit_retargetCommandParameters() PASSED
+
+[INFO ] 2026-01-23 18:46:22,682739 [Test worker] TypeMappingsSanitizationTransformerTest - {"method":"PUT","URI":"/time-nov11-cpu/_doc/doc2","payload":{"inlinedJsonBody":{"name":"Some User","user_name":"user","email":"user@example.com"}}}
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:test
+
+PayloadRepackingTest > testJsonPayloadTransformation() PASSED
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :MetadataMigration:test
+
+TransformersTest > testSingleTransformerCliOutput() PASSED
+
+TransformersTest > testEmptyJsonOutput() PASSED
+
+> Task :TrafficCapture:captureOffloader:check
+> Task :TrafficCapture:captureOffloader:build
+
+> Task :RFS:test
+
+AllowlistEntryTest > testLiteralEntry_withSpecialChars() PASSED
+
+AllowlistEntryTest > testLiteralEntry_withHyphens() PASSED
+
+AllowlistEntryTest > testRegexEntry_complex() PASSED
+
+AllowlistEntryTest > testRegexEntry_simple() PASSED
+
+AllowlistEntryTest > testRegexEntry_caseInsensitive() PASSED
+
+AllowlistEntryTest > testLiteralEntry_withDots() PASSED
+
+AllowlistEntryTest > testRegexEntry_matchesEmptyString() PASSED
+
+AllowlistEntryTest > testRegexEntry_alternation() PASSED
+
+AllowlistEntryTest > testRegexEntry_withEscapedSpecialChars() PASSED
+
+AllowlistEntryTest > testRegexEntry_emptyPattern() PASSED
+
+AllowlistEntryTest > testLiteralEntry_startsWithRegexLikePattern() PASSED
+
+AllowlistEntryTest > testRegexEntry_fullMatch() PASSED
+
+AllowlistEntryTest > testLiteralEntry_exactMatch() PASSED
+
+AllowlistEntryTest > testEmptyString() PASSED
+
+AllowlistEntryTest > testRegexEntry_invalidPattern_unclosedGroup() PASSED
+
+AllowlistEntryTest > testRegexEntry_dotMatching() PASSED
+
+AllowlistEntryTest > testMatches_nullTestValue() PASSED
+
+AllowlistEntryTest > testNullValue() PASSED
+
+AllowlistEntryTest > testRegexEntry_withDigits() PASSED
+
+AllowlistEntryTest > testRegexEntry_invalidPattern() PASSED
+
+OpenSearchClientFactoryTest > testCheckCompatibilityModeFromResponse() PASSED
+
+OpenSearchClientFactoryTest > determineVersion_setsCompressionWhenTransient() PASSED
+
+DocumentReindexerTest > reindex_shouldTrimAndRemoveNewlineFromSource() PASSED
+
+OpenSearchClientFactoryTest > determineVersion_serverless_respectsDisableCompressionFlag() PASSED
+
+OpenSearchClientFactoryTest > determineVersion_setsCompressionTrue() PASSED
+
+OpenSearchClientFactoryTest > testGetClusterVersion_OS_Serverless() PASSED
+
+OpenSearchClientFactoryTest > testGetClusterVersion_AlphaVersion() PASSED
+
+OpenSearchClientFactoryTest > determineVersion_serverless_skipsCompressionCheckAndDefaultsToEnabled() PASSED
+
+OpenSearchClientFactoryTest > determineVersion_setsCompressionFalseWhenForcedOff() PASSED
+
+DocumentReindexerTest > reindex_shouldSendDocumentsLargerThanMaxBulkSize() PASSED
+
+OpenSearchClientFactoryTest > testGetClusterVersion_OS_CompatibilityModeFailure_UseFallback() PASSED
+
+OpenSearchClientFactoryTest > determineVersion_setsCompressionFalse() PASSED
+
+OpenSearchClientFactoryTest > testGetClusterVersion_OS_CompatibilityModeEnabled() PASSED
+
+OpenSearchClientFactoryTest > determineVersion_setsCompressionFalseWhenSettingMissing() PASSED
+
+OpenSearchClientFactoryTest > testGetClusterVersion_ES_7_10() PASSED
+
+OpenSearchClientFactoryTest > testGetClusterVersion_OS_CompatibilityModeDisableEnabled() PASSED
+
+DocumentReindexerTest > reindex_shouldBufferByTransformedSize() PASSED
+
+GzipPayloadRequestTransformerTest > testGzipCompressionWithDirectBuffer(int) > [1] 100 PASSED
+
+GzipPayloadRequestTransformerTest > testGzipCompressionWithDirectBuffer(int) > [2] 1024 PASSED
+
+GzipPayloadRequestTransformerTest > testGzipCompressionWithDirectBuffer(int) > [3] 10240 PASSED
+
+[INFO ] 2026-01-23 18:46:27,258316 [Test worker] JavascriptTransformer - Context:  {
+  "index_mappings": {
+    "split": {
+      "type2": "split_b",
+      "type1": "split_a"
+    },
+    "drop": {},
+    "union": {
+      "type2": "union",
+      "type1": "union"
+    },
+    "keep": {
+      "_doc": "keep"
+    }
+  },
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "minor": 8,
+      "major": 6
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceTypePattern": "(.*)",
+      "targetIndexPattern": "time-$1-$2",
+      "sourceIndexPattern": "time-(.*)"
+    }
+  ]
+}
+
+
+> Task :TrafficCapture:trafficReplayer:test
+
+TrafficReplayerTest > testInputStreamOfTrafficDeserializer() PASSED
+
+TrafficReplayerTest > testBasicAuthHeaderFromUsernameAndPassword() PASSED
+
+UtilsTest > testFoldLeft() PASSED
+
+TimeToResponseFulfillmentFutureMapTest > testAddsAndPopsAreOrdered() PASSED
+
+TrafficReplayerTest > testReader() PASSED
+
+NettyJsonToByteBufHandlerTest > testThatHttpContentsAreRepackagedToChunkSizeSpec() PASSED
+
+TracingTest > tracingWorks() PASSED
+
+TimeShifterTest > testShiftsBothWays() PASSED
+
+NettyJsonBodySerializeHandlerTest > testJsonSerializerHandler() PASSED
+
+KafkaTrafficCaptureSourceTest > testBuildPropertiesMSKAuthEnabled() PASSED
+
+[INFO ] 2026-01-23 18:46:28,318594 [Test worker] JavascriptTransformer - Context:  {
+  "index_mappings": {
+    "split": {
+      "type2": "split_b",
+      "type1": "split_a"
+    },
+    "drop": {},
+    "union": {
+      "type2": "union",
+      "type1": "union"
+    },
+    "keep": {
+      "_doc": "keep"
+    }
+  },
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "minor": 8,
+      "major": 6
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceTypePattern": "(.*)",
+      "targetIndexPattern": "time-$1-$2",
+      "sourceIndexPattern": "time-(.*)"
+    }
+  ]
+}
+
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:test
+
+JsonJSTransformerProviderTest > testCreateTransformer_scriptFile() PASSED
+
+JsonJSTransformerProviderTest > testCreateTransformer_missingScript() PASSED
+
+JsonJSTransformerProviderTest > testCreateTransformer_invalidScript() PASSED
+
+JsonJSTransformerProviderTest > testCreateTransformer_missingBindings() PASSED
+
+JsonJSTransformerProviderTest > testCreateTransformer_inlineScript() PASSED
+
+JsonJSTransformerProviderTest > testCreateTransformer_invalidFilePath() PASSED
+
+JsonJSTransformerProviderTest > testCreateTransformer_tooManyScriptSources() PASSED
+
+[INFO ] 2026-01-23 18:46:28,499766 [Test worker] JavascriptTransformer - Context:  {
+  "index_mappings": {
+    "split": {
+      "type2": "split_b",
+      "type1": "split_a"
+    },
+    "drop": {},
+    "union": {
+      "type2": "union",
+      "type1": "union"
+    },
+    "keep": {
+      "_doc": "keep"
+    }
+  },
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "minor": 8,
+      "major": 6
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceTypePattern": "(.*)",
+      "targetIndexPattern": "time-$1-$2",
+      "sourceIndexPattern": "time-(.*)"
+    }
+  ]
+}
+
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:test
+
+TypeMappingsSanitizationTransformerTest > testPutDocRegex() PASSED
+
+TypeMappingsSanitizationTransformerTest > testDefaultActionPreservesRequest(String) > [1] status PASSED
+
+TypeMappingsSanitizationTransformerTest > testDefaultActionPreservesRequest(String) > [2] _cat/indices PASSED
+
+TypeMappingsSanitizationTransformerTest > testDefaultActionPreservesRequest(String) > [3] _cat/indices/nov-* PASSED
+
+TypeMappingsSanitizationTransformerTest > testPutDoc() PASSED
+
+TypeMappingsSanitizationMetadataTest > testUnionTypeMappings() PASSED
+
+TypeMappingsSanitizationMetadataTest > testKeepTypeMappings() PASSED
+
+TypeMappingsSanitizationMetadataTest > testSplitTypeMappings() PASSED
+
+[INFO ] 2026-01-23 18:46:28,737820 [Test worker] JavascriptTransformer - Context:  {
+  "index_mappings": {
+    "split": {
+      "type2": "split_b",
+      "type1": "split_a"
+    },
+    "drop": {},
+    "union": {
+      "type2": "union",
+      "type1": "union"
+    },
+    "keep": {
+      "_doc": "keep"
+    }
+  },
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "minor": 8,
+      "major": 6
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceTypePattern": "(.*)",
+      "targetIndexPattern": "time-$1-$2",
+      "sourceIndexPattern": "time-(.*)"
+    }
+  ]
+}
+
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:test
+
+TypeMappingsSanitizationProviderTest > testMappingWithoutTypesAndLatestSourceInfoDoesNothing() PASSED
+
+TypeMappingsSanitizationProviderTest > testSimpleTransform() PASSED
+
+TypeMappingsSanitizationProviderTest > testTypeMappingsButNoSourcePropertiesThrows() PASSED
+
+TypeMappingsSanitizationProviderTest > testTypeMappingsWithSourcePropertiesWorks() PASSED
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:check
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJSTransformerProvider:build
+
+> Task :RFS:test
+
+GzipPayloadRequestTransformerTest > testGzipCompressionWithDirectBuffer(int) > [4] 1048576 PASSED
+
+GzipPayloadRequestTransformerTest > testEmptyInput() PASSED
+
+GzipPayloadRequestTransformerTest > testGzipCompression(int) > [1] 0 PASSED
+
+GzipPayloadRequestTransformerTest > testGzipCompression(int) > [2] 100 PASSED
+
+GzipPayloadRequestTransformerTest > testGzipCompression(int) > [3] 1024 PASSED
+
+GzipPayloadRequestTransformerTest > testGzipCompression(int) > [4] 10240 PASSED
+
+GzipPayloadRequestTransformerTest > testGzipCompression(int) > [5] 1048576 PASSED
+
+GzipPayloadRequestTransformerTest > testAlreadyCompressedPayload() PASSED
+
+SnapshotShardUnpackerTest > testUnpack_ThrowsCouldNotUnpackShard_WhenFileUnpackingFails(Path) PASSED
+
+DocumentReindexerTest > reindex_shouldRespectMaxConcurrentRequests() PASSED
+
+DocumentReindexerTest > reindex_shouldBufferByDocumentCount() PASSED
+
+DocumentReindexerTest > reindex_shouldTransformDocuments() PASSED
+
+DocumentReindexerTest > reindex_shouldBufferBySize() PASSED
+
+Transformer_ES_7_10_OS_2_11Test > transformGlobalMetadata_AsExpected() PASSED
+
+Transformer_ES_7_10_OS_2_11Test > transformIndexMetadata_AsExpected() PASSED
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:check
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonJoltMessageTransformerProvider:build
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:check
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformerProvider:build
+> Task :MetadataMigration:check
+> Task :MetadataMigration:build
+
+> Task :TrafficCapture:trafficReplayer:test
+
+RequestSenderOrchestratorTest > testFutureGraphBuildout() PASSED
+
+KafkaTrafficCaptureSourceTest > testSupplyTrafficWithUnformattedMessages() PASSED
+
+KafkaTrafficCaptureSourceTest > testSupplyTrafficFromSource() PASSED
+
+KafkaTrafficCaptureSourceTest > testBuildPropertiesWithProvidedPropertyFile() PASSED
+
+KafkaTrafficCaptureSourceTest > testBuildPropertiesBaseCase() PASSED
+
+KafkaTrafficCaptureSourceTest > testRecordToString() PASSED
+
+ExpiringTrafficStreamMapUnorderedTest > testConnectionsAreExpired1() PASSED
+
+ExpiringTrafficStreamMapUnorderedTest > testConnectionsAreExpired2() PASSED
+
+BlockingTrafficSourceTest > readNextChunkTest() PASSED
+
+> Task :TrafficCapture:trafficCaptureProxyServer:check
+> Task :TrafficCapture:trafficCaptureProxyServer:build
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:test
+
+TypeMappingsSanitizationMetadataTest > testDropTypeMappings() PASSED
+
+[INFO ] 2026-01-23 18:46:32,663839 [Test worker] JavascriptTransformer - Context:  {
+  "index_mappings": {},
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "major": 6,
+      "minor": 8
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceTypePattern": ".*",
+      "targetIndexPattern": "$1_transformed",
+      "sourceIndexPattern": "(test_e2e_0001_.*)"
+    },
+    {
+      "sourceTypePattern": "(.*)",
+      "targetIndexPattern": "$1",
+      "sourceIndexPattern": "(.*)"
+    }
+  ]
+}
+
+
+> Task :RFS:test
+
+OpenSearchClient_ES_6_8_Test > testCreateIndexWithIncludeTypeNameFalse() PASSED
+
+OpenSearchClient_ES_6_8_Test > testBulkRequestHasType_doc() PASSED
+
+ClusterProviderRegistryTest > testGetRemoteWriter_matchLoosely() PASSED
+
+ClusterProviderRegistryTest > testGetSnapshotReader_matchLoosely() PASSED
+
+ClusterProviderRegistryTest > testGetSnapshotReader_matchStrictly_NotFound() PASSED
+
+ClusterProviderRegistryTest > testGetRemoteWriter_matchStrictly_NotFound() PASSED
+
+ClusterProviderRegistryTest > testGetRemoteWriter_overridden() PASSED
+
+ClusterProviderRegistryTest > testGetSnapshotReader_ES_6_4() PASSED
+
+FilterSchemeTest > testFilterByAllowList_literal_withDotsAndHyphens() PASSED
+
+FilterSchemeTest > testFilterByAllowList_matches() PASSED
+
+FilterSchemeTest > testExcludedES717SystemIndices() PASSED
+
+FilterSchemeTest > testFilterByAllowList_regex_simple() PASSED
+
+FilterSchemeTest > testExcludedByExactName() PASSED
+
+FilterSchemeTest > testFilterByAllowList_mixed_literalAndRegex() PASSED
+
+FilterSchemeTest > testFilterByAllowList_regex_alternation() PASSED
+
+FilterSchemeTest > testFilterByAllowList_empty() PASSED
+
+FilterSchemeTest > testFilterByAllowList_regex_invalidPattern() PASSED
+
+FilterSchemeTest > testFilterByAllowList_literal_lookingLikeRegex() PASSED
+
+FilterSchemeTest > testExcludedXPackWatchIndices() PASSED
+
+FilterSchemeTest > testFilterByAllowList_regex_matchesMultipleItems() PASSED
+
+FilterSchemeTest > testFilterByAllowList_matches_with_period() PASSED
+
+FilterSchemeTest > testExcludedByPrefix() PASSED
+
+FilterSchemeTest > testExcludedBySuffix() PASSED
+
+FilterSchemeTest > testFilterByAllowList_regex_complex() PASSED
+
+FilterSchemeTest > testFilterByAllowList_regex_multiplePatterns() PASSED
+
+FilterSchemeTest > testFilterByAllowList_null() PASSED
+
+FilterSchemeTest > testFilterByAllowList_regex_withDigits() PASSED
+
+FilterSchemeTest > testFilterByAllowList_mixed_withInvalidRegex() PASSED
+
+FilterSchemeTest > testFilterByAllowList_regex_emptyPattern() PASSED
+
+FilterSchemeTest > testExcludedKibanaIndexTemplates() PASSED
+
+FilterSchemeTest > testFilterByAllowList_regex_withEscapedDot() PASSED
+
+DeleteOpTest > testDeleteOp() PASSED
+
+SnapshotRepoData_ES_7_10Test > testFromRepoFile_default() PASSED
+
+SnapshotRepoData_ES_7_10Test > testFromRepoFile_extraFields() PASSED
+
+GlobalMetadataCreatorResultsTest > testFatalIssueCount_noFatalIssues() PASSED
+
+GlobalMetadataCreatorResultsTest > testFatalIssueCount_hasFatalIssues() PASSED
+
+> Task :TrafficCapture:nettyWireLogging:check
+> Task :TrafficCapture:nettyWireLogging:build
+
+> Task :TrafficCapture:trafficReplayer:test
+
+ResultsToLogsConsumerTest > testTupleNewWithNullKeyThrows() PASSED
+
+NettyPacketToHttpConsumerTest > testThatTestSetupIsCorrect() PASSED
+
+ResultsToLogsConsumerTest > testTransformerWithJsonJoltTransformer() PASSED
+
+ResultsToLogsConsumerTest > testOutputterWithNulls() PASSED
+
+ResultsToLogsConsumerTest > testOutputterWithException() PASSED
+
+HttpJsonTransformingConsumerTest > testSomeRequestProcessing() PASSED
+
+[INFO ] 2026-01-23 18:46:33,056132 [Test worker] TypeMappingsSanitizationDocBackfillTest - resultStr = [{"schema":"rfs-opensearch-bulk-v1","operation_type":"index","operation":{"_index":"test_e2e_0001_1234_transformed","_id":"1"},"document":{"field1":"value1"},"include_document":true},{"schema":"rfs-opensearch-bulk-v1","operation_type":"index","operation":{"_index":"test_e2e_0001_1234_transformed","_id":"1"},"document":{"field1":"value1"},"include_document":true},{"schema":"rfs-opensearch-bulk-v1","operation_type":"index","operation":{"_index":"test_e2e_0001_1234_transformed","_id":"1"},"document":{"field1":"value1"},"include_document":true},{"schema":"rfs-opensearch-bulk-v1","operation_type":"index","operation":{"_index":"test_e2e_0001_1234_transformed","_id":"1"},"document":{"field1":"value1"},"include_document":true},{"schema":"rfs-opensearch-bulk-v1","operation_type":"index","operation":{"_index":"test_e2e_0001_1234_transformed","_id":"1"},"document":{"field1":"value1"},"include_document":true},{"schema":"rfs-opensearch-bulk-v1","operation_type":"index","operation":{"_index":"test_e2e_0001_1234_transformed","_id":"1"},"document":{"field1":"value1"},"include_document":true}]
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:test
+
+TypeMappingsSanitizationDocBackfillTest > testAsBatch() PASSED
+
+[INFO ] 2026-01-23 18:46:33,295447 [Test worker] JavascriptTransformer - Context:  {
+  "index_mappings": {},
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "major": 7,
+      "minor": 10
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceTypePattern": "_doc",
+      "targetIndexPattern": "$1",
+      "sourceIndexPattern": "(.+)"
+    },
+    {
+      "sourceTypePattern": "(.+)",
+      "targetIndexPattern": "$1_$2",
+      "sourceIndexPattern": "(.+)"
+    }
+  ]
+}
+
+[INFO ] 2026-01-23 18:46:33,304633 [Test worker] TypeMappingsSanitizationDocBackfillTest - resultStr = {"schema":"rfs-opensearch-bulk-v1","operation_type":"index","operation":{"_index":"performance_network","_id":"1"},"document":{"field1":"value1"},"include_document":true}
+[INFO ] 2026-01-23 18:46:33,355976 [Test worker] JavascriptTransformer - Context:  {
+  "index_mappings": {},
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "major": 6,
+      "minor": 8
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceTypePattern": ".*",
+      "targetIndexPattern": "$1_transformed",
+      "sourceIndexPattern": "(test_e2e_0001_.*)"
+    },
+    {
+      "sourceTypePattern": "(.*)",
+      "targetIndexPattern": "$1",
+      "sourceIndexPattern": "(.*)"
+    }
+  ]
+}
+
+[INFO ] 2026-01-23 18:46:33,371441 [Test worker] TypeMappingsSanitizationDocBackfillTest - resultStr = {"schema":"rfs-opensearch-bulk-v1","operation_type":"index","operation":{"_index":"test_e2e_0001_1234_transformed","_id":"1"},"document":{"field1":"value1"},"include_document":true}
+[INFO ] 2026-01-23 18:46:33,424374 [Test worker] JavascriptTransformer - Context:  {
+  "index_mappings": {},
+  "featureFlags": {},
+  "source_properties": {
+    "version": {
+      "major": 6,
+      "minor": 8
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceTypePattern": ".*",
+      "targetIndexPattern": "$1_transformed",
+      "sourceIndexPattern": "(test_e2e_0001_.*)"
+    },
+    {
+      "sourceTypePattern": "(.*)",
+      "targetIndexPattern": "$1",
+      "sourceIndexPattern": "(.*)"
+    }
+  ]
+}
+
+[INFO ] 2026-01-23 18:46:33,428981 [Test worker] TypeMappingsSanitizationDocBackfillTest - resultStr = {"schema":"rfs-opensearch-bulk-v1","operation_type":"index","operation":{"_index":"test_e2e_0001_1234_transformed","_id":"1"},"document":{"field1":"value1"},"include_document":true}
+[INFO ] 2026-01-23 18:46:34,210392 [Test worker] JavascriptTransformer - Context:  {
+  "source_properties": {
+    "version": {
+      "major": 5,
+      "minor": 8
+    }
+  },
+  "featureFlags": {},
+  "index_mappings": {
+    "indexa": {
+      "type1": "indexa_1",
+      "type2": "indexa_2",
+      "user": "a_user"
+    },
+    "indexb": {
+      "type1": "indexb",
+      "type2": "indexb"
+    },
+    "socialTypes": {
+      "user": "communal",
+      "tweet": "communal"
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceIndexPattern": "time-(.*)",
+      "targetIndexPattern": "time-$1-$2",
+      "sourceTypePattern": "(.*)"
+    }
+  ]
+}
+
+[INFO ] 2026-01-23 18:46:34,528844 [Test worker] JavascriptTransformer - Context:  {
+  "source_properties": {
+    "version": {
+      "major": 5,
+      "minor": 8
+    }
+  },
+  "featureFlags": {},
+  "index_mappings": {
+    "indexa": {
+      "type1": "indexa_1",
+      "type2": "indexa_2",
+      "user": "a_user"
+    },
+    "indexb": {
+      "type1": "indexb",
+      "type2": "indexb"
+    },
+    "socialTypes": {
+      "user": "communal",
+      "tweet": "communal"
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceIndexPattern": "time-(.*)",
+      "targetIndexPattern": "time-$1-$2",
+      "sourceTypePattern": "(.*)"
+    }
+  ]
+}
+
+[INFO ] 2026-01-23 18:46:34,581650 [Test worker] JavascriptTransformer - Context:  {
+  "source_properties": {
+    "version": {
+      "major": 5,
+      "minor": 8
+    }
+  },
+  "featureFlags": {},
+  "index_mappings": {
+    "indexa": {
+      "type1": "indexa_1",
+      "type2": "indexa_2",
+      "user": "a_user"
+    },
+    "indexb": {
+      "type1": "indexb",
+      "type2": "indexb"
+    },
+    "socialTypes": {
+      "user": "communal",
+      "tweet": "communal"
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceIndexPattern": "time-(.*)",
+      "targetIndexPattern": "time-$1-$2",
+      "sourceTypePattern": "(.*)"
+    }
+  ]
+}
+
+[INFO ] 2026-01-23 18:46:34,641644 [Test worker] JavascriptTransformer - Context:  {
+  "source_properties": {
+    "version": {
+      "major": 5,
+      "minor": 8
+    }
+  },
+  "featureFlags": {},
+  "index_mappings": {
+    "indexa": {
+      "type1": "indexa_1",
+      "type2": "indexa_2",
+      "user": "a_user"
+    },
+    "indexb": {
+      "type1": "indexb",
+      "type2": "indexb"
+    },
+    "socialTypes": {
+      "user": "communal",
+      "tweet": "communal"
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceIndexPattern": "time-(.*)",
+      "targetIndexPattern": "time-$1-$2",
+      "sourceTypePattern": "(.*)"
+    }
+  ]
+}
+
+[INFO ] 2026-01-23 18:46:34,685040 [Test worker] JavascriptTransformer - Context:  {
+  "source_properties": {
+    "version": {
+      "major": 5,
+      "minor": 8
+    }
+  },
+  "featureFlags": {},
+  "index_mappings": {
+    "indexa": {
+      "type1": "indexa_1",
+      "type2": "indexa_2",
+      "user": "a_user"
+    },
+    "indexb": {
+      "type1": "indexb",
+      "type2": "indexb"
+    },
+    "socialTypes": {
+      "user": "communal",
+      "tweet": "communal"
+    }
+  },
+  "regex_mappings": [
+    {
+      "sourceIndexPattern": "time-(.*)",
+      "targetIndexPattern": "time-$1-$2",
+      "sourceTypePattern": "(.*)"
+    }
+  ]
+}
+
+
+> Task :RFS:test
+
+GzipPayloadRequestTransformerTest > testLargeInputWithDirectBuffer() PASSED
+
+> Task :TrafficCapture:trafficReplayer:test
+
+HttpJsonTransformingConsumerTest > testPartialBodyIsPassedThrough() PASSED
+
+HttpJsonTransformingConsumerTest > testNewlineDelimitedJsonBodyIsHandled() PASSED
+
+TypeMappingTransformationTest > testBulkTransformation(String, String, String) > [1] /_bulk, /_bulk, btc-rfs_transformed PASSED
+
+TypeMappingTransformationTest > testBulkTransformation(String, String, String) > [2] /btc-rfs/_bulk, /btc-rfs_transformed/_bulk, null PASSED
+
+TypeMappingTransformationTest > testBulkTransformation(String, String, String) > [3] /btc-rfs/sometype/_bulk, /btc-rfs_transformed-sometype/_bulk, null PASSED
+
+HeaderTransformerTest > testMalformedPayloadIsPassedThrough() PASSED
+
+HttpJsonTransformingConsumerTest > testMalformedPayload_andThrowingTransformation_IsPassedThrough() PASSED
+
+HeaderTransformerTest > testTransformer() PASSED
+
+HttpJsonTransformingConsumerTest > testPartialNewlineDelimitedJsonBodyIsHandled() PASSED
+
+HttpJsonTransformingConsumerTest > testRemoveAuthHeadersWorks() PASSED
+
+> Task :TrafficCapture:trafficReplayer:check
+> Task :TrafficCapture:trafficReplayer:build
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:test
+
+TypeMappingsSanitizationDocBackfillTest > test() PASSED
+
+TypeMappingsSanitizationDocBackfillTest > testWithTypeMapping() PASSED
+
+TypeMappingsSanitizationDocBackfillTest > testWithoutTypeMapping_hasCorrectDefault() PASSED
+
+TypeMappingsSanitizationCreateIndexTest > testMultiTypeIndexMerged() PASSED
+
+TypeMappingsSanitizationCreateIndexTest > testCreateIndexWithoutType() PASSED
+
+TypeMappingsSanitizationCreateIndexTest > testPutSingleTypeIndex() PASSED
+
+TypeMappingsSanitizationCreateIndexTest > testPutSingleTypeToMissingTarget() PASSED
+
+TypeMappingsSanitizationCreateIndexTest > testCreateIndexWithoutTypeButWithMappings() PASSED
+
+> Task :RFS:test
+
+GzipPayloadRequestTransformerTest > testLargeInput() PASSED
+
+RemoteReaderClientTest > testGetJsonForTemplateApis_WithInvalidComponentTemplate() PASSED
+
+RemoteReaderClientTest > testGetJsonForTemplateApis_WithSingleLegacyTemplate() PASSED
+
+RemoteReaderClientTest > testGetJsonForTemplateApis_WithMultipleLegacyTemplate() PASSED
+
+RemoteReaderClientTest > testGetJsonForTemplateApis_WithOneComponentTemplate() PASSED
+
+RemoteReaderClientTest > testGetJsonForTemplateApis_WithMultipleComponentTemplate() PASSED
+
+> Task :RFS:check
+> Task :RFS:build
+[INFO ] 2026-01-23 18:46:37,873578 [Test worker] TypeMappingsSanitizationTransformerBulkTest - Total time=PT3.127324299S over 10000 runs. Avg: PT0.000312732S, Uncompressed Throughput: 3.4611755404662574 MBps
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:test
+
+TypeMappingsSanitizationTransformerBulkTest > testBulkRequest() PASSED
+
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:check
+> Task :transformation:transformationPlugins:jsonMessageTransformers:jsonTypeMappingsSanitizationTransformer:build
+
+[Incubating] Problems report is available at: file:///Users/akurait/workplace/opensearch-migrations-main/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 1m 42s
+465 actionable tasks: 76 executed, 389 up-to-date
+
+Publishing build scan...
+https://gradle.com/s/jzjl35ujsv4xw
+
+Configuration cache entry stored.
