@@ -820,14 +820,10 @@ spec:
             EOF
             
             # Install OpenSearch 1.3
-            helm install {{inputs.parameters.cluster-name}} opensearch/opensearch \
+            helm install {{inputs.parameters.cluster-name}} opensearch/opensearch --set rbac.create=false --set rbac.serviceAccountName=migration-console-access-role \
               --namespace {{inputs.parameters.namespace}} \
               --values /tmp/opensearch-values.yaml \
               --set-file config."opensearch\.yml"=/tmp/opensearch.yml
-            
-            kubectl patch statefulset {{inputs.parameters.cluster-name}} -n {{inputs.parameters.namespace}} \
-              --type='json' -p='[{"op": "add", "path": "/spec/template/spec/serviceAccountName", "value": "migration-console-access-role"}]'
-            kubectl rollout restart statefulset {{inputs.parameters.cluster-name}} -n {{inputs.parameters.namespace}}
             
             # Create cluster credentials secret (OpenSearch 1.3 default: admin/admin)
             kubectl create secret generic "{{inputs.parameters.cluster-name}}-creds" \
@@ -916,14 +912,10 @@ spec:
             EOF
             
             # Install OpenSearch 2.19.1
-            helm install {{inputs.parameters.cluster-name}} opensearch/opensearch \
+            helm install {{inputs.parameters.cluster-name}} opensearch/opensearch --set rbac.create=false --set rbac.serviceAccountName=migration-console-access-role \
               --namespace {{inputs.parameters.namespace}} \
               --values /tmp/opensearch-values.yaml \
               --set-file config."opensearch\.yml"=/tmp/opensearch.yml
-            
-            kubectl patch statefulset {{inputs.parameters.cluster-name}} -n {{inputs.parameters.namespace}} \
-              --type='json' -p='[{"op": "add", "path": "/spec/template/spec/serviceAccountName", "value": "migration-console-access-role"}]'
-            kubectl rollout restart statefulset {{inputs.parameters.cluster-name}} -n {{inputs.parameters.namespace}}
             
             # Create cluster credentials secret (OpenSearch 2.19 password set via OPENSEARCH_INITIAL_ADMIN_PASSWORD)
             kubectl create secret generic "{{inputs.parameters.cluster-name}}-creds" \
@@ -1008,14 +1000,10 @@ spec:
                 - "repository-s3"
             EOF
             
-            helm install {{inputs.parameters.cluster-name}} opensearch/opensearch \
+            helm install {{inputs.parameters.cluster-name}} opensearch/opensearch --set rbac.create=false --set rbac.serviceAccountName=migration-console-access-role \
               --namespace {{inputs.parameters.namespace}} \
               --values /tmp/opensearch-values.yaml \
               --set-file config."opensearch\.yml"=/tmp/opensearch.yml
-            
-            kubectl patch statefulset {{inputs.parameters.cluster-name}} -n {{inputs.parameters.namespace}} \
-              --type='json' -p='[{"op": "add", "path": "/spec/template/spec/serviceAccountName", "value": "migration-console-access-role"}]'
-            kubectl rollout restart statefulset {{inputs.parameters.cluster-name}} -n {{inputs.parameters.namespace}}
             
             # Create cluster credentials secret (OpenSearch 3.1 password set via OPENSEARCH_INITIAL_ADMIN_PASSWORD)
             kubectl create secret generic "{{inputs.parameters.cluster-name}}-creds" \
