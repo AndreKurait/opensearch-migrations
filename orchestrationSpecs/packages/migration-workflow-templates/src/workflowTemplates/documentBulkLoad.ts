@@ -5,7 +5,8 @@ import {
     CONSOLE_SERVICES_CONFIG_FILE,
     NAMED_TARGET_CLUSTER_CONFIG,
     ResourceRequirementsType,
-    RFS_OPTIONS
+    RFS_OPTIONS,
+    DEFAULT_RESOURCES
 } from "@opensearch-migrations/schemas";
 import {MigrationConsole} from "./migrationConsole";
 
@@ -32,6 +33,17 @@ import {CommonWorkflowParameters} from "./commonUtils/workflowParameters";
 import {makeRequiredImageParametersForKeys} from "./commonUtils/imageDefinitions";
 import {makeTargetParamDict, makeCoordinatorParamDict} from "./commonUtils/clusterSettingManipulators";
 import {getHttpAuthSecretName} from "./commonUtils/clusterSettingManipulators";
+
+// Fixed prefix for coordinator cluster to avoid naming conflicts with target clusters
+const COORDINATOR_CLUSTER_PREFIX = "rfs-coordinator-";
+
+function getCoordinatorClusterName(sessionName: BaseExpression<string>) {
+    return expr.concat(expr.literal(COORDINATOR_CLUSTER_PREFIX), sessionName);
+}
+
+function getCoordinatorCredsSecretName(sessionName: BaseExpression<string>) {
+    return expr.concat(getCoordinatorClusterName(sessionName), expr.literal("-creds"));
+}
 
 function makeParamsDict(
     sourceVersion: BaseExpression<z.infer<typeof CLUSTER_VERSION_STRING>>,
@@ -378,6 +390,229 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addSteps(b => b.addStepGroup(c => c)))
 
 
+    // Coordinator cluster deployment templates (OS 3.1)
+    .addTemplate("createCoordinatorSecret", t => t
+        .addRequiredInput("sessionName", typeToken<string>())
+        .addResourceTask(b => b
+            .setDefinition({
+                action: "apply",
+                manifest: {
+                    apiVersion: "v1",
+                    kind: "Secret",
+                    metadata: {
+                        name: makeStringTypeProxy(getCoordinatorCredsSecretName(b.inputs.sessionName)),
+                        labels: {
+                            "rfs-coordinator": "true",
+                            "session-name": makeStringTypeProxy(b.inputs.sessionName)
+                        }
+                    },
+                    type: "Opaque",
+                    stringData: {
+                        username: "admin",
+                        password: "myStrongPassword123!"
+                    }
+                }
+            })))
+
+
+    .addTemplate("createCoordinatorService", t => t
+        .addRequiredInput("sessionName", typeToken<string>())
+        .addResourceTask(b => b
+            .setDefinition({
+                action: "apply",
+                manifest: {
+                    apiVersion: "v1",
+                    kind: "Service",
+                    metadata: {
+                        name: makeStringTypeProxy(getCoordinatorClusterName(b.inputs.sessionName)),
+                        labels: {
+                            app: makeStringTypeProxy(getCoordinatorClusterName(b.inputs.sessionName)),
+                            "rfs-coordinator": "true",
+                            "session-name": makeStringTypeProxy(b.inputs.sessionName)
+                        }
+                    },
+                    spec: {
+                        selector: {
+                            app: makeStringTypeProxy(getCoordinatorClusterName(b.inputs.sessionName))
+                        },
+                        ports: [{
+                            name: "https",
+                            port: 9200,
+                            targetPort: "https"
+                        }]
+                    }
+                }
+            })))
+
+
+    .addTemplate("createCoordinatorStatefulSet", t => t
+        .addRequiredInput("sessionName", typeToken<string>())
+        .addResourceTask(b => b
+            .setDefinition({
+                action: "apply",
+                manifest: {
+                    apiVersion: "apps/v1",
+                    kind: "StatefulSet",
+                    metadata: {
+                        name: makeStringTypeProxy(getCoordinatorClusterName(b.inputs.sessionName)),
+                        labels: {
+                            app: makeStringTypeProxy(getCoordinatorClusterName(b.inputs.sessionName)),
+                            "rfs-coordinator": "true",
+                            "session-name": makeStringTypeProxy(b.inputs.sessionName)
+                        }
+                    },
+                    spec: {
+                        serviceName: makeStringTypeProxy(getCoordinatorClusterName(b.inputs.sessionName)),
+                        replicas: 1,
+                        persistentVolumeClaimRetentionPolicy: {
+                            whenDeleted: "Delete",
+                            whenScaled: "Retain"
+                        },
+                        selector: {
+                            matchLabels: {
+                                app: makeStringTypeProxy(getCoordinatorClusterName(b.inputs.sessionName))
+                            }
+                        },
+                        template: {
+                            metadata: {
+                                labels: {
+                                    app: makeStringTypeProxy(getCoordinatorClusterName(b.inputs.sessionName)),
+                                    "rfs-coordinator": "true",
+                                    "session-name": makeStringTypeProxy(b.inputs.sessionName)
+                                }
+                            },
+                            spec: {
+                                serviceAccountName: "argo-workflow-executor",
+                                initContainers: [{
+                                    name: "install-plugins",
+                                    image: "opensearchproject/opensearch:3.1.0",
+                                    command: ["sh", "-c", `set -euo pipefail
+cp -r /usr/share/opensearch/plugins/* /plugins/ 2>/dev/null || true
+bin/opensearch-plugin install --batch repository-s3
+cp -r /usr/share/opensearch/plugins/repository-s3 /plugins/`],
+                                    volumeMounts: [{
+                                        name: "plugins",
+                                        mountPath: "/plugins"
+                                    }]
+                                }],
+                                containers: [{
+                                    name: "opensearch",
+                                    image: "opensearchproject/opensearch:3.1.0",
+                                    ports: [{
+                                        name: "https",
+                                        containerPort: 9200
+                                    }],
+                                    env: [
+                                        { name: "cluster.name", value: makeStringTypeProxy(getCoordinatorClusterName(b.inputs.sessionName)) },
+                                        { name: "discovery.type", value: "single-node" },
+                                        {
+                                            name: "OPENSEARCH_INITIAL_ADMIN_USERNAME",
+                                            valueFrom: {
+                                                secretKeyRef: {
+                                                    name: makeStringTypeProxy(getCoordinatorCredsSecretName(b.inputs.sessionName)),
+                                                    key: "username"
+                                                }
+                                            }
+                                        },
+                                        {
+                                            name: "OPENSEARCH_INITIAL_ADMIN_PASSWORD",
+                                            valueFrom: {
+                                                secretKeyRef: {
+                                                    name: makeStringTypeProxy(getCoordinatorCredsSecretName(b.inputs.sessionName)),
+                                                    key: "password"
+                                                }
+                                            }
+                                        },
+                                        { name: "OPENSEARCH_JAVA_OPTS", value: "-Xms2g -Xmx2g" }
+                                    ],
+                                    resources: {
+                                        requests: { cpu: "2", memory: "4Gi" },
+                                        limits: { cpu: "2", memory: "4Gi" }
+                                    },
+                                    readinessProbe: {
+                                        exec: {
+                                            command: ["sh", "-c", `curl -sk -u "\${OPENSEARCH_INITIAL_ADMIN_USERNAME}:\${OPENSEARCH_INITIAL_ADMIN_PASSWORD}" "https://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s"`]
+                                        },
+                                        initialDelaySeconds: 5,
+                                        periodSeconds: 5,
+                                        timeoutSeconds: 3,
+                                        failureThreshold: 24
+                                    },
+                                    volumeMounts: [
+                                        { name: "data", mountPath: "/usr/share/opensearch/data" },
+                                        { name: "plugins", mountPath: "/usr/share/opensearch/plugins" }
+                                    ]
+                                }],
+                                volumes: [{
+                                    name: "plugins",
+                                    emptyDir: {}
+                                }]
+                            }
+                        },
+                        volumeClaimTemplates: [{
+                            metadata: { name: "data" },
+                            spec: {
+                                accessModes: ["ReadWriteOnce"],
+                                resources: {
+                                    requests: { storage: "1Gi" }
+                                }
+                            }
+                        }]
+                    }
+                }
+            })))
+
+
+    .addTemplate("deployCoordinatorCluster", t => t
+        .addRequiredInput("sessionName", typeToken<string>())
+        .addSteps(b => b
+            .addStep("createSecret", INTERNAL, "createCoordinatorSecret", c =>
+                c.register({ sessionName: b.inputs.sessionName }))
+            .addStep("createService", INTERNAL, "createCoordinatorService", c =>
+                c.register({ sessionName: b.inputs.sessionName }))
+            .addStep("createStatefulSet", INTERNAL, "createCoordinatorStatefulSet", c =>
+                c.register({ sessionName: b.inputs.sessionName }))
+        ))
+
+
+    .addTemplate("waitForCoordinatorClusterReady", t => t
+        .addRequiredInput("sessionName", typeToken<string>())
+        .addInputsFromRecord(makeRequiredImageParametersForKeys(["MigrationConsole"]))
+        .addContainer(cb => cb
+            .addImageInfo(cb.inputs.imageMigrationConsoleLocation, cb.inputs.imageMigrationConsolePullPolicy)
+            .addCommand(["sh", "-c"])
+            .addResources(DEFAULT_RESOURCES.MIGRATION_CONSOLE_CLI)
+            .addArgs([makeStringTypeProxy(expr.fillTemplate(
+                `kubectl wait --for=condition=ready pod/{{CLUSTER_NAME}}-0 --timeout=300s`,
+                { "CLUSTER_NAME": getCoordinatorClusterName(cb.inputs.sessionName) }
+            ))]))
+        .addRetryParameters({
+            limit: "60",
+            retryPolicy: "Always",
+            backoff: { duration: "5", factor: "1", cap: "5" }
+        }))
+
+
+    .addTemplate("deleteCoordinatorCluster", t => t
+        .addRequiredInput("sessionName", typeToken<string>())
+        .addInputsFromRecord(makeRequiredImageParametersForKeys(["MigrationConsole"]))
+        .addContainer(cb => cb
+            .addImageInfo(cb.inputs.imageMigrationConsoleLocation, cb.inputs.imageMigrationConsolePullPolicy)
+            .addCommand(["sh", "-c"])
+            .addResources(DEFAULT_RESOURCES.MIGRATION_CONSOLE_CLI)
+            .addArgs([makeStringTypeProxy(expr.fillTemplate(
+                `set -e
+CLUSTER_NAME="{{CLUSTER_NAME}}"
+echo "Deleting coordinator cluster: $CLUSTER_NAME"
+kubectl delete statefulset "$CLUSTER_NAME" --ignore-not-found
+kubectl delete service "$CLUSTER_NAME" --ignore-not-found
+kubectl delete secret "$CLUSTER_NAME-creds" --ignore-not-found
+kubectl delete pvc -l app="$CLUSTER_NAME" --ignore-not-found
+echo "Coordinator cluster deleted"`,
+                { "CLUSTER_NAME": getCoordinatorClusterName(cb.inputs.sessionName) }
+            ))])))
+
+
     .addTemplate("setupAndRunBulkLoad", t => t
         .addRequiredInput("sourceVersion", typeToken<z.infer<typeof CLUSTER_VERSION_STRING>>())
         .addRequiredInput("targetConfig", typeToken<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>())
@@ -387,14 +622,49 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addRequiredInput("documentBackfillConfig", typeToken<z.infer<typeof RFS_OPTIONS>>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["ReindexFromSnapshot", "MigrationConsole"]))
 
-        .addSteps(b => b
-            .addStep("configureCoordinator", INTERNAL, "doNothing")
-            .addStep("runBulkLoad", INTERNAL, "runBulkLoad", c =>
-                c.register({
-                    ...selectInputsForRegister(b, c),
-                    coordinatorConfig: b.inputs.targetConfig
-                }))
-        )
+        .addSteps(b => {
+            const useTargetForCoordination = expr.dig(
+                expr.deserializeRecord(b.inputs.documentBackfillConfig),
+                ["useTargetClusterForWorkCoordination"],
+                true
+            );
+            const deployCoordinator = expr.not(useTargetForCoordination);
+            const coordinatorClusterName = getCoordinatorClusterName(b.inputs.sessionName);
+            const coordinatorCredsSecretName = getCoordinatorCredsSecretName(b.inputs.sessionName);
+
+            // Build coordinator config for dedicated cluster
+            const dedicatedCoordinatorConfig = expr.serialize(expr.makeDict({
+                name: expr.literal("coordinator"),
+                endpoint: expr.concat(expr.literal("https://"), coordinatorClusterName, expr.literal(":9200")),
+                allowInsecure: expr.literal(true),
+                version: expr.literal("OS 3.1"),
+                authConfig: expr.makeDict({
+                    basic: expr.makeDict({
+                        secretName: coordinatorCredsSecretName
+                    })
+                })
+            }));
+
+            return b
+                .addStep("deployCoordinatorCluster", INTERNAL, "deployCoordinatorCluster", c =>
+                    c.register({ sessionName: b.inputs.sessionName }),
+                    { when: { templateExp: deployCoordinator } })
+                .addStep("waitForCoordinatorClusterReady", INTERNAL, "waitForCoordinatorClusterReady", c =>
+                    c.register({ ...selectInputsForRegister(b, c), sessionName: b.inputs.sessionName }),
+                    { when: { templateExp: deployCoordinator } })
+                .addStep("runBulkLoad", INTERNAL, "runBulkLoad", c =>
+                    c.register({
+                        ...selectInputsForRegister(b, c),
+                        coordinatorConfig: expr.ternary(
+                            deployCoordinator,
+                            dedicatedCoordinatorConfig,
+                            b.inputs.targetConfig
+                        )
+                    }))
+                .addStep("deleteCoordinatorCluster", INTERNAL, "deleteCoordinatorCluster", c =>
+                    c.register({ ...selectInputsForRegister(b, c), sessionName: b.inputs.sessionName }),
+                    { when: { templateExp: deployCoordinator } });
+        })
     )
 
     .getFullScope();

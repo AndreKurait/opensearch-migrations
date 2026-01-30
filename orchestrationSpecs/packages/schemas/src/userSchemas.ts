@@ -195,6 +195,8 @@ export const USER_RFS_OPTIONS = z.object({
     maxConnections: z.number().default(10).optional(),
     maxShardSizeBytes: z.number().default(80*1024*1024*1024).optional(),
     otelCollectorEndpoint: z.string().default("http://otel-collector:4317").optional(),
+    useTargetClusterForWorkCoordination: z.boolean().default(true).optional()
+        .describe("When true, uses target cluster for work coordination. When false, deploys a dedicated OS 3.1 coordinator cluster."),
 
     skipApproval: z.boolean().default(false).optional(),  // TODO - fullmigration
     resources: z.preprocess((v) =>
