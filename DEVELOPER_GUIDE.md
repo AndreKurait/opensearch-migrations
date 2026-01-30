@@ -105,10 +105,18 @@ We use Spotless for code formatting. To check and apply the code style:
 
 ## Pre-Commit Hooks
 
+This project uses the [pre-commit](https://pre-commit.com/) framework for managing git hooks. The configured hooks check for trailing whitespace, proper end-of-file formatting, valid YAML/JSON syntax, and Python code style (flake8).
+
 Install the pre-commit hooks:
 
 ```bash
 ./install_githooks.sh
+```
+
+To manually run all hooks against all files:
+
+```bash
+pre-commit run --all-files
 ```
 
 ## Publishing Images
