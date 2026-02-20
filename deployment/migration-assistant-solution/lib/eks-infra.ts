@@ -1,5 +1,5 @@
 import {Construct} from 'constructs';
-import {CfnCluster, CfnPodIdentityAssociation} from 'aws-cdk-lib/aws-eks';
+import {CfnAccessEntry, CfnCluster, CfnPodIdentityAssociation} from 'aws-cdk-lib/aws-eks';
 import {IVpc} from 'aws-cdk-lib/aws-ec2';
 import {
     Effect,
@@ -170,6 +170,20 @@ export class EKSInfra extends Construct {
         migrationsPodIdentityAssociation.node.addDependency(this.cluster)
         migrationConsolePodIdentityAssociation.node.addDependency(this.cluster)
         otelCollectorPodIdentityAssociation.node.addDependency(this.cluster)
+
+        // Grant EKS readonly access to all IAM principals in the account
+        const accountReadonlyAccess = new CfnAccessEntry(this, 'AccountReadonlyAccessEntry', {
+            clusterName: props.clusterName,
+            principalArn: `arn:aws:iam::${Stack.of(this).account}:root`,
+            type: 'STANDARD',
+            accessPolicies: [{
+                accessScope: {
+                    type: 'cluster',
+                },
+                policyArn: 'arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy',
+            }],
+        });
+        accountReadonlyAccess.node.addDependency(this.cluster);
     }
 
     createDefaultPodIdentityRole(clusterName: string) {
