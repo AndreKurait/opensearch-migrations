@@ -288,6 +288,50 @@ exports[`Solutions stack Migration stack with import VPC matches snapshot 1`] = 
       },
       "Type": "AWS::ServiceCatalogAppRegistry::AttributeGroup",
     },
+    "EKSInfraAccountReadonlyAccessEntryBF9BEA4F": {
+      "DependsOn": [
+        "EKSInfraMigrationsEKSCluster4497841A",
+      ],
+      "Properties": {
+        "AccessPolicies": [
+          {
+            "AccessScope": {
+              "Type": "cluster",
+            },
+            "PolicyArn": "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy",
+          },
+        ],
+        "ClusterName": {
+          "Fn::Join": [
+            "",
+            [
+              "migration-eks-cluster-",
+              {
+                "Ref": "Stage",
+              },
+              "-",
+              {
+                "Ref": "AWS::Region",
+              },
+            ],
+          ],
+        },
+        "PrincipalArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:aws:iam::",
+              {
+                "Ref": "AWS::AccountId",
+              },
+              ":root",
+            ],
+          ],
+        },
+        "Type": "STANDARD",
+      },
+      "Type": "AWS::EKS::AccessEntry",
+    },
     "EKSInfraArgoWorkflowPodIdentityAssociation9EBD0AE8": {
       "DependsOn": [
         "EKSInfraMigrationsEKSCluster4497841A",
@@ -1223,6 +1267,50 @@ exports[`Solutions stack Migration stack with new VPC matches snapshot 1`] = `
         },
       },
       "Type": "AWS::ServiceCatalogAppRegistry::AttributeGroup",
+    },
+    "EKSInfraAccountReadonlyAccessEntryBF9BEA4F": {
+      "DependsOn": [
+        "EKSInfraMigrationsEKSCluster4497841A",
+      ],
+      "Properties": {
+        "AccessPolicies": [
+          {
+            "AccessScope": {
+              "Type": "cluster",
+            },
+            "PolicyArn": "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy",
+          },
+        ],
+        "ClusterName": {
+          "Fn::Join": [
+            "",
+            [
+              "migration-eks-cluster-",
+              {
+                "Ref": "Stage",
+              },
+              "-",
+              {
+                "Ref": "AWS::Region",
+              },
+            ],
+          ],
+        },
+        "PrincipalArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:aws:iam::",
+              {
+                "Ref": "AWS::AccountId",
+              },
+              ":root",
+            ],
+          ],
+        },
+        "Type": "STANDARD",
+      },
+      "Type": "AWS::EKS::AccessEntry",
     },
     "EKSInfraArgoWorkflowPodIdentityAssociation9EBD0AE8": {
       "DependsOn": [
