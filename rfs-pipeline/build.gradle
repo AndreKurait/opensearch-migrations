@@ -1,0 +1,18 @@
+plugins {
+    id 'org.opensearch.migrations.java-library-conventions'
+}
+
+dependencies {
+    // Only depends on rfs-common for the adapter (LuceneDocumentChange).
+    // The core pipeline IR types have ZERO dependency on rfs-common.
+    compileOnly project(':rfs-common')
+
+    implementation libs.jackson.databind
+    implementation libs.reactor.core
+
+    testImplementation project(':rfs-common')
+    testImplementation libs.reactor.test
+    testImplementation libs.junit.jupiter.api
+    testImplementation libs.junit.jupiter.params
+    testRuntimeOnly libs.junit.jupiter.engine
+}
