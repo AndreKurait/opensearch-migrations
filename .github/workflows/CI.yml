@@ -210,23 +210,55 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
+      - name: Record job start time
+        run: echo "JOB_START=$(date +%s)" >> $GITHUB_ENV
       - uses: ./.github/actions/setup-env
         with:
           gradle-cache-enabled: true
           gradle-cache-read-only: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+      - name: Record setup-env done
+        run: echo "SETUP_ENV_DONE=$(date +%s)" >> $GITHUB_ENV
       - name: Cache Docker Images
         uses: AndreKurait/docker-cache@0.6.0
         with:
           key: docker-python-e2e-${{ runner.os }}-${{ needs.generate-cache-key.outputs.docker_cache_key }}
           # Only save cache on push events
           read-only: ${{ github.event_name != 'push' }}
+      - name: Record docker cache done
+        run: echo "DOCKER_CACHE_DONE=$(date +%s)" >> $GITHUB_ENV
       - name: Start Docker Solution
         run: ./gradlew -p TrafficCapture dockerSolution:ComposeUp -x test -x spotlessCheck --info --stacktrace
         env:
           OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
+      - name: Record docker solution done
+        run: echo "DOCKER_SOLUTION_DONE=$(date +%s)" >> $GITHUB_ENV
       - name: Run E2E test script
         run: |
           docker exec $(docker ps --filter "name=migration-console" -q) pipenv run pytest /root/lib/integ_test/integ_test/replayer_tests.py --unique_id="testindex" -s
+      - name: Record e2e tests done
+        run: echo "E2E_TESTS_DONE=$(date +%s)" >> $GITHUB_ENV
+      - name: Print timing summary
+        if: always()
+        run: |
+          echo "## ⏱ python-e2e-tests Timing Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Duration |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|----------|" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "$JOB_START" && -n "$SETUP_ENV_DONE" ]]; then
+            echo "| Setup env | $(( SETUP_ENV_DONE - JOB_START ))s |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [[ -n "$SETUP_ENV_DONE" && -n "$DOCKER_CACHE_DONE" ]]; then
+            echo "| Docker cache restore | $(( DOCKER_CACHE_DONE - SETUP_ENV_DONE ))s |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [[ -n "$DOCKER_CACHE_DONE" && -n "$DOCKER_SOLUTION_DONE" ]]; then
+            echo "| Start Docker Solution (gradle ComposeUp) | $(( DOCKER_SOLUTION_DONE - DOCKER_CACHE_DONE ))s |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [[ -n "$DOCKER_SOLUTION_DONE" && -n "$E2E_TESTS_DONE" ]]; then
+            echo "| Run E2E tests (pytest) | $(( E2E_TESTS_DONE - DOCKER_SOLUTION_DONE ))s |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [[ -n "$JOB_START" ]]; then
+            echo "| **Total (to end of tests)** | **$(( $(date +%s) - JOB_START ))s** |" >> $GITHUB_STEP_SUMMARY
+          fi
       - name: Show disk usage
         if: always()
         run: |
