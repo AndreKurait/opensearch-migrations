@@ -12,7 +12,7 @@ RUN ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/') && \
 
 ARG HELM_VERSION="3.14.0"
 ARG KUBECTL_VERSION="1.32.1"
-ARG KAFKA_VERSION="3.9.1"
+ARG KAFKA_VERSION="3.9.2"
 ARG STERN_VERSION="1.33.1"
 
 # Get kafka distribution and unpack to 'kafka'
