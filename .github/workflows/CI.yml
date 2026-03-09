@@ -213,6 +213,7 @@ jobs:
       - uses: ./.github/actions/setup-env
         with:
           gradle-cache-enabled: true
+          gradle-cache-read-only: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       - name: Cache Docker Images
         uses: AndreKurait/docker-cache@0.6.0
         with:
