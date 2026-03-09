@@ -149,9 +149,9 @@ jobs:
       - name: Restore Docker Cache
         uses: AndreKurait/docker-cache@0.6.0
         with:
-          key: docker-${{ runner.os }}-${{ needs.generate-cache-key.outputs.docker_cache_key }}
-          # Delegate cache saving to python-e2e-tests
-          read-only: true
+          key: docker-gradle-${{ runner.os }}-${{ needs.generate-cache-key.outputs.docker_cache_key }}
+          # Only gradle-tests-0 saves the cache on push events
+          read-only: ${{ !(matrix.index == 0 && github.event_name == 'push') }}
 
       - name: Run Gradle tests with striping
         run: |
@@ -217,7 +217,7 @@ jobs:
       - name: Cache Docker Images
         uses: AndreKurait/docker-cache@0.6.0
         with:
-          key: docker-${{ runner.os }}-${{ needs.generate-cache-key.outputs.docker_cache_key }}
+          key: docker-python-e2e-${{ runner.os }}-${{ needs.generate-cache-key.outputs.docker_cache_key }}
           # Only save cache on push events
           read-only: ${{ github.event_name != 'push' }}
       - name: Start Docker Solution
