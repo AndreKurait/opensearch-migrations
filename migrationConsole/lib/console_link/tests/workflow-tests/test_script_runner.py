@@ -9,6 +9,7 @@ from console_link.workflow.services.script_runner import ScriptRunner
 from console_link.workflow.models.config import WorkflowConfig
 
 
+@pytest.mark.usefixtures("ensure_config_processor_dir")
 class TestScriptRunner:
     """Test script runner service."""
 

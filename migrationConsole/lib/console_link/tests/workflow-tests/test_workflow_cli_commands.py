@@ -1,5 +1,6 @@
 """Integration tests for workflow CLI commands."""
 
+import pytest
 from click.testing import CliRunner
 from unittest.mock import Mock, patch
 
@@ -7,6 +8,7 @@ from console_link.workflow.cli import workflow_cli
 from console_link.workflow.models.config import WorkflowConfig
 
 
+@pytest.mark.usefixtures("ensure_config_processor_dir")
 class TestWorkflowCLICommands:
     """Test suite for workflow CLI command integration."""
 

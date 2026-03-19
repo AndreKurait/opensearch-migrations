@@ -48,7 +48,7 @@ CONFIG_RE = re.compile(r"CONFIG_PROCESSOR_DIR=(.*)")
 NODE_RE = re.compile(r"NODEJS_BIN=(.*)")
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def ensure_config_processor_dir():
     """
     Ensures CONFIG_PROCESSOR_DIR and NODEJS are set.
