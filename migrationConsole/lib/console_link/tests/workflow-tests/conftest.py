@@ -1,6 +1,7 @@
 """Pytest configuration for workflow tests."""
 
 import os
+import time
 import warnings
 from pathlib import Path
 import pytest
@@ -15,32 +16,39 @@ def set_config_processor_dir(monkeypatch):
     monkeypatch.setenv("ETCD_SERVICE_PORT_CLIENT", "2379")
 
 
-def agradle(*args):
+def agradle(*args, retries=3, retry_delay=10):
     """
     Mimics the shell function:
     - Walk upward from cwd to root looking for ./gradlew
     - Run that gradlew with the provided args
+    - Retry on failure (e.g. transient network errors during npm install)
     - Return stdout (stripped)
     """
     dir_path = Path(os.getcwd())
     for parent in [dir_path] + list(dir_path.parents):
         gradlew = parent / "gradlew"
         if gradlew.exists() and os.access(gradlew, os.X_OK):
-            result = subprocess.run(
-                [str(gradlew), *args],
-                cwd=parent,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            if result.returncode != 0:
-                raise RuntimeError(
+            last_error = None
+            for attempt in range(1, retries + 1):
+                result = subprocess.run(
+                    [str(gradlew), *args],
+                    cwd=parent,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                if result.returncode == 0:
+                    return result.stdout.strip()
+                last_error = RuntimeError(
                     f"Gradle command failed (exit {result.returncode}):\n"
                     f"  args: {[str(gradlew), *args]}\n"
                     f"  stdout: {result.stdout}\n"
                     f"  stderr: {result.stderr}"
                 )
-            return result.stdout.strip()
+                if attempt < retries:
+                    print(f"Gradle attempt {attempt}/{retries} failed, retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+            raise last_error
     raise RuntimeError("No gradlew script found in ancestor directories")
 
 
