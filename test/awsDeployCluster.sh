@@ -124,14 +124,44 @@ npm ci
 npm run build
 
 cd ..
-cp -f "$PROVIDED_CONTEXT_FILE_PATH" "$CLUSTER_CDK_CONTEXT_FILE_PATH"
+
+# OpenSearch domain names must be between 3 and 28 characters.
+# The default CDK naming convention is "cluster-{stage}-{clusterId}".
+# When the stage name is long (e.g. high build numbers), this can exceed 28 chars.
+# Compute a domain name that fits, truncating the stage portion if needed, and inject
+# it as 'clusterName' in the context so the CDK uses our truncated name.
+MAX_DOMAIN_NAME_LENGTH=28
+compute_domain_name() {
+  local stage="$1" cid="$2"
+  local name="cluster-${stage}-${cid}"
+  if [[ ${#name} -gt $MAX_DOMAIN_NAME_LENGTH ]]; then
+    # Truncate stage from the left to preserve the build-number suffix for uniqueness
+    local max_stage=$(( MAX_DOMAIN_NAME_LENGTH - 8 - 1 - ${#cid} ))
+    local start=$(( ${#stage} - max_stage ))
+    local truncated_stage="${stage:$start}"
+    name="cluster-${truncated_stage}-${cid}"
+    echo "WARNING: Domain name truncated to '$name' (original stage: '$stage')" >&2
+  fi
+  echo "$name"
+}
+
+# Inject clusterName into each cluster entry in the context file
+context_json=$(cat "$PROVIDED_CONTEXT_FILE_PATH")
+cluster_ids=$(echo "$context_json" | jq -r '.clusters[].clusterId')
+idx=0
+for cid in $cluster_ids; do
+  domain_name=$(compute_domain_name "$STAGE" "$cid")
+  context_json=$(echo "$context_json" | jq --arg idx "$idx" --arg name "$domain_name" \
+    '.clusters[($idx | tonumber)].clusterName = $name')
+  idx=$((idx + 1))
+done
+echo "$context_json" > "$CLUSTER_CDK_CONTEXT_FILE_PATH"
 
 # Wait for any leftover OpenSearch domains from a previous run to finish deleting.
 # The CDK VPC-validation Lambda will reject deployment if a domain with the same name
 # still exists in a different VPC (e.g. from a prior run whose cleanup is still in progress).
-cluster_ids=$(jq -r '.clusters[].clusterId' "$PROVIDED_CONTEXT_FILE_PATH")
 for cid in $cluster_ids; do
-  domain_name="cluster-${STAGE}-${cid}"
+  domain_name=$(compute_domain_name "$STAGE" "$cid")
   if aws opensearch describe-domain --domain-name "$domain_name" >/dev/null 2>&1; then
     if aws opensearch describe-domain --domain-name "$domain_name" \
          --query 'DomainStatus.Deleted' --output text 2>/dev/null | grep -qi true; then
