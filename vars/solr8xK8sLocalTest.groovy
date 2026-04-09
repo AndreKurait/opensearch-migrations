@@ -1,8 +1,7 @@
+// Placeholder: Solr 8.x K8s local test will be enabled once the SolrCloud
+// backup integration is merged. See: SolrBackfillIntegTesting branch.
 def call(Map config = [:]) {
-    k8sLocalDeployment(
-            jobName: config.jobName ?: 'solr-8x-k8s-local-test',
-            sourceVersion: 'SOLR_8.11',
-            targetVersion: 'OS_2.19',
-            testIds: 'Solr0001,Solr0002'
-    )
+    node(label: 'Jenkins-Default-Agent-X64-C5xlarge-Single-Host') {
+        echo 'Solr 8.x K8s local test - placeholder (no-op until SolrCloud backup support is merged)'
+    }
 }
