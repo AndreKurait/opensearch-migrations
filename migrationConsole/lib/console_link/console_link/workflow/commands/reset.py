@@ -223,11 +223,11 @@ def _delete_targets(targets, namespace):
     return not failed
 
 
-def _resolve_cascade_targets(targets, namespace, cascade):
+def _resolve_cascade_targets(targets, namespace, cascade, include_proxies=False):
     """Check for dependents. Returns expanded targets or None if blocked.
 
-    If the only blocking dependents are capture proxies, automatically
-    disables capture on them (removing the dependency) instead of blocking.
+    Proxy dependents are auto-switched to non-capture instead of being
+    deleted (unless include_proxies is True).
     """
     target_names = {t[1] for t in targets}
     all_crds = list_migration_resources(namespace)
@@ -237,7 +237,19 @@ def _resolve_cascade_targets(targets, namespace, cascade):
 
     if cascade:
         target_names.update(dep_names)
-        return [r for r in all_crds if r[1] in target_names]
+        expanded = [r for r in all_crds if r[1] in target_names]
+
+        if not include_proxies:
+            # Pull proxies out of the delete set — disable capture instead
+            proxy_targets = [r for r in expanded if r[0] == 'capturedtraffics']
+            if proxy_targets:
+                from .proxy import _set_capture_mode_headless
+                proxy_names = [r[1] for r in proxy_targets]
+                click.echo("Switching dependent proxies to non-capture mode:")
+                _set_capture_mode_headless(namespace, proxy_names, enable=False)
+                expanded = [r for r in expanded if r[0] != 'capturedtraffics']
+
+        return expanded
 
     blocking = [r for r in all_crds if r[1] in dep_names]
 
@@ -255,7 +267,6 @@ def _resolve_cascade_targets(targets, namespace, cascade):
             dep_names = _find_dependents(target_names, all_crds)
             if not dep_names:
                 return targets
-            # Still blocked by something else after disabling capture
             blocking = [r for r in all_crds if r[1] in dep_names]
 
     click.echo("Cannot delete — dependent resources exist:")
@@ -291,23 +302,27 @@ def _show_resource_list(crds):
     '--cascade', is_flag=True, default=False,
     help='Also delete dependent resources',
 )
+@click.option(
+    '--include-proxies', is_flag=True, default=False,
+    help='Also delete capture proxies (by default proxies are switched to non-capture instead)',
+)
 @click.option('--namespace', default='ma')
 @click.pass_context
-def reset_command(ctx, path, reset_all, cascade, namespace):
+def reset_command(ctx, path, reset_all, cascade, include_proxies, namespace):
     """Reset migration resources by deleting CRDs.
 
     With no arguments, lists migration resources and their status.
     With a NAME or glob, deletes matching resources.
     With --all, deletes all resources and workflows.
 
-    Dependencies are read from spec.dependsOn on each CRD. Deleting a
-    resource that others depend on is blocked unless --cascade is used.
+    Proxies are protected by default — they are switched to non-capture
+    mode instead of being deleted. Use --include-proxies to delete them.
 
     Example:
         workflow reset                     # list resources
-        workflow reset source-proxy        # delete one resource
-        workflow reset --cascade snap1     # delete snap1 + its dependents
-        workflow reset --all               # delete everything
+        workflow reset my-kafka            # auto-disables capture on proxy, deletes kafka
+        workflow reset --all               # delete everything except proxies
+        workflow reset --all --include-proxies  # delete everything
     """
     try:
         load_k8s_config()
@@ -317,7 +332,19 @@ def reset_command(ctx, path, reset_all, cascade, namespace):
             if not targets:
                 click.echo(f"No resources matching '{path}'.")
                 return
-            targets = _resolve_cascade_targets(targets, namespace, cascade)
+
+            # Block direct proxy deletion unless --include-proxies
+            if not include_proxies:
+                proxy_targets = [t for t in targets if t[0] == 'capturedtraffics']
+                if proxy_targets:
+                    names = ', '.join(t[1] for t in proxy_targets)
+                    click.echo(f"Proxies are protected by default: {names}")
+                    click.echo("Use --include-proxies to delete them, or")
+                    click.echo("use 'workflow proxy disable-capture' to switch to non-capture mode.")
+                    ctx.exit(ExitCode.FAILURE.value)
+                    return
+
+            targets = _resolve_cascade_targets(targets, namespace, cascade, include_proxies)
             if targets is None:
                 ctx.exit(ExitCode.FAILURE.value)
                 return
@@ -337,7 +364,19 @@ def reset_command(ctx, path, reset_all, cascade, namespace):
 
         if crds:
             click.echo("Deleting migration resources...")
-            _delete_targets(crds, namespace)
+            if include_proxies:
+                _delete_targets(crds, namespace)
+            else:
+                # Disable capture on proxies instead of deleting them
+                proxy_crds = [c for c in crds if c[0] == 'capturedtraffics']
+                non_proxy_crds = [c for c in crds if c[0] != 'capturedtraffics']
+                if proxy_crds:
+                    from .proxy import _set_capture_mode_headless
+                    proxy_names = [c[1] for c in proxy_crds]
+                    click.echo("Switching proxies to non-capture mode:")
+                    _set_capture_mode_headless(namespace, proxy_names, enable=False)
+                if non_proxy_crds:
+                    _delete_targets(non_proxy_crds, namespace)
 
         click.echo("Cleaning up workflows...")
         _stop_and_delete_workflows(namespace)
