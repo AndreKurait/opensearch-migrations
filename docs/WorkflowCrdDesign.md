@@ -103,7 +103,7 @@ stateDiagram-v2
 | State | CRD phase | Proxy behavior | Kafka alive? |
 |-------|-----------|---------------|-------------|
 | **Capturing** (Ready) | `Ready` | Routes traffic to source AND writes to Kafka topic | Yes |
-| **Non-Capture** (pass-through) | `Ready` | Routes traffic to source only — transparent pass-through, no Kafka writes | No (KafkaCluster CRD deleted) |
+| **Non-Capture** (pass-through) | `Ready` | Routes traffic to source only — transparent pass-through, no Kafka writes | No (disabled via `workflow proxy disable-capture` or KafkaCluster deleted) |
 | **Deleted** | CRD gone | Proxy Deployment + Service + Pods all removed via ownership cascade | N/A |
 
 ### Transitions
@@ -190,6 +190,82 @@ This ordering guarantees:
 - The replayer is gone before the proxy changes mode (no "upstream disconnected" errors)
 - The proxy is in non-capture mode before it's deleted (no "Kafka connection lost" errors)
 - Zero spurious error logs in any component
+
+---
+
+## Reconfiguration: Disable/Enable Capture
+
+The primary way to switch a proxy between capturing and non-capture mode is through
+explicit reconfiguration, not teardown. This keeps the proxy alive and routing traffic
+throughout the transition.
+
+### CLI commands
+
+```bash
+workflow proxy disable-capture source-proxy   # switch to non-capture
+workflow proxy enable-capture source-proxy    # restore capture
+```
+
+### How it works
+
+The command reads the **running workflow's denormalized config** directly from the Argo
+workflow's `spec.arguments.parameters[name=config]` — not the user's saved ConfigMap.
+This preserves any config drift from previous `configure edit` + `resubmit` cycles.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI as CLI (proxy.py)
+    participant K8s as Kubernetes API
+    participant Argo as Argo Workflow
+
+    User->>CLI: workflow proxy disable-capture
+    CLI->>K8s: Read workflow spec.arguments.parameters
+    CLI->>CLI: Parse denormalized config, set noCapture=true
+    CLI->>K8s: Patch CRD dependsOn=[] (remove Kafka dep)
+    CLI->>K8s: Stop + delete current workflow
+    CLI->>K8s: Create new workflow with modified config
+    Argo->>K8s: Redeploy proxy without Kafka params
+    Note over User: User's saved config is untouched
+```
+
+**Key design decisions:**
+
+1. **Reads from the running Argo workflow, not the ConfigMap.** The running workflow's
+   config is the actual state of the system. Reading from the ConfigMap could revert
+   changes made via `configure edit` + `resubmit`.
+
+2. **Bypasses the config processor.** The denormalized config already has all the labels
+   and resolved references needed by the workflow templates. Going through the config
+   processor would re-derive everything from the user config, losing any drift.
+
+3. **CLI patches CRD `dependsOn` directly** before resubmitting. This is the one exception
+   to the "CLI only deletes CRDs" rule — `dependsOn` is metadata about the dependency
+   graph, not component state. The Argo workflow doesn't manage `dependsOn`.
+
+4. **User's saved config is not modified.** A fresh `workflow submit` restores the
+   original configuration from the ConfigMap.
+
+### Typical flow: disable capture then tear down Kafka
+
+```bash
+workflow proxy disable-capture source-proxy   # proxy → non-capture, dependsOn=[]
+workflow reset my-kafka                        # now unblocked — deletes Kafka
+# ... later ...
+workflow submit                                # fresh start from saved config (with capture)
+```
+
+### Difference from teardown-triggered non-capture
+
+The `kafkaGonePath` in the Argo workflow (see below) is a **resilience mechanism** — it
+handles the case where Kafka dies unexpectedly while the proxy is running. The explicit
+`workflow proxy disable-capture` command is the **primary way** to switch modes.
+
+| Mechanism | Trigger | Proxy survives? | User config changed? |
+|-----------|---------|----------------|---------------------|
+| `workflow proxy disable-capture` | Explicit CLI command | Yes (redeployed) | No |
+| `kafkaGonePath` (Argo) | KafkaCluster CRD deleted | Yes (redeployed in-place) | No |
+| `workflow reset source-proxy` | CRD deletion | No (deleted) | No |
 
 ---
 

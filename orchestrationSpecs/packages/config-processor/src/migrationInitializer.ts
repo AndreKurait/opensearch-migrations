@@ -149,7 +149,8 @@ export class MigrationInitializer {
 
         // CapturedTraffic resources from proxies
         for (const proxy of workflows.proxies ?? []) {
-            const kafkaDep = proxy.kafkaConfig?.label ? [proxy.kafkaConfig.label] : [];
+            const noCapture = (proxy as any).proxyConfig?.noCapture === true;
+            const kafkaDep = (!noCapture && proxy.kafkaConfig?.label) ? [proxy.kafkaConfig.label] : [];
             items.push({
                 apiVersion: CRD_API_VERSION,
                 kind: 'CapturedTraffic',
