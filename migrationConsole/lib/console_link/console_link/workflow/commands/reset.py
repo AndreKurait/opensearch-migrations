@@ -8,67 +8,40 @@ Dependencies are read from spec.dependsOn on each CRD instance, so the CLI
 does not hardcode any dependency order.
 """
 
-import json
 import logging
-import tempfile
 import time
-from pathlib import Path
 
 import click
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 
 from ..models.utils import ExitCode, load_k8s_config
-from .crd_utils import CRD_GROUP, CRD_VERSION, has_glob, match_names
+from .crd_utils import (
+    CRD_GROUP, CRD_VERSION, DISPLAY_NAMES, RESETTABLE_PLURALS,
+    cached_crd_completions, has_glob, list_migration_resources, match_names,
+)
 
 logger = logging.getLogger(__name__)
-
-_AUTOCOMPLETE_RESET_CACHE_TTL_SECONDS = 10
 
 ARGO_GROUP = 'argoproj.io'
 ARGO_VERSION = 'v1alpha1'
 
-# All resettable resource types
-RESETTABLE_PLURALS = [
-    'kafkaclusters', 'capturedtraffics', 'datasnapshots',
-    'snapshotmigrations', 'trafficreplays', 'approvalgates',
-]
 
-DISPLAY_NAMES = {
-    'kafkaclusters': 'Kafka Cluster',
-    'capturedtraffics': 'Capture Proxy',
-    'datasnapshots': 'Data Snapshot',
-    'snapshotmigrations': 'Snapshot Migration',
-    'trafficreplays': 'Traffic Replay',
-    'approvalgates': 'Approval Gate',
-}
+def _resettable_names(namespace):
+    return [n for _, n, phase, _ in list_migration_resources(namespace)
+            if phase != 'Teardown']
 
 
-def _list_migration_resources(namespace):
-    """List all migration resources. Returns list of (plural, name, phase, dependsOn)."""
-    custom = client.CustomObjectsApi()
-    results = []
-    for plural in RESETTABLE_PLURALS:
-        try:
-            items = custom.list_namespaced_custom_object(
-                group=CRD_GROUP, version=CRD_VERSION,
-                namespace=namespace, plural=plural
-            ).get('items', [])
-            for item in items:
-                name = item['metadata']['name']
-                phase = item.get('status', {}).get('phase', 'Unknown')
-                deps = item.get('spec', {}).get('dependsOn', []) or []
-                results.append((plural, name, phase, deps))
-        except ApiException:
-            pass
-    return results
+def _get_resource_completions(ctx, _, incomplete):
+    ns = ctx.params.get('namespace', 'ma')
+    return [n for n in cached_crd_completions(ns, 'reset_resources', _resettable_names)
+            if n.startswith(incomplete)]
 
 
 def _find_dependents(target_names, all_resources):
     """Find all resources that transitively depend on any of target_names."""
     dependents = []
     found = set(target_names)
-    # Iterate until no new dependents are found
     changed = True
     while changed:
         changed = False
@@ -174,41 +147,10 @@ def _find_resource_by_name(namespace, name):
     return None
 
 
-def _get_reset_cache_file(namespace: str) -> Path:
-    cache_dir = Path(tempfile.gettempdir()) / "workflow_completions"
-    cache_dir.mkdir(exist_ok=True)
-    return cache_dir / f"reset_resources_{namespace}.json"
-
-
-def _get_cached_resource_names(ctx) -> list[str]:
-    """Fetch and cache resettable resource names."""
-    namespace = ctx.params.get('namespace', 'ma')
-    cache_file = _get_reset_cache_file(namespace)
-
-    if cache_file.exists() and (time.time() - cache_file.stat().st_mtime) < _AUTOCOMPLETE_RESET_CACHE_TTL_SECONDS:
-        try:
-            return json.loads(cache_file.read_text()).get('names', [])
-        except Exception:
-            pass
-
-    try:
-        load_k8s_config()
-        crds = _list_migration_resources(namespace)
-        names = [n for _, n, phase, _ in crds if phase != 'Teardown']
-        cache_file.write_text(json.dumps({'names': names}))
-        return names
-    except Exception:
-        return []
-
-
-def _get_resource_completions(ctx, param, incomplete):
-    return [n for n in _get_cached_resource_names(ctx) if n.startswith(incomplete)]
-
-
 def _resolve_targets(namespace, path):
     """Resolve a name or glob to matching resources."""
     if has_glob(path):
-        crds = _list_migration_resources(namespace)
+        crds = list_migration_resources(namespace)
         matched = set(match_names([n for _, n, _, _ in crds], path))
         return [(p, n, ph, d) for p, n, ph, d in crds if n in matched]
     match = _find_resource_by_name(namespace, path)
@@ -284,7 +226,7 @@ def _delete_targets(targets, namespace):
 def _resolve_cascade_targets(targets, namespace, cascade):
     """Check for dependents. Returns expanded targets or None if blocked."""
     target_names = {t[1] for t in targets}
-    all_crds = _list_migration_resources(namespace)
+    all_crds = list_migration_resources(namespace)
     dep_names = _find_dependents(target_names, all_crds)
     if not dep_names:
         return targets
@@ -361,7 +303,7 @@ def reset_command(ctx, path, reset_all, cascade, namespace):
                 ctx.exit(ExitCode.FAILURE.value)
             return
 
-        crds = _list_migration_resources(namespace)
+        crds = list_migration_resources(namespace)
 
         if not crds and not reset_all:
             click.echo("No migration resources found.")

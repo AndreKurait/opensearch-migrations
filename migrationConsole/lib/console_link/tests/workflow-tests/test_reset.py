@@ -5,10 +5,10 @@ from click.testing import CliRunner
 
 from console_link.workflow.cli import workflow_cli
 from console_link.workflow.commands.reset import (
-    _list_migration_resources,
     _delete_crd,
     _find_dependents,
 )
+from console_link.workflow.commands.crd_utils import list_migration_resources
 
 
 def _mock_crd_list(items_by_plural):
@@ -23,7 +23,7 @@ def _mock_crd_list(items_by_plural):
 
 
 class TestListMigrationCrds:
-    @patch('console_link.workflow.commands.reset.client')
+    @patch('console_link.workflow.commands.crd_utils.client')
     def test_lists_crds_with_phases_and_deps(self, mock_client):
         mock_custom = _mock_crd_list({
             'capturedtraffics': [
@@ -41,12 +41,12 @@ class TestListMigrationCrds:
         })
         mock_client.CustomObjectsApi.return_value = mock_custom
 
-        result = _list_migration_resources('ma')
+        result = list_migration_resources('ma')
         assert len(result) == 2
         assert ('capturedtraffics', 'source-proxy', 'Ready', ['kafka1']) in result
         assert ('trafficreplays', 'src-tgt-replayer', 'Running', ['source-proxy']) in result
 
-    @patch('console_link.workflow.commands.reset.client')
+    @patch('console_link.workflow.commands.crd_utils.client')
     def test_handles_missing_status_and_deps(self, mock_client):
         mock_custom = _mock_crd_list({
             'capturedtraffics': [{'metadata': {'name': 'x'}, 'spec': {}}],
@@ -58,7 +58,7 @@ class TestListMigrationCrds:
         })
         mock_client.CustomObjectsApi.return_value = mock_custom
 
-        result = _list_migration_resources('ma')
+        result = list_migration_resources('ma')
         assert result == [('capturedtraffics', 'x', 'Unknown', [])]
 
 
@@ -106,7 +106,7 @@ class TestDeleteCrd:
 
 class TestResetCommandList:
     @patch('console_link.workflow.commands.reset.load_k8s_config')
-    @patch('console_link.workflow.commands.reset._list_migration_resources')
+    @patch('console_link.workflow.commands.reset.list_migration_resources')
     def test_list_mode_shows_deps(self, mock_list, mock_k8s):
         mock_list.return_value = [
             ('capturedtraffics', 'source-proxy', 'Ready', ['kafka1']),
@@ -120,7 +120,7 @@ class TestResetCommandList:
         assert 'depends on: source-proxy' in result.output
 
     @patch('console_link.workflow.commands.reset.load_k8s_config')
-    @patch('console_link.workflow.commands.reset._list_migration_resources')
+    @patch('console_link.workflow.commands.reset.list_migration_resources')
     def test_no_resources(self, mock_list, mock_k8s):
         mock_list.return_value = []
         runner = CliRunner()
@@ -129,7 +129,7 @@ class TestResetCommandList:
 
 
 class TestResetCommandDelete:
-    @patch('console_link.workflow.commands.reset._list_migration_resources')
+    @patch('console_link.workflow.commands.reset.list_migration_resources')
     @patch('console_link.workflow.commands.reset._wait_until_gone')
     @patch('console_link.workflow.commands.reset.load_k8s_config')
     @patch('console_link.workflow.commands.reset._delete_crd')
@@ -144,7 +144,7 @@ class TestResetCommandDelete:
         assert result.exit_code == 0
         assert '✓ Deleted replayer1' in result.output
 
-    @patch('console_link.workflow.commands.reset._list_migration_resources')
+    @patch('console_link.workflow.commands.reset.list_migration_resources')
     @patch('console_link.workflow.commands.reset.load_k8s_config')
     @patch('console_link.workflow.commands.reset._find_resource_by_name')
     def test_blocked_when_dependents_exist(self, mock_find, mock_k8s, mock_list):
@@ -163,7 +163,7 @@ class TestResetCommandDelete:
     @patch('console_link.workflow.commands.reset._wait_until_gone')
     @patch('console_link.workflow.commands.reset._delete_crd')
     @patch('console_link.workflow.commands.reset.load_k8s_config')
-    @patch('console_link.workflow.commands.reset._list_migration_resources')
+    @patch('console_link.workflow.commands.reset.list_migration_resources')
     def test_reset_all(self, mock_list, mock_k8s, mock_delete, mock_wait, mock_wf):
         mock_list.return_value = [
             ('capturedtraffics', 'source-proxy', 'Ready', []),
