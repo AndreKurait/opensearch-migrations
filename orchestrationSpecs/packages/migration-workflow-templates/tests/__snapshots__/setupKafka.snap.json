@@ -33,11 +33,17 @@
             },
             {
               "name": "nodePoolSpec"
+            },
+            {
+              "name": "crdName"
+            },
+            {
+              "name": "crdUid"
             }
           ]
         },
         "resource": {
-          "manifest": "apiVersion: kafka.strimzi.io/v1\nkind: KafkaNodePool\nmetadata:\n  name: dual-role\n  labels:\n    strimzi.io/cluster: \"{{inputs.parameters.clusterName}}\"\nspec: {{inputs.parameters.nodePoolSpec}}\n",
+          "manifest": "apiVersion: kafka.strimzi.io/v1\nkind: KafkaNodePool\nmetadata:\n  name: dual-role\n  labels:\n    strimzi.io/cluster: \"{{inputs.parameters.clusterName}}\"\n  ownerReferences:\n    - apiVersion: migrations.opensearch.org/v1alpha1\n      kind: KafkaCluster\n      name: \"{{inputs.parameters.crdName}}\"\n      uid: \"{{inputs.parameters.crdUid}}\"\n      blockOwnerDeletion: true\n      controller: false\nspec: {{inputs.parameters.nodePoolSpec}}\n",
           "action": "apply",
           "setOwnerReference": false
         },
@@ -63,11 +69,17 @@
             },
             {
               "name": "kafkaSpec"
+            },
+            {
+              "name": "crdName"
+            },
+            {
+              "name": "crdUid"
             }
           ]
         },
         "resource": {
-          "manifest": "apiVersion: kafka.strimzi.io/v1\nkind: Kafka\nmetadata:\n  name: \"{{inputs.parameters.clusterName}}\"\n  annotations:\n    strimzi.io/node-pools: enabled\n    strimzi.io/kraft: enabled\nspec:\n  kafka: {{inputs.parameters.kafkaSpec}}\n  entityOperator:\n    topicOperator: {}\n    userOperator: {}\n",
+          "manifest": "apiVersion: kafka.strimzi.io/v1\nkind: Kafka\nmetadata:\n  name: \"{{inputs.parameters.clusterName}}\"\n  annotations:\n    strimzi.io/node-pools: enabled\n    strimzi.io/kraft: enabled\n  ownerReferences:\n    - apiVersion: migrations.opensearch.org/v1alpha1\n      kind: KafkaCluster\n      name: \"{{inputs.parameters.crdName}}\"\n      uid: \"{{inputs.parameters.crdUid}}\"\n      blockOwnerDeletion: true\n      controller: false\nspec:\n  kafka: {{inputs.parameters.kafkaSpec}}\n  entityOperator:\n    topicOperator: {}\n    userOperator: {}\n",
           "action": "apply",
           "setOwnerReference": false,
           "successCondition": "status.listeners"
@@ -101,11 +113,17 @@
             },
             {
               "name": "kafkaSpec"
+            },
+            {
+              "name": "crdName"
+            },
+            {
+              "name": "crdUid"
             }
           ]
         },
         "resource": {
-          "manifest": "apiVersion: kafka.strimzi.io/v1\nkind: Kafka\nmetadata:\n  name: \"{{inputs.parameters.clusterName}}\"\n  annotations:\n    strimzi.io/node-pools: enabled\n    strimzi.io/kraft: enabled\nspec:\n  kafka: {{inputs.parameters.kafkaSpec}}\n  entityOperator:\n    topicOperator: {}\n    userOperator: {}\n",
+          "manifest": "apiVersion: kafka.strimzi.io/v1\nkind: Kafka\nmetadata:\n  name: \"{{inputs.parameters.clusterName}}\"\n  annotations:\n    strimzi.io/node-pools: enabled\n    strimzi.io/kraft: enabled\n  ownerReferences:\n    - apiVersion: migrations.opensearch.org/v1alpha1\n      kind: KafkaCluster\n      name: \"{{inputs.parameters.crdName}}\"\n      uid: \"{{inputs.parameters.crdUid}}\"\n      blockOwnerDeletion: true\n      controller: false\nspec:\n  kafka: {{inputs.parameters.kafkaSpec}}\n  entityOperator:\n    topicOperator: {}\n    userOperator: {}\n",
           "action": "apply",
           "setOwnerReference": false,
           "successCondition": "status.listeners"
@@ -142,6 +160,12 @@
             },
             {
               "name": "clusterConfig"
+            },
+            {
+              "name": "crdName"
+            },
+            {
+              "name": "crdUid"
             }
           ]
         },
@@ -155,6 +179,14 @@
                   {
                     "name": "clusterName",
                     "value": "{{inputs.parameters.clusterName}}"
+                  },
+                  {
+                    "name": "crdName",
+                    "value": "{{inputs.parameters.crdName}}"
+                  },
+                  {
+                    "name": "crdUid",
+                    "value": "{{inputs.parameters.crdUid}}"
                   },
                   {
                     "name": "kafkaSpec",
@@ -174,6 +206,14 @@
                   {
                     "name": "clusterName",
                     "value": "{{inputs.parameters.clusterName}}"
+                  },
+                  {
+                    "name": "crdName",
+                    "value": "{{inputs.parameters.crdName}}"
+                  },
+                  {
+                    "name": "crdUid",
+                    "value": "{{inputs.parameters.crdUid}}"
                   },
                   {
                     "name": "kafkaSpec",
@@ -214,11 +254,17 @@
             },
             {
               "name": "topicConfig"
+            },
+            {
+              "name": "crdName"
+            },
+            {
+              "name": "crdUid"
             }
           ]
         },
         "resource": {
-          "manifest": "apiVersion: kafka.strimzi.io/v1\nkind: KafkaTopic\nmetadata:\n  name: \"{{inputs.parameters.topicName}}\"\n  labels:\n    strimzi.io/cluster: \"{{inputs.parameters.clusterName}}\"\nspec:\n  partitions: {{inputs.parameters.partitions}}\n  replicas: {{inputs.parameters.replicas}}\n  config: {{inputs.parameters.topicConfig}}\n",
+          "manifest": "apiVersion: kafka.strimzi.io/v1\nkind: KafkaTopic\nmetadata:\n  name: \"{{inputs.parameters.topicName}}\"\n  labels:\n    strimzi.io/cluster: \"{{inputs.parameters.clusterName}}\"\n  ownerReferences:\n    - apiVersion: migrations.opensearch.org/v1alpha1\n      kind: KafkaCluster\n      name: \"{{inputs.parameters.crdName}}\"\n      uid: \"{{inputs.parameters.crdUid}}\"\n      blockOwnerDeletion: true\n      controller: false\nspec:\n  partitions: {{inputs.parameters.partitions}}\n  replicas: {{inputs.parameters.replicas}}\n  config: {{inputs.parameters.topicConfig}}\n",
           "action": "apply",
           "setOwnerReference": false,
           "successCondition": "status.topicName"
@@ -299,6 +345,12 @@
               "name": "clusterConfig"
             },
             {
+              "name": "crdName"
+            },
+            {
+              "name": "crdUid"
+            },
+            {
               "name": "retryGroupName_view",
               "value": "Apply"
             }
@@ -313,6 +365,14 @@
                   {
                     "name": "clusterName",
                     "value": "{{inputs.parameters.clusterName}}"
+                  },
+                  {
+                    "name": "crdName",
+                    "value": "{{inputs.parameters.crdName}}"
+                  },
+                  {
+                    "name": "crdUid",
+                    "value": "{{inputs.parameters.crdUid}}"
                   },
                   {
                     "name": "nodePoolSpec",
@@ -356,6 +416,14 @@
                     "value": "{{inputs.parameters.clusterConfig}}"
                   },
                   {
+                    "name": "crdName",
+                    "value": "{{inputs.parameters.crdName}}"
+                  },
+                  {
+                    "name": "crdUid",
+                    "value": "{{inputs.parameters.crdUid}}"
+                  },
+                  {
                     "name": "retryGroupName_view",
                     "value": "{{inputs.parameters.retryGroupName_view}}"
                   }
@@ -383,6 +451,12 @@
               "name": "clusterConfig"
             },
             {
+              "name": "crdName"
+            },
+            {
+              "name": "crdUid"
+            },
+            {
               "name": "retryGroupName_view",
               "value": "Apply"
             }
@@ -405,6 +479,14 @@
                   {
                     "name": "clusterConfig",
                     "value": "{{inputs.parameters.clusterConfig}}"
+                  },
+                  {
+                    "name": "crdName",
+                    "value": "{{inputs.parameters.crdName}}"
+                  },
+                  {
+                    "name": "crdUid",
+                    "value": "{{inputs.parameters.crdUid}}"
                   }
                 ]
               },
@@ -448,6 +530,14 @@
                     "value": "{{inputs.parameters.clusterConfig}}"
                   },
                   {
+                    "name": "crdName",
+                    "value": "{{inputs.parameters.crdName}}"
+                  },
+                  {
+                    "name": "crdUid",
+                    "value": "{{inputs.parameters.crdUid}}"
+                  },
+                  {
                     "name": "retryGroupName_view",
                     "value": "{{inputs.parameters.retryGroupName_view}}"
                   }
@@ -488,6 +578,12 @@
               "name": "topicConfig"
             },
             {
+              "name": "crdName"
+            },
+            {
+              "name": "crdUid"
+            },
+            {
               "name": "retryGroupName_view",
               "value": "Apply"
             }
@@ -518,6 +614,14 @@
                   {
                     "name": "topicConfig",
                     "value": "{{inputs.parameters.topicConfig}}"
+                  },
+                  {
+                    "name": "crdName",
+                    "value": "{{inputs.parameters.crdName}}"
+                  },
+                  {
+                    "name": "crdUid",
+                    "value": "{{inputs.parameters.crdUid}}"
                   }
                 ]
               },
@@ -567,6 +671,14 @@
                   {
                     "name": "topicConfig",
                     "value": "{{inputs.parameters.topicConfig}}"
+                  },
+                  {
+                    "name": "crdName",
+                    "value": "{{inputs.parameters.crdName}}"
+                  },
+                  {
+                    "name": "crdUid",
+                    "value": "{{inputs.parameters.crdUid}}"
                   },
                   {
                     "name": "retryGroupName_view",
@@ -682,6 +794,12 @@
             },
             {
               "name": "clusterConfig"
+            },
+            {
+              "name": "crdName"
+            },
+            {
+              "name": "crdUid"
             }
           ]
         },
@@ -698,6 +816,14 @@
                   {
                     "name": "clusterConfig",
                     "value": "{{inputs.parameters.clusterConfig}}"
+                  },
+                  {
+                    "name": "crdName",
+                    "value": "{{inputs.parameters.crdName}}"
+                  },
+                  {
+                    "name": "crdUid",
+                    "value": "{{inputs.parameters.crdUid}}"
                   },
                   {
                     "name": "retryGroupName_view",
@@ -724,6 +850,14 @@
                   {
                     "name": "clusterConfig",
                     "value": "{{inputs.parameters.clusterConfig}}"
+                  },
+                  {
+                    "name": "crdName",
+                    "value": "{{inputs.parameters.crdName}}"
+                  },
+                  {
+                    "name": "crdUid",
+                    "value": "{{inputs.parameters.crdUid}}"
                   },
                   {
                     "name": "retryGroupName_view",

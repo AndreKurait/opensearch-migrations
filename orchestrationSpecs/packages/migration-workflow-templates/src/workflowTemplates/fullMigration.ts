@@ -173,6 +173,10 @@ export const FullMigration = WorkflowBuilder.create({
                             })
                         ) as any
                     )),
+                    kafkaAuthConfigMapName: expr.literal(""),
+                    kafkaAuthType: expr.literal(""),
+                    kafkaSecretName: expr.literal(""),
+                    kafkaCaSecretName: expr.literal(""),
                     crdName: expr.literal(""),
                     crdUid: expr.literal(""),
                 });
