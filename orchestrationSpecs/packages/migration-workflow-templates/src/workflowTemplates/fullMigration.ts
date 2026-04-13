@@ -205,7 +205,29 @@ export const FullMigration = WorkflowBuilder.create({
                     ...selectInputsForRegister(b, c),
                     resourceName: b.inputs.kafkaClusterName,
                 })
-            )
+            , {
+                when: {
+                    templateExp: expr.dig(
+                        expr.deserializeRecord(b.inputs.proxyConfig),
+                        ["kafkaConfig", "managedByWorkflow"],
+                        false
+                    )
+                }
+            })
+            .addStep("readKafkaConnectionProfile", ResourceManagement, "readKafkaConnectionProfile", c =>
+                c.register({
+                    ...selectInputsForRegister(b, c),
+                    resourceName: b.inputs.kafkaClusterName,
+                })
+            , {
+                when: {
+                    templateExp: expr.dig(
+                        expr.deserializeRecord(b.inputs.proxyConfig),
+                        ["kafkaConfig", "managedByWorkflow"],
+                        false
+                    )
+                }
+            })
             .addStep("createCrd", ResourceManagement, "createCapturedTraffic", c =>
                 c.register({resourceName: b.inputs.proxyName})
             )
@@ -227,6 +249,9 @@ export const FullMigration = WorkflowBuilder.create({
                     podReplicas: b.inputs.podReplicas,
                     crdName: b.inputs.proxyName,
                     crdUid: c.steps.getCrdUid.outputs.uid,
+                    resolvedKafkaConnection: c.steps.readKafkaConnectionProfile.outputs.bootstrapServers,
+                    resolvedKafkaListenerName: c.steps.readKafkaConnectionProfile.outputs.listenerName,
+                    resolvedKafkaAuthType: c.steps.readKafkaConnectionProfile.outputs.authType,
                 }),
                 {when: c => ({templateExp: expr.not(expr.equals(c.getCrdUid.outputs.phase, "Ready"))})}
             )
@@ -589,7 +614,29 @@ export const FullMigration = WorkflowBuilder.create({
                         ...selectInputsForRegister(b, c),
                         resourceName: b.inputs.kafkaClusterName
                     })
-                )
+                , {
+                    when: {
+                        templateExp: expr.dig(
+                            expr.deserializeRecord(b.inputs.kafkaConfig),
+                            ["managedByWorkflow"],
+                            false
+                        )
+                    }
+                })
+                .addStep("readKafkaConnectionProfile", ResourceManagement, "readKafkaConnectionProfile", c =>
+                    c.register({
+                        ...selectInputsForRegister(b, c),
+                        resourceName: b.inputs.kafkaClusterName
+                    })
+                , {
+                    when: {
+                        templateExp: expr.dig(
+                            expr.deserializeRecord(b.inputs.kafkaConfig),
+                            ["managedByWorkflow"],
+                            false
+                        )
+                    }
+                })
                 // Create TrafficReplay CRD and read its UID
                 .addStep("createTrafficReplay", ResourceManagement, "createTrafficReplay", c =>
                     c.register({
@@ -611,6 +658,9 @@ export const FullMigration = WorkflowBuilder.create({
                         name: replayerName,
                         crdName: replayerName,
                         crdUid: c.steps.getCrdUid.outputs.uid,
+                        resolvedKafkaConnection: c.steps.readKafkaConnectionProfile.outputs.bootstrapServers,
+                        resolvedKafkaListenerName: c.steps.readKafkaConnectionProfile.outputs.listenerName,
+                        resolvedKafkaAuthType: c.steps.readKafkaConnectionProfile.outputs.authType,
                     })
                 )
                 .addStep("patchTrafficReplayReady", ResourceManagement, "patchTrafficReplayReady", c =>
