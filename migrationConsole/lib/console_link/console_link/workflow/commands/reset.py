@@ -224,7 +224,11 @@ def _delete_targets(targets, namespace):
 
 
 def _resolve_cascade_targets(targets, namespace, cascade):
-    """Check for dependents. Returns expanded targets or None if blocked."""
+    """Check for dependents. Returns expanded targets or None if blocked.
+
+    If the only blocking dependents are capture proxies, automatically
+    disables capture on them (removing the dependency) instead of blocking.
+    """
     target_names = {t[1] for t in targets}
     all_crds = list_migration_resources(namespace)
     dep_names = _find_dependents(target_names, all_crds)
@@ -236,6 +240,24 @@ def _resolve_cascade_targets(targets, namespace, cascade):
         return [r for r in all_crds if r[1] in target_names]
 
     blocking = [r for r in all_crds if r[1] in dep_names]
+
+    # Auto-disable capture on proxy dependents instead of blocking
+    proxy_blockers = [r for r in blocking if r[0] == 'capturedtraffics']
+    non_proxy_blockers = [r for r in blocking if r[0] != 'capturedtraffics']
+
+    if proxy_blockers and not non_proxy_blockers:
+        from .proxy import _set_capture_mode_headless
+        proxy_names = [r[1] for r in proxy_blockers]
+        click.echo("Dependent proxies found — disabling capture automatically:")
+        if _set_capture_mode_headless(namespace, proxy_names, enable=False):
+            # Re-read CRDs after disable-capture updated dependsOn
+            all_crds = list_migration_resources(namespace)
+            dep_names = _find_dependents(target_names, all_crds)
+            if not dep_names:
+                return targets
+            # Still blocked by something else after disabling capture
+            blocking = [r for r in all_crds if r[1] in dep_names]
+
     click.echo("Cannot delete — dependent resources exist:")
     for p, n, _, _ in blocking:
         click.echo(f"  {DISPLAY_NAMES.get(p, p)}: {n}")

@@ -166,6 +166,52 @@ def _indent(text, spaces):
     return '\n'.join(prefix + line for line in text.splitlines())
 
 
+def _set_capture_mode_headless(namespace, proxy_names, enable):
+    """Headless version for use by other commands (e.g., reset).
+
+    Modifies the running workflow's proxy config and resubmits.
+    Returns True on success.
+    """
+    mode = "capture" if enable else "non-capture"
+    try:
+        wf_name, config = _get_workflow_config(namespace)
+        if not config:
+            click.echo("  ⚠ No running workflow found, skipping", err=True)
+            return False
+
+        proxies = config.get('proxies') or []
+        targets = set(proxy_names)
+        changed = False
+        for proxy in proxies:
+            if proxy['name'] not in targets:
+                continue
+            pc = proxy.get('proxyConfig') or {}
+            want = not enable
+            if pc.get('noCapture', False) == want:
+                click.echo(f"  {proxy['name']}: already {mode}")
+                continue
+            pc['noCapture'] = want
+            proxy['proxyConfig'] = pc
+            click.echo(f"  {proxy['name']}: noCapture={want}")
+            changed = True
+
+        if not changed:
+            return True
+
+        click.echo(f"  Stopping workflow '{wf_name}'...")
+        _stop_and_delete_workflow(namespace, wf_name)
+
+        click.echo("  Submitting workflow via config processor...")
+        _submit_via_config_processor(namespace, config)
+        click.echo("  ✓ Workflow resubmitted")
+        return True
+
+    except Exception as e:
+        click.echo(f"  ⚠ Failed to disable capture: {e}", err=True)
+        logger.exception(e)
+        return False
+
+
 def _set_capture_mode(ctx, name, namespace, enable):
     mode = "capture" if enable else "non-capture"
     try:
