@@ -52,9 +52,10 @@ function makeParamsDict(
     rfsCoordinatorConfig: BaseExpression<Serialized<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>>,
     snapshotConfig: BaseExpression<Serialized<z.infer<typeof COMPLETE_SNAPSHOT_CONFIG>>>,
     options: BaseExpression<Serialized<z.infer<typeof ARGO_RFS_OPTIONS>>>,
-    sessionName: BaseExpression<string>
+    sessionName: BaseExpression<string>,
+    sourceEndpoint?: BaseExpression<string>
 ) {
-    return expr.mergeDicts(
+    const base = expr.mergeDicts(
         expr.mergeDicts(
             expr.mergeDicts(
                 makeTargetParamDict(targetConfig),
@@ -75,6 +76,18 @@ function makeParamsDict(
                 true)
         )
     );
+
+    // Pass sourceHost for Solr backup migrations (RFS detects Solr from sourceVersion)
+    if (sourceEndpoint) {
+        return expr.mergeDicts(base,
+            expr.ternary(
+                expr.isEmpty(sourceEndpoint),
+                expr.makeDict({}),
+                expr.makeDict({ sourceHost: sourceEndpoint })
+            )
+        );
+    }
+    return base;
 }
 
 function getRfsDeploymentName(sessionName: BaseExpression<string>) {
@@ -97,6 +110,9 @@ function getRfsDeploymentManifest
     rfsImageName: BaseExpression<string>,
     rfsImagePullPolicy: BaseExpression<IMAGE_PULL_POLICY>,
     resources: BaseExpression<ResourceRequirementsType>,
+
+    crdName: BaseExpression<string>,
+    crdUid: BaseExpression<string>,
 
     sourceK8sLabel: BaseExpression<string>,
     targetK8sLabel: BaseExpression<string>,
@@ -154,6 +170,14 @@ function getRfsDeploymentManifest
                 "migrations.opensearch.org/from-snapshot-migration": makeStringTypeProxy(args.fromSnapshotMigrationK8sLabel),
                 "migrations.opensearch.org/task": makeStringTypeProxy(args.taskK8sLabel)
             },
+            ownerReferences: [{
+                apiVersion: "migrations.opensearch.org/v1alpha1",
+                kind: "SnapshotMigration",
+                name: makeDirectTypeProxy(args.crdName),
+                uid: makeDirectTypeProxy(args.crdUid),
+                blockOwnerDeletion: true,
+                controller: false
+            }]
         },
         spec: {
             replicas: makeDirectTypeProxy(args.podReplicas),
@@ -323,6 +347,8 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addRequiredInput("loggingConfigurationOverrideConfigMap", typeToken<string>())
         .addRequiredInput("useLocalStack", typeToken<boolean>(), "Only used for local testing")
         .addRequiredInput("resources", typeToken<ResourceRequirementsType>())
+        .addRequiredInput("crdName", typeToken<string>())
+        .addRequiredInput("crdUid", typeToken<string>())
         .addRequiredInput("sourceK8sLabel", typeToken<string>())
         .addRequiredInput("targetK8sLabel", typeToken<string>())
         .addRequiredInput("snapshotK8sLabel", typeToken<string>())
@@ -333,7 +359,7 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addResourceTask(b => b
             .setDefinition({
                 action: "create",
-                setOwnerReference: true,
+                setOwnerReference: false,
                 manifest: getRfsDeploymentManifest({
                     podReplicas: expr.deserializeRecord(b.inputs.podReplicas),
                     loggingConfigMap: b.inputs.loggingConfigurationOverrideConfigMap,
@@ -347,6 +373,8 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
                     workflowName: expr.getWorkflowValue("name"),
                     jsonConfig: expr.toBase64(b.inputs.rfsJsonConfig),
                     resources: expr.deserializeRecord(b.inputs.resources),
+                    crdName: b.inputs.crdName,
+                    crdUid: b.inputs.crdUid,
                     sourceK8sLabel: b.inputs.sourceK8sLabel,
                     targetK8sLabel: b.inputs.targetK8sLabel,
                     snapshotK8sLabel: b.inputs.snapshotK8sLabel,
@@ -367,6 +395,9 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addRequiredInput("rfsCoordinatorConfig", typeToken<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>())
         .addRequiredInput("documentBackfillConfig", typeToken<z.infer<typeof ARGO_RFS_OPTIONS>>())
         .addRequiredInput("migrationLabel", typeToken<string>())
+        .addRequiredInput("crdName", typeToken<string>())
+        .addRequiredInput("crdUid", typeToken<string>())
+        .addOptionalInput("sourceEndpoint", c => expr.literal(""))
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["ReindexFromSnapshot"]))
 
         .addSteps(b => b
@@ -385,7 +416,8 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
                             b.inputs.rfsCoordinatorConfig,
                             b.inputs.snapshotConfig,
                             b.inputs.documentBackfillConfig,
-                            b.inputs.sessionName)
+                            b.inputs.sessionName,
+                            b.inputs.sourceEndpoint)
                     )),
                     resources: expr.serialize(expr.jsonPathStrict(b.inputs.documentBackfillConfig, "resources")),
                     sourceK8sLabel: b.inputs.sourceLabel,
@@ -407,6 +439,9 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addRequiredInput("sessionName", typeToken<string>())
         .addRequiredInput("documentBackfillConfig", typeToken<z.infer<typeof ARGO_RFS_OPTIONS>>())
         .addRequiredInput("migrationLabel", typeToken<string>())
+        .addRequiredInput("crdName", typeToken<string>())
+        .addRequiredInput("crdUid", typeToken<string>())
+        .addOptionalInput("sourceEndpoint", c => expr.literal(""))
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["ReindexFromSnapshot", "MigrationConsole"]))
 
         .addSteps(b => b
@@ -450,6 +485,9 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addRequiredInput("sessionName", typeToken<string>())
         .addRequiredInput("documentBackfillConfig", typeToken<z.infer<typeof ARGO_RFS_OPTIONS>>())
         .addRequiredInput("migrationLabel", typeToken<string>())
+        .addRequiredInput("crdName", typeToken<string>())
+        .addRequiredInput("crdUid", typeToken<string>())
+        .addOptionalInput("sourceEndpoint", c => expr.literal(""))
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["ReindexFromSnapshot", "MigrationConsole", "CoordinatorCluster"]))
 
         .addSteps(b => {
@@ -459,7 +497,9 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
                 .addStep("createRfsCoordinator", RfsCoordinatorCluster, "createRfsCoordinator", c =>
                         c.register({
                             clusterName: getRfsCoordinatorClusterName(b.inputs.sessionName),
-                            coordinatorImage: b.inputs.imageCoordinatorClusterLocation
+                            coordinatorImage: b.inputs.imageCoordinatorClusterLocation,
+                            crdName: b.inputs.crdName,
+                            crdUid: b.inputs.crdUid,
                         }),
                     {when: {templateExp: createRfsCluster}}
                 )

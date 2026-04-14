@@ -213,7 +213,7 @@
         },
         "retryStrategy": {
           "limit": "6",
-          "retryPolicy": "Always",
+          "retryPolicy": "OnError",
           "backoff": {
             "duration": "10",
             "factor": "2",
@@ -309,7 +309,7 @@
           [
             {
               "template": "deletemigrationworkflow",
-              "when": "{{=!(fromJSON(inputs.parameters.keepMigrationWorkflow))}}",
+              "when": "!({{inputs.parameters.keepMigrationWorkflow}})",
               "arguments": {
                 "parameters": []
               },
