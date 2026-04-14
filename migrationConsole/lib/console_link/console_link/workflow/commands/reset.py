@@ -289,6 +289,51 @@ def _show_resource_list(crds):
     click.echo("Use 'workflow reset --all' to delete everything.")
 
 
+def _reset_by_path(ctx, path, namespace, cascade, include_proxies):
+    """Handle 'workflow reset <path>' — resolve, check proxies, cascade, delete."""
+    targets = _resolve_targets(namespace, path)
+    if not targets:
+        click.echo(f"No resources matching '{path}'.")
+        return
+
+    if not include_proxies:
+        proxy_targets = [t for t in targets if t[0] == 'capturedtraffics']
+        if proxy_targets:
+            names = ', '.join(t[1] for t in proxy_targets)
+            click.echo(f"Proxies are protected by default: {names}")
+            click.echo("Use --include-proxies to delete them, or")
+            click.echo("use 'workflow proxy disable-capture' to switch to non-capture mode.")
+            ctx.exit(ExitCode.FAILURE.value)
+            return
+
+    targets = _resolve_cascade_targets(targets, namespace, cascade, include_proxies)
+    if targets is None:
+        ctx.exit(ExitCode.FAILURE.value)
+        return
+    if not _delete_targets(targets, namespace):
+        ctx.exit(ExitCode.FAILURE.value)
+
+
+def _reset_all_resources(namespace, crds, include_proxies):
+    """Handle --all: delete CRDs, disabling capture on proxies unless --include-proxies."""
+    if not crds:
+        return
+    click.echo("Deleting migration resources...")
+    if include_proxies:
+        _delete_targets(crds, namespace)
+        return
+
+    proxy_crds = [c for c in crds if c[0] == 'capturedtraffics']
+    non_proxy_crds = [c for c in crds if c[0] != 'capturedtraffics']
+    if proxy_crds:
+        from .proxy import _set_capture_mode_headless
+        proxy_names = [c[1] for c in proxy_crds]
+        click.echo("Switching proxies to non-capture mode:")
+        _set_capture_mode_headless(namespace, proxy_names, enable=False)
+    if non_proxy_crds:
+        _delete_targets(non_proxy_crds, namespace)
+
+
 @click.command(name="reset")
 @click.argument(
     'path', required=False, default=None,
@@ -328,28 +373,7 @@ def reset_command(ctx, path, reset_all, cascade, include_proxies, namespace):
         load_k8s_config()
 
         if path is not None:
-            targets = _resolve_targets(namespace, path)
-            if not targets:
-                click.echo(f"No resources matching '{path}'.")
-                return
-
-            # Block direct proxy deletion unless --include-proxies
-            if not include_proxies:
-                proxy_targets = [t for t in targets if t[0] == 'capturedtraffics']
-                if proxy_targets:
-                    names = ', '.join(t[1] for t in proxy_targets)
-                    click.echo(f"Proxies are protected by default: {names}")
-                    click.echo("Use --include-proxies to delete them, or")
-                    click.echo("use 'workflow proxy disable-capture' to switch to non-capture mode.")
-                    ctx.exit(ExitCode.FAILURE.value)
-                    return
-
-            targets = _resolve_cascade_targets(targets, namespace, cascade, include_proxies)
-            if targets is None:
-                ctx.exit(ExitCode.FAILURE.value)
-                return
-            if not _delete_targets(targets, namespace):
-                ctx.exit(ExitCode.FAILURE.value)
+            _reset_by_path(ctx, path, namespace, cascade, include_proxies)
             return
 
         crds = list_migration_resources(namespace)
@@ -362,22 +386,7 @@ def reset_command(ctx, path, reset_all, cascade, include_proxies, namespace):
             _show_resource_list(crds)
             return
 
-        if crds:
-            click.echo("Deleting migration resources...")
-            if include_proxies:
-                _delete_targets(crds, namespace)
-            else:
-                # Disable capture on proxies instead of deleting them
-                proxy_crds = [c for c in crds if c[0] == 'capturedtraffics']
-                non_proxy_crds = [c for c in crds if c[0] != 'capturedtraffics']
-                if proxy_crds:
-                    from .proxy import _set_capture_mode_headless
-                    proxy_names = [c[1] for c in proxy_crds]
-                    click.echo("Switching proxies to non-capture mode:")
-                    _set_capture_mode_headless(namespace, proxy_names, enable=False)
-                if non_proxy_crds:
-                    _delete_targets(non_proxy_crds, namespace)
-
+        _reset_all_resources(namespace, crds, include_proxies)
         click.echo("Cleaning up workflows...")
         _stop_and_delete_workflows(namespace)
         click.echo("Done.")

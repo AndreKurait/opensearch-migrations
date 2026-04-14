@@ -19,7 +19,6 @@ from kubernetes import client
 from kubernetes.client.rest import ApiException
 
 from ..models.utils import ExitCode, load_k8s_config
-from .crd_utils import CRD_GROUP, CRD_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +152,7 @@ spec:
         value: |
 {_indent(wf_config_str, 10)}"""
 
-        result = subprocess.run(
+        subprocess.run(
             ['kubectl', 'create', '-f', '-', '-n', namespace],
             input=workflow_yaml, check=True, capture_output=True, text=True
         )
@@ -166,13 +165,31 @@ def _indent(text, spaces):
     return '\n'.join(prefix + line for line in text.splitlines())
 
 
+def _update_proxy_configs(proxies, target_names, enable):
+    """Update noCapture on matching proxies. Returns True if any changed."""
+    mode = "capture" if enable else "non-capture"
+    want = not enable
+    changed = False
+    for proxy in proxies:
+        if proxy['name'] not in target_names:
+            continue
+        pc = proxy.get('proxyConfig') or {}
+        if pc.get('noCapture', False) == want:
+            click.echo(f"  {proxy['name']}: already {mode}")
+            continue
+        pc['noCapture'] = want
+        proxy['proxyConfig'] = pc
+        click.echo(f"  {proxy['name']}: noCapture={want}")
+        changed = True
+    return changed
+
+
 def _set_capture_mode_headless(namespace, proxy_names, enable):
     """Headless version for use by other commands (e.g., reset).
 
     Modifies the running workflow's proxy config and resubmits.
     Returns True on success.
     """
-    mode = "capture" if enable else "non-capture"
     try:
         wf_name, config = _get_workflow_config(namespace)
         if not config:
@@ -180,22 +197,7 @@ def _set_capture_mode_headless(namespace, proxy_names, enable):
             return False
 
         proxies = config.get('proxies') or []
-        targets = set(proxy_names)
-        changed = False
-        for proxy in proxies:
-            if proxy['name'] not in targets:
-                continue
-            pc = proxy.get('proxyConfig') or {}
-            want = not enable
-            if pc.get('noCapture', False) == want:
-                click.echo(f"  {proxy['name']}: already {mode}")
-                continue
-            pc['noCapture'] = want
-            proxy['proxyConfig'] = pc
-            click.echo(f"  {proxy['name']}: noCapture={want}")
-            changed = True
-
-        if not changed:
+        if not _update_proxy_configs(proxies, set(proxy_names), enable):
             return True
 
         click.echo(f"  Stopping workflow '{wf_name}'...")
@@ -231,21 +233,7 @@ def _set_capture_mode(ctx, name, namespace, enable):
             return
 
         targets = {name} if name else set(proxy_names)
-        changed = False
-        for proxy in proxies:
-            if proxy['name'] not in targets:
-                continue
-            pc = proxy.get('proxyConfig') or {}
-            want = not enable
-            if pc.get('noCapture', False) == want:
-                click.echo(f"  {proxy['name']}: already {mode}")
-                continue
-            pc['noCapture'] = want
-            proxy['proxyConfig'] = pc
-            click.echo(f"  {proxy['name']}: noCapture={want}")
-            changed = True
-
-        if not changed:
+        if not _update_proxy_configs(proxies, targets, enable):
             return
 
         click.echo(f"Stopping workflow '{wf_name}'...")
