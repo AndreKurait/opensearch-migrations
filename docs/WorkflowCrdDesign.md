@@ -210,7 +210,7 @@ workflow proxy enable-capture source-proxy    # restore capture
 
 The command reads the **running workflow's denormalized config** directly from the Argo
 workflow's `spec.arguments.parameters[name=config]` — not the user's saved ConfigMap.
-This preserves any config drift from previous `configure edit` + `resubmit` cycles.
+This preserves any config drift from previous `configure edit` + `submit` cycles.
 
 ```mermaid
 sequenceDiagram
@@ -233,13 +233,13 @@ sequenceDiagram
 
 1. **Reads from the running Argo workflow, not the ConfigMap.** The running workflow's
    config is the actual state of the system. Reading from the ConfigMap could revert
-   changes made via `configure edit` + `resubmit`.
+   changes made via `configure edit` + `submit`.
 
 2. **Bypasses the config processor.** The denormalized config already has all the labels
    and resolved references needed by the workflow templates. Going through the config
    processor would re-derive everything from the user config, losing any drift.
 
-3. **CLI patches CRD `dependsOn` directly** before resubmitting. This is the one exception
+3. **CLI patches CRD `dependsOn` directly** before submitting. This is the one exception
    to the "CLI only deletes CRDs" rule — `dependsOn` is metadata about the dependency
    graph, not component state. The Argo workflow doesn't manage `dependsOn`.
 

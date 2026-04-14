@@ -504,8 +504,7 @@ class TestSubmitErrorPathsIntegration:
         assert "CONFIG_PROCESSOR_DIR" in result.output
 
     def test_submit_script_fails_with_already_exists(self, runner, reset_ns, monkeypatch, tmp_path):
-        """Submit with a script that outputs AlreadyExists shows hint."""
-        # Create a fake submit script that fails with AlreadyExists
+        """Submit with a script that fails with AlreadyExists is treated as a script failure."""
         script = tmp_path / "createMigrationWorkflowFromUserConfiguration.sh"
         script.write_text("#!/bin/bash\necho 'AlreadyExists' >&2; exit 1\n")
         script.chmod(0o755)
@@ -518,8 +517,7 @@ class TestSubmitErrorPathsIntegration:
 
         result = runner.invoke(workflow_cli, ["submit", "--namespace", reset_ns])
         assert result.exit_code != 0
-        assert "workflow already exists" in result.output
-        assert "resubmit" in result.output
+        assert "failed" in result.output.lower()
 
     def test_submit_script_fails_generic(self, runner, reset_ns, monkeypatch, tmp_path):
         """Submit with a script that fails generically shows exit code."""
