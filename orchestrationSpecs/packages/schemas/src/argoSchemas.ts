@@ -1,6 +1,5 @@
 import {
     CLUSTER_CONFIG,
-    DEFAULT_KAFKA_TOPIC_SPEC_OVERRIDES,
     getZodKeys,
     HTTP_ENDPOINT_PATTERN,
     KAFKA_CLIENT_CONFIG,
@@ -93,12 +92,11 @@ export const NAMED_KAFKA_CLUSTER_CONFIG = z.object({
     name: z.string(),
     version: z.string(),
     config: makeOptionalDefaultedFieldsRequired(KAFKA_CLUSTER_CREATION_CONFIG),
-    topics: z.array(z.string()).readonly(),
-    configChecksum: z.string(),
+    topics: z.array(z.string()).readonly()
 });
 
 export const NAMED_SOURCE_CLUSTER_CONFIG =
-    makeOptionalDefaultedFieldsRequired(SOURCE_CLUSTER_CONFIG.safeExtend({
+    makeOptionalDefaultedFieldsRequired(SOURCE_CLUSTER_CONFIG.omit({enabled: true}).safeExtend({
         label: z.string(), // override to required
         proxy: SOURCE_PROXY_CONFIG.optional(),
     }));
@@ -107,7 +105,7 @@ export const NAMED_SOURCE_CLUSTER_CONFIG_WITHOUT_SNAPSHOT_INFO =
     NAMED_SOURCE_CLUSTER_CONFIG.omit({snapshotInfo: true});
 
 export const NAMED_TARGET_CLUSTER_CONFIG =
-    makeOptionalDefaultedFieldsRequired(TARGET_CLUSTER_CONFIG.safeExtend({
+    makeOptionalDefaultedFieldsRequired(TARGET_CLUSTER_CONFIG.omit({enabled: true}).safeExtend({
         label: z.string().regex(/^[a-zA-Z0-9_]+$/), // override to required
     }));
 
@@ -202,29 +200,16 @@ export const SNAPSHOT_REPO_CONFIG = z.object({
 export const SNAPSHOT_MIGRATION_CONFIG = z.object({
     label: z.string(), // from the record of the user config
     snapshotNameResolution: SNAPSHOT_NAME_RESOLUTION,
-    snapshotConfigChecksum: z.string(),
     migrations: z.array(PER_INDICES_SNAPSHOT_MIGRATION_CONFIG).min(1),
     sourceVersion: z.string(),
     sourceLabel: z.string(),
     targetConfig: NAMED_TARGET_CLUSTER_CONFIG,
-    snapshotConfig: SNAPSHOT_REPO_CONFIG,
-    // For Solr/HTTP API sources (no snapshot)
-    sourceEndpoint: z.string().optional(),
-    sourceAllowInsecure: z.boolean().optional(),
-    sourceAuth: z.any().optional(),
-    configChecksum: z.string(),
-    checksumForReplayer: z.string(),
+    snapshotConfig: SNAPSHOT_REPO_CONFIG
 });
 
 export const NAMED_KAFKA_CLIENT_CONFIG =
     makeOptionalDefaultedFieldsRequired(KAFKA_CLIENT_CONFIG).extend({
-        topicSpecOverrides: z.object({
-            partitions: z.number(),
-            replicas: z.number(),
-            config: z.record(z.string(), z.any()),
-        }).default(DEFAULT_KAFKA_TOPIC_SPEC_OVERRIDES),
-        label: z.string(),
-        configChecksum: z.string(),
+        label: z.string()
     });
 
 export const DENORMALIZED_PROXY_CONFIG = z.object({
@@ -232,10 +217,7 @@ export const DENORMALIZED_PROXY_CONFIG = z.object({
     kafkaConfig: NAMED_KAFKA_CLIENT_CONFIG,
     sourceEndpoint: z.string(),
     sourceAllowInsecure: z.boolean().default(false),
-    proxyConfig: ARGO_PROXY_OPTIONS,
-    configChecksum: z.string(),
-    checksumForSnapshot: z.string(),
-    checksumForReplayer: z.string(),
+    proxyConfig: ARGO_PROXY_OPTIONS
 });
 
 export const PER_SOURCE_CREATE_SNAPSHOTS_CONFIG = z.object({
@@ -245,15 +227,7 @@ export const PER_SOURCE_CREATE_SNAPSHOTS_CONFIG = z.object({
     repo: DENORMALIZED_S3_REPO_CONFIG,
     semaphoreConfigMapName: z.string(),
     semaphoreKey: z.string(),
-    dependsOnProxySetups: z.array(z.object({
-        name: z.string(),
-        configChecksum: z.string(),
-    })),
-    configChecksum: z.string(),
-});
-
-export const ENRICHED_SNAPSHOT_MIGRATION_FILTER = SNAPSHOT_MIGRATION_FILTER.extend({
-    configChecksum: z.string(),
+    dependsOnProxySetups: z.array(z.string())
 });
 
 export const DENORMALIZED_CREATE_SNAPSHOTS_CONFIG = z.object({
@@ -262,15 +236,12 @@ export const DENORMALIZED_CREATE_SNAPSHOTS_CONFIG = z.object({
 });
 
 export const DENORMALIZED_REPLAY_CONFIG = z.object({
-    name: z.string(),
-    dependsOnSnapshotMigrations: z.array(ENRICHED_SNAPSHOT_MIGRATION_FILTER),
+    dependsOnSnapshotMigrations: z.array(SNAPSHOT_MIGRATION_FILTER),
     fromProxy: z.string(),
-    fromProxyConfigChecksum: z.string(),
     kafkaClusterName: z.string(),
     kafkaConfig: NAMED_KAFKA_CLIENT_CONFIG,
     replayerConfig: ARGO_REPLAYER_OPTIONS,
-    toTarget: NAMED_TARGET_CLUSTER_CONFIG,
-    configChecksum: z.string(),
+    toTarget: NAMED_TARGET_CLUSTER_CONFIG
 });
 
 export const ARGO_MIGRATION_CONFIG = z.object({

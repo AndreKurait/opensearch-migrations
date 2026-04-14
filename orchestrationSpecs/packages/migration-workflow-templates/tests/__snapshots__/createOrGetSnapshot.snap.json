@@ -91,9 +91,6 @@
               "name": "semaphoreKey"
             },
             {
-              "name": "configChecksum"
-            },
-            {
               "name": "imageMigrationConsoleLocation"
             },
             {
@@ -160,10 +157,6 @@
                   {
                     "name": "semaphoreKey",
                     "value": "{{inputs.parameters.semaphoreKey}}"
-                  },
-                  {
-                    "name": "configChecksum",
-                    "value": "{{inputs.parameters.configChecksum}}"
                   },
                   {
                     "name": "imageMigrationConsoleLocation",

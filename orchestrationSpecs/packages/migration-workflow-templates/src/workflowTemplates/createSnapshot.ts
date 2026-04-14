@@ -37,13 +37,6 @@ const checkScript = `
     echo "Snapshot completed successfully" > /tmp/status-output.txt
     exit 0
   fi
-
-  # If snapshot has permanently failed, stop retrying
-  if [ "$status" = "FAILED" ]; then
-    echo "Snapshot failed" > /tmp/status-output.txt
-    echo Failed > /tmp/phase-output.txt
-    exit 0
-  fi
   
   # Deep check and save output in case there was a race condition
   deep_output=$(console --config-file=/config/migration_services.yaml snapshot status --deep-check)
@@ -203,7 +196,6 @@ export const CreateSnapshot = WorkflowBuilder.create({
         .addRequiredInput("targetLabel", typeToken<string>())
         .addRequiredInput("semaphoreConfigMapName", typeToken<string>())
         .addRequiredInput("semaphoreKey", typeToken<string>())
-        .addRequiredInput("configChecksum", typeToken<string>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["MigrationConsole"]))
 
         .addSteps(b => b
@@ -236,8 +228,7 @@ export const CreateSnapshot = WorkflowBuilder.create({
                         expr.literal("-"),
                         expr.jsonPathStrict(b.inputs.snapshotConfig, "label")
                     ),
-                    snapshotName: expr.jsonPathStrict(b.inputs.snapshotConfig, "snapshotName"),
-                    configChecksum: b.inputs.configChecksum,
+                    snapshotName: expr.jsonPathStrict(b.inputs.snapshotConfig, "snapshotName")
                 }))
         )
         .addSynchronization(c => ({

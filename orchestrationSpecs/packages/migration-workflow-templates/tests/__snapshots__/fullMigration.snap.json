@@ -125,14 +125,6 @@
                   {
                     "name": "clusterConfig",
                     "value": "{{=jsonpath(inputs.parameters.kafkaClusterConfig, '$.config')}}"
-                  },
-                  {
-                    "name": "crdName",
-                    "value": "{{inputs.parameters.clusterName}}"
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": "{{steps.getCrdUid.outputs.parameters.uid}}"
                   }
                 ]
               },
@@ -192,168 +184,6 @@
         }
       },
       {
-        "name": "proxykafkagoneteardown",
-        "inputs": {
-          "parameters": [
-            {
-              "name": "proxyName"
-            },
-            {
-              "name": "kafkaClusterName"
-            },
-            {
-              "name": "proxyConfig"
-            },
-            {
-              "name": "listenPort"
-            },
-            {
-              "name": "podReplicas"
-            },
-            {
-              "name": "imageMigrationConsoleLocation"
-            },
-            {
-              "name": "imageMigrationConsolePullPolicy"
-            },
-            {
-              "name": "imageCaptureProxyLocation"
-            },
-            {
-              "name": "imageCaptureProxyPullPolicy"
-            }
-          ]
-        },
-        "steps": [
-          [
-            {
-              "templateRef": {
-                "template": "waitforcrddeletion",
-                "name": "resource-management"
-              },
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "imageMigrationConsoleLocation",
-                    "value": "{{inputs.parameters.imageMigrationConsoleLocation}}"
-                  },
-                  {
-                    "name": "imageMigrationConsolePullPolicy",
-                    "value": "{{inputs.parameters.imageMigrationConsolePullPolicy}}"
-                  },
-                  {
-                    "name": "resourceName",
-                    "value": "{{inputs.parameters.kafkaClusterName}}"
-                  },
-                  {
-                    "name": "resourceKind",
-                    "value": "KafkaCluster"
-                  }
-                ]
-              },
-              "name": "waitForKafkaDeletion"
-            }
-          ],
-          [
-            {
-              "templateRef": {
-                "template": "deployproxydeployment",
-                "name": "setup-capture"
-              },
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "proxyName",
-                    "value": "{{inputs.parameters.proxyName}}"
-                  },
-                  {
-                    "name": "listenPort",
-                    "value": "{{inputs.parameters.listenPort}}"
-                  },
-                  {
-                    "name": "podReplicas",
-                    "value": "{{inputs.parameters.podReplicas}}"
-                  },
-                  {
-                    "name": "imageCaptureProxyLocation",
-                    "value": "{{inputs.parameters.imageCaptureProxyLocation}}"
-                  },
-                  {
-                    "name": "imageCaptureProxyPullPolicy",
-                    "value": "{{inputs.parameters.imageCaptureProxyPullPolicy}}"
-                  },
-                  {
-                    "name": "resources",
-                    "value": "{{=toJSON(fromJSON(inputs.parameters.proxyConfig)['proxyConfig']['resources'])}}"
-                  },
-                  {
-                    "name": "jsonConfig",
-                    "value": "{{=toJSON(sprig.merge(sprig.omit(fromJSON(inputs.parameters.proxyConfig)['proxyConfig'], 'noCapture', 'resources', 'internetFacing', 'tls', 'podReplicas', 'listenPort'), sprig.dict(\"destinationUri\", fromJSON(inputs.parameters.proxyConfig)['sourceEndpoint'], \"insecureDestination\", fromJSON(inputs.parameters.proxyConfig)['sourceAllowInsecure'])))}}"
-                  },
-                  {
-                    "name": "kafkaAuthConfigMapName",
-                    "value": ""
-                  },
-                  {
-                    "name": "kafkaAuthType",
-                    "value": ""
-                  },
-                  {
-                    "name": "kafkaSecretName",
-                    "value": ""
-                  },
-                  {
-                    "name": "kafkaCaSecretName",
-                    "value": ""
-                  },
-                  {
-                    "name": "crdName",
-                    "value": ""
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": ""
-                  }
-                ]
-              },
-              "name": "redeployNoCapture"
-            }
-          ],
-          [
-            {
-              "templateRef": {
-                "template": "waitforcrddeletion",
-                "name": "resource-management"
-              },
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "imageMigrationConsoleLocation",
-                    "value": "{{inputs.parameters.imageMigrationConsoleLocation}}"
-                  },
-                  {
-                    "name": "imageMigrationConsolePullPolicy",
-                    "value": "{{inputs.parameters.imageMigrationConsolePullPolicy}}"
-                  },
-                  {
-                    "name": "resourceName",
-                    "value": "{{inputs.parameters.proxyName}}"
-                  },
-                  {
-                    "name": "resourceKind",
-                    "value": "CapturedTraffic"
-                  }
-                ]
-              },
-              "name": "waitForCapturedTrafficDeletion"
-            }
-          ]
-        ],
-        "outputs": {
-          "parameters": []
-        }
-      },
-      {
         "name": "setupsingleproxy",
         "inputs": {
           "parameters": [
@@ -404,7 +234,6 @@
                 "template": "waitforkafkacluster",
                 "name": "resource-management"
               },
-              "when": "{{=sprig.dig('kafkaConfig', 'managedByWorkflow', false, fromJSON(inputs.parameters.proxyConfig))}}",
               "arguments": {
                 "parameters": [
                   {
@@ -418,32 +247,10 @@
                   {
                     "name": "resourceName",
                     "value": "{{inputs.parameters.kafkaClusterName}}"
-                  },
-                  {
-                    "name": "configChecksum",
-                    "value": ""
                   }
                 ]
               },
               "name": "waitForKafkaCluster"
-            }
-          ],
-          [
-            {
-              "templateRef": {
-                "template": "readkafkaconnectionprofile",
-                "name": "resource-management"
-              },
-              "when": "{{=sprig.dig('kafkaConfig', 'managedByWorkflow', false, fromJSON(inputs.parameters.proxyConfig))}}",
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "resourceName",
-                    "value": "{{inputs.parameters.kafkaClusterName}}"
-                  }
-                ]
-              },
-              "name": "readKafkaConnectionProfile"
             }
           ],
           [
@@ -524,26 +331,6 @@
                   {
                     "name": "imageCaptureProxyPullPolicy",
                     "value": "{{inputs.parameters.imageCaptureProxyPullPolicy}}"
-                  },
-                  {
-                    "name": "crdName",
-                    "value": "{{inputs.parameters.proxyName}}"
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": "{{steps.getCrdUid.outputs.parameters.uid}}"
-                  },
-                  {
-                    "name": "resolvedKafkaConnection",
-                    "value": "{{steps.readKafkaConnectionProfile.outputs.parameters.bootstrapServers}}"
-                  },
-                  {
-                    "name": "resolvedKafkaListenerName",
-                    "value": "{{steps.readKafkaConnectionProfile.outputs.parameters.listenerName}}"
-                  },
-                  {
-                    "name": "resolvedKafkaAuthType",
-                    "value": "{{steps.readKafkaConnectionProfile.outputs.parameters.authType}}"
                   }
                 ]
               },
@@ -570,53 +357,6 @@
           ],
           [
             {
-              "template": "proxykafkagoneteardown",
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "proxyName",
-                    "value": "{{inputs.parameters.proxyName}}"
-                  },
-                  {
-                    "name": "kafkaClusterName",
-                    "value": "{{inputs.parameters.kafkaClusterName}}"
-                  },
-                  {
-                    "name": "proxyConfig",
-                    "value": "{{inputs.parameters.proxyConfig}}"
-                  },
-                  {
-                    "name": "listenPort",
-                    "value": "{{inputs.parameters.listenPort}}"
-                  },
-                  {
-                    "name": "podReplicas",
-                    "value": "{{inputs.parameters.podReplicas}}"
-                  },
-                  {
-                    "name": "imageMigrationConsoleLocation",
-                    "value": "{{inputs.parameters.imageMigrationConsoleLocation}}"
-                  },
-                  {
-                    "name": "imageMigrationConsolePullPolicy",
-                    "value": "{{inputs.parameters.imageMigrationConsolePullPolicy}}"
-                  },
-                  {
-                    "name": "imageCaptureProxyLocation",
-                    "value": "{{inputs.parameters.imageCaptureProxyLocation}}"
-                  },
-                  {
-                    "name": "imageCaptureProxyPullPolicy",
-                    "value": "{{inputs.parameters.imageCaptureProxyPullPolicy}}"
-                  }
-                ]
-              },
-              "name": "kafkaGonePath",
-              "continueOn": {
-                "failed": true
-              }
-            },
-            {
               "templateRef": {
                 "template": "waitforcrddeletion",
                 "name": "resource-management"
@@ -641,10 +381,7 @@
                   }
                 ]
               },
-              "name": "directTeardown",
-              "continueOn": {
-                "failed": true
-              }
+              "name": "waitForCrdDeletion"
             }
           ]
         ],
@@ -727,15 +464,7 @@
                   },
                   {
                     "name": "resourceName",
-                    "value": "{{=item['name']}}"
-                  },
-                  {
-                    "name": "configChecksum",
-                    "value": "{{=item['configChecksum']}}"
-                  },
-                  {
-                    "name": "checksumField",
-                    "value": "configChecksum"
+                    "value": "{{item}}"
                   }
                 ]
               },
@@ -789,10 +518,6 @@
                   {
                     "name": "semaphoreKey",
                     "value": "{{=fromJSON(inputs.parameters.snapshotItemConfig)['semaphoreKey']}}"
-                  },
-                  {
-                    "name": "configChecksum",
-                    "value": "{{=fromJSON(inputs.parameters.snapshotItemConfig)['configChecksum']}}"
                   }
                 ]
               },
@@ -917,7 +642,7 @@
                   },
                   {
                     "name": "snapshotItemConfig",
-                    "value": "{{=toJSON(sprig.dict(\"label\", item['label'], \"snapshotPrefix\", item['snapshotPrefix'], \"config\", fromJSON(item['config']), \"repo\", fromJSON(item['repo']), \"semaphoreConfigMapName\", item['semaphoreConfigMapName'], \"semaphoreKey\", item['semaphoreKey'], \"dependsOnProxySetups\", fromJSON(toJSON(item))['dependsOnProxySetups'], \"configChecksum\", item['configChecksum']))}}"
+                    "value": "{{=toJSON(sprig.dict(\"label\", item['label'], \"snapshotPrefix\", item['snapshotPrefix'], \"config\", fromJSON(item['config']), \"repo\", fromJSON(item['repo']), \"semaphoreConfigMapName\", item['semaphoreConfigMapName'], \"semaphoreKey\", item['semaphoreKey'], \"dependsOnProxySetups\", fromJSON(toJSON(item))['dependsOnProxySetups']))}}"
                   },
                   {
                     "name": "sourceConfig",
@@ -954,16 +679,6 @@
             },
             {
               "name": "groupName_view"
-            },
-            {
-              "name": "crdName"
-            },
-            {
-              "name": "crdUid"
-            },
-            {
-              "name": "sourceEndpoint",
-              "value": ""
             },
             {
               "name": "metadataMigrationConfig",
@@ -1034,10 +749,6 @@
                     "value": "{{inputs.parameters.metadataMigrationConfig}}"
                   },
                   {
-                    "name": "sourceEndpoint",
-                    "value": "{{inputs.parameters.sourceEndpoint}}"
-                  },
-                  {
                     "name": "snapshotConfig",
                     "value": "{{inputs.parameters.snapshotConfig}}"
                   },
@@ -1104,18 +815,6 @@
                     "value": "{{inputs.parameters.migrationLabel}}"
                   },
                   {
-                    "name": "crdName",
-                    "value": "{{inputs.parameters.crdName}}"
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": "{{inputs.parameters.crdUid}}"
-                  },
-                  {
-                    "name": "sourceEndpoint",
-                    "value": "{{inputs.parameters.sourceEndpoint}}"
-                  },
-                  {
                     "name": "imageReindexFromSnapshotLocation",
                     "value": "{{inputs.parameters.imageReindexFromSnapshotLocation}}"
                   },
@@ -1167,12 +866,6 @@
               "name": "resolvedSnapshotName"
             },
             {
-              "name": "crdName"
-            },
-            {
-              "name": "crdUid"
-            },
-            {
               "name": "uniqueRunNonce",
               "description": "Workflow session nonce",
               "value": "{{workflow.uid}}"
@@ -1216,14 +909,6 @@
               "withParam": "{{=fromJSON(inputs.parameters.snapshotMigrationConfig)['migrations']}}",
               "arguments": {
                 "parameters": [
-                  {
-                    "name": "crdName",
-                    "value": "{{inputs.parameters.crdName}}"
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": "{{inputs.parameters.crdUid}}"
-                  },
                   {
                     "name": "uniqueRunNonce",
                     "value": "{{inputs.parameters.uniqueRunNonce}}"
@@ -1303,10 +988,6 @@
                   {
                     "name": "groupName_view",
                     "value": "{{=item['label']}}"
-                  },
-                  {
-                    "name": "sourceEndpoint",
-                    "value": "{{=sprig.dig('sourceEndpoint', '', fromJSON(inputs.parameters.snapshotMigrationConfig))}}"
                   }
                 ]
               },
@@ -1324,14 +1005,6 @@
                   {
                     "name": "resourceName",
                     "value": "{{inputs.parameters.resourceName}}"
-                  },
-                  {
-                    "name": "configChecksum",
-                    "value": ""
-                  },
-                  {
-                    "name": "checksumForReplayer",
-                    "value": ""
                   }
                 ]
               },
@@ -1469,7 +1142,7 @@
                 "parameters": [
                   {
                     "name": "resourceName",
-                    "value": "{{=(('dataSnapshotResourceName' in fromJSON(inputs.parameters.snapshotMigrationConfig)['snapshotNameResolution']) ? (fromJSON(inputs.parameters.snapshotMigrationConfig)['snapshotNameResolution']['dataSnapshotResourceName']) : (''))}}"
+                    "value": "{{=fromJSON(inputs.parameters.snapshotMigrationConfig)['snapshotNameResolution']['dataSnapshotResourceName']}}"
                   },
                   {
                     "name": "imageMigrationConsoleLocation",
@@ -1478,14 +1151,6 @@
                   {
                     "name": "imageMigrationConsolePullPolicy",
                     "value": "{{inputs.parameters.imageMigrationConsolePullPolicy}}"
-                  },
-                  {
-                    "name": "configChecksum",
-                    "value": ""
-                  },
-                  {
-                    "name": "checksumField",
-                    "value": "checksumForSnapshotMigration"
                   }
                 ]
               },
@@ -1503,7 +1168,7 @@
                 "parameters": [
                   {
                     "name": "resourceName",
-                    "value": "{{=(('dataSnapshotResourceName' in fromJSON(inputs.parameters.snapshotMigrationConfig)['snapshotNameResolution']) ? (fromJSON(inputs.parameters.snapshotMigrationConfig)['snapshotNameResolution']['dataSnapshotResourceName']) : (''))}}"
+                    "value": "{{=fromJSON(inputs.parameters.snapshotMigrationConfig)['snapshotNameResolution']['dataSnapshotResourceName']}}"
                   }
                 ]
               },
@@ -1597,14 +1262,6 @@
                   {
                     "name": "resolvedSnapshotName",
                     "value": "{{=(('externalSnapshotName' in fromJSON(inputs.parameters.snapshotMigrationConfig)['snapshotNameResolution']) ? (fromJSON(inputs.parameters.snapshotMigrationConfig)['snapshotNameResolution']['externalSnapshotName']) : (steps.readSnapshotName.outputs.parameters.snapshotName))}}"
-                  },
-                  {
-                    "name": "crdName",
-                    "value": "{{inputs.parameters.resourceName}}"
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": "{{steps.getCrdUid.outputs.parameters.uid}}"
                   }
                 ]
               },
@@ -1685,14 +1342,6 @@
                   {
                     "name": "resourceName",
                     "value": "{{=item['source']+'-'+item['snapshot']}}"
-                  },
-                  {
-                    "name": "configChecksum",
-                    "value": "{{=item['configChecksum']}}"
-                  },
-                  {
-                    "name": "checksumField",
-                    "value": "checksumForReplayer"
                   }
                 ]
               },
@@ -1718,14 +1367,6 @@
                   {
                     "name": "resourceName",
                     "value": "{{inputs.parameters.fromProxy}}"
-                  },
-                  {
-                    "name": "configChecksum",
-                    "value": ""
-                  },
-                  {
-                    "name": "checksumField",
-                    "value": "configChecksum"
                   }
                 ]
               },
@@ -1738,7 +1379,6 @@
                 "template": "waitforkafkacluster",
                 "name": "resource-management"
               },
-              "when": "{{=sprig.dig('managedByWorkflow', false, fromJSON(inputs.parameters.kafkaConfig))}}",
               "arguments": {
                 "parameters": [
                   {
@@ -1752,32 +1392,10 @@
                   {
                     "name": "resourceName",
                     "value": "{{inputs.parameters.kafkaClusterName}}"
-                  },
-                  {
-                    "name": "configChecksum",
-                    "value": ""
                   }
                 ]
               },
               "name": "waitForKafkaCluster"
-            }
-          ],
-          [
-            {
-              "templateRef": {
-                "template": "readkafkaconnectionprofile",
-                "name": "resource-management"
-              },
-              "when": "{{=sprig.dig('managedByWorkflow', false, fromJSON(inputs.parameters.kafkaConfig))}}",
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "resourceName",
-                    "value": "{{inputs.parameters.kafkaClusterName}}"
-                  }
-                ]
-              },
-              "name": "readKafkaConnectionProfile"
             }
           ],
           [
@@ -1853,26 +1471,6 @@
                   {
                     "name": "name",
                     "value": "{{=inputs.parameters.fromProxy+'-'+fromJSON(inputs.parameters.targetConfig)['label']+'-replayer'}}"
-                  },
-                  {
-                    "name": "crdName",
-                    "value": "{{=inputs.parameters.fromProxy+'-'+fromJSON(inputs.parameters.targetConfig)['label']+'-replayer'}}"
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": "{{steps.getCrdUid.outputs.parameters.uid}}"
-                  },
-                  {
-                    "name": "resolvedKafkaConnection",
-                    "value": "{{steps.readKafkaConnectionProfile.outputs.parameters.bootstrapServers}}"
-                  },
-                  {
-                    "name": "resolvedKafkaListenerName",
-                    "value": "{{steps.readKafkaConnectionProfile.outputs.parameters.listenerName}}"
-                  },
-                  {
-                    "name": "resolvedKafkaAuthType",
-                    "value": "{{steps.readKafkaConnectionProfile.outputs.parameters.authType}}"
                   }
                 ]
               },
@@ -2051,7 +1649,7 @@
                   },
                   {
                     "name": "kafkaClusterConfig",
-                    "value": "{{=toJSON(sprig.dict(\"name\", item['name'], \"version\", item['version'], \"config\", fromJSON(item['config']), \"topics\", fromJSON(item['topics']), \"configChecksum\", item['configChecksum']))}}"
+                    "value": "{{=toJSON(sprig.dict(\"name\", item['name'], \"version\", item['version'], \"config\", fromJSON(item['config']), \"topics\", fromJSON(item['topics'])))}}"
                   },
                   {
                     "name": "clusterName",
@@ -2096,7 +1694,7 @@
                   },
                   {
                     "name": "proxyConfig",
-                    "value": "{{=toJSON(sprig.dict(\"name\", item['name'], \"kafkaConfig\", fromJSON(item['kafkaConfig']), \"sourceEndpoint\", item['sourceEndpoint'], \"sourceAllowInsecure\", item['sourceAllowInsecure'], \"proxyConfig\", fromJSON(item['proxyConfig']), \"configChecksum\", item['configChecksum'], \"checksumForSnapshot\", item['checksumForSnapshot'], \"checksumForReplayer\", item['checksumForReplayer']))}}"
+                    "value": "{{=toJSON(sprig.dict(\"name\", item['name'], \"kafkaConfig\", fromJSON(item['kafkaConfig']), \"sourceEndpoint\", item['sourceEndpoint'], \"sourceAllowInsecure\", item['sourceAllowInsecure'], \"proxyConfig\", fromJSON(item['proxyConfig'])))}}"
                   },
                   {
                     "name": "kafkaClusterName",
@@ -2254,7 +1852,7 @@
                   },
                   {
                     "name": "snapshotMigrationConfig",
-                    "value": "{{=toJSON(sprig.dict(\"label\", item['label'], \"snapshotNameResolution\", fromJSON(item['snapshotNameResolution']), \"snapshotConfigChecksum\", item['snapshotConfigChecksum'], \"migrations\", fromJSON(item['migrations']), \"sourceVersion\", item['sourceVersion'], \"sourceLabel\", item['sourceLabel'], \"targetConfig\", fromJSON(item['targetConfig']), \"snapshotConfig\", fromJSON(item['snapshotConfig']), \"sourceEndpoint\", sprig.dig('sourceEndpoint', '', item), \"configChecksum\", item['configChecksum'], \"checksumForReplayer\", item['checksumForReplayer']))}}"
+                    "value": "{{=toJSON(sprig.dict(\"label\", item['label'], \"snapshotNameResolution\", fromJSON(item['snapshotNameResolution']), \"migrations\", fromJSON(item['migrations']), \"sourceVersion\", item['sourceVersion'], \"sourceLabel\", item['sourceLabel'], \"targetConfig\", fromJSON(item['targetConfig']), \"snapshotConfig\", fromJSON(item['snapshotConfig'])))}}"
                   },
                   {
                     "name": "sortOrder_view",
@@ -2286,20 +1884,12 @@
                     "value": "{{inputs.parameters.imageTrafficReplayerPullPolicy}}"
                   },
                   {
-                    "name": "name",
-                    "value": "{{=jsonpath(toJSON(item), '$.name')}}"
-                  },
-                  {
                     "name": "dependsOnSnapshotMigrations",
                     "value": "{{=jsonpath(toJSON(item), '$.dependsOnSnapshotMigrations')}}"
                   },
                   {
                     "name": "fromProxy",
                     "value": "{{=jsonpath(toJSON(item), '$.fromProxy')}}"
-                  },
-                  {
-                    "name": "fromProxyConfigChecksum",
-                    "value": "{{=jsonpath(toJSON(item), '$.fromProxyConfigChecksum')}}"
                   },
                   {
                     "name": "kafkaClusterName",
@@ -2316,10 +1906,6 @@
                   {
                     "name": "toTarget",
                     "value": "{{=jsonpath(toJSON(item), '$.toTarget')}}"
-                  },
-                  {
-                    "name": "configChecksum",
-                    "value": "{{=jsonpath(toJSON(item), '$.configChecksum')}}"
                   },
                   {
                     "name": "targetConfig",

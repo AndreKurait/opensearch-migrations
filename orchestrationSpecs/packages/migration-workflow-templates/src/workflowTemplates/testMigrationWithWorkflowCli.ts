@@ -152,7 +152,7 @@ fi
 
             // Step 4: Delete the migration workflow (skipped when keepMigrationWorkflow=true)
             .addStep("deleteMigrationWorkflow", INTERNAL, "deleteMigrationWorkflow",
-                {when: expr.not(b.inputs.keepMigrationWorkflow)}
+                {when: {templateExp: expr.not(expr.deserializeRecord(b.inputs.keepMigrationWorkflow))}}
             )
         )
     )

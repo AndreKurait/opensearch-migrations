@@ -35,25 +35,19 @@
               "name": "listenPort"
             },
             {
-              "name": "crdName"
-            },
-            {
-              "name": "crdUid"
-            },
-            {
               "name": "internetFacing",
               "value": "false"
             }
           ]
         },
         "resource": {
-          "manifest": "apiVersion: v1\nkind: Service\nmetadata:\n  name: \"{{inputs.parameters.proxyName}}\"\n  ownerReferences:\n    - apiVersion: migrations.opensearch.org/v1alpha1\n      kind: CapturedTraffic\n      name: \"{{inputs.parameters.crdName}}\"\n      uid: \"{{inputs.parameters.crdUid}}\"\n      blockOwnerDeletion: true\n      controller: false\n  annotations:\n    service.beta.kubernetes.io/aws-load-balancer-type: external\n    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip\n    service.beta.kubernetes.io/aws-load-balancer-scheme: \"{{=((fromJSON(inputs.parameters.internetFacing)) ? ('internet-facing') : ('internal'))}}\"\nspec:\n  type: LoadBalancer\n  selector:\n    migrations/proxy: \"{{inputs.parameters.proxyName}}\"\n  ports:\n    - port: {{inputs.parameters.listenPort}}\n      targetPort: {{inputs.parameters.listenPort}}\n      protocol: TCP\n",
+          "manifest": "apiVersion: v1\nkind: Service\nmetadata:\n  name: \"{{inputs.parameters.proxyName}}\"\n  annotations:\n    service.beta.kubernetes.io/aws-load-balancer-type: external\n    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip\n    service.beta.kubernetes.io/aws-load-balancer-scheme: \"{{=((fromJSON(inputs.parameters.internetFacing)) ? ('internet-facing') : ('internal'))}}\"\nspec:\n  type: LoadBalancer\n  selector:\n    migrations/proxy: \"{{inputs.parameters.proxyName}}\"\n  ports:\n    - port: {{inputs.parameters.listenPort}}\n      targetPort: {{inputs.parameters.listenPort}}\n      protocol: TCP\n",
           "action": "apply",
           "setOwnerReference": false
         },
         "retryStrategy": {
           "limit": "6",
-          "retryPolicy": "OnError",
+          "retryPolicy": "Always",
           "backoff": {
             "duration": "10",
             "factor": "2",
@@ -75,18 +69,6 @@
               "name": "jsonConfig"
             },
             {
-              "name": "kafkaAuthConfigMapName"
-            },
-            {
-              "name": "kafkaAuthType"
-            },
-            {
-              "name": "kafkaSecretName"
-            },
-            {
-              "name": "kafkaCaSecretName"
-            },
-            {
               "name": "listenPort"
             },
             {
@@ -94,12 +76,6 @@
             },
             {
               "name": "resources"
-            },
-            {
-              "name": "crdName"
-            },
-            {
-              "name": "crdUid"
             },
             {
               "name": "tlsSecretName",
@@ -114,14 +90,13 @@
           ]
         },
         "resource": {
-          "manifest": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: \"{{inputs.parameters.proxyName}}\"\n  ownerReferences:\n    - apiVersion: migrations.opensearch.org/v1alpha1\n      kind: CapturedTraffic\n      name: \"{{inputs.parameters.crdName}}\"\n      uid: \"{{inputs.parameters.crdUid}}\"\n      blockOwnerDeletion: true\n      controller: false\nspec:\n  replicas: {{=fromJSON(inputs.parameters.podReplicas)}}\n  strategy:\n    type: Recreate\n  selector:\n    matchLabels:\n      migrations/proxy: \"{{inputs.parameters.proxyName}}\"\n  template:\n    metadata:\n      labels:\n        migrations/proxy: \"{{inputs.parameters.proxyName}}\"\n    spec:\n      containers:\n        - name: proxy\n          image: \"{{inputs.parameters.imageCaptureProxyLocation}}\"\n          imagePullPolicy: \"{{inputs.parameters.imageCaptureProxyPullPolicy}}\"\n          args:\n            - ---INLINE-JSON\n            - \"{{=toBase64(inputs.parameters.jsonConfig)}}\"\n          ports:\n            - containerPort: {{inputs.parameters.listenPort}}\n          resources: {{=fromJSON(inputs.parameters.resources)}}\n          env:\n            - name: CAPTURE_PROXY_KAFKA_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: \"{{=((inputs.parameters.kafkaAuthType == 'scram-sha-512') ? (inputs.parameters.kafkaSecretName) : ('empty'))}}\"\n                  key: password\n                  optional: {{=!(inputs.parameters.kafkaAuthType == 'scram-sha-512')}}\n          volumeMounts:\n            - name: kafka-auth-config\n              mountPath: /config/kafka-auth\n              readOnly: true\n            - name: kafka-ca\n              mountPath: /config/kafka-ca\n              readOnly: true\n      volumes:\n        - name: kafka-auth-config\n          configMap:\n            name: \"{{inputs.parameters.kafkaAuthConfigMapName}}\"\n        - name: kafka-ca\n          secret:\n            secretName: \"{{=((inputs.parameters.kafkaAuthType == 'scram-sha-512') ? (inputs.parameters.kafkaCaSecretName) : ('empty'))}}\"\n            optional: {{=!(inputs.parameters.kafkaAuthType == 'scram-sha-512')}}\n",
+          "manifest": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: \"{{inputs.parameters.proxyName}}\"\nspec:\n  replicas: {{=fromJSON(inputs.parameters.podReplicas)}}\n  selector:\n    matchLabels:\n      migrations/proxy: \"{{inputs.parameters.proxyName}}\"\n  template:\n    metadata:\n      labels:\n        migrations/proxy: \"{{inputs.parameters.proxyName}}\"\n    spec:\n      containers:\n        - name: proxy\n          image: \"{{inputs.parameters.imageCaptureProxyLocation}}\"\n          imagePullPolicy: \"{{inputs.parameters.imageCaptureProxyPullPolicy}}\"\n          args:\n            - ---INLINE-JSON\n            - \"{{=toBase64(inputs.parameters.jsonConfig)}}\"\n          ports:\n            - containerPort: {{inputs.parameters.listenPort}}\n          resources: {{=fromJSON(inputs.parameters.resources)}}\n",
           "action": "apply",
-          "setOwnerReference": false,
-          "successCondition": "status.readyReplicas > 0"
+          "setOwnerReference": false
         },
         "retryStrategy": {
           "limit": "6",
-          "retryPolicy": "OnError",
+          "retryPolicy": "Always",
           "backoff": {
             "duration": "10",
             "factor": "2",
@@ -143,18 +118,6 @@
               "name": "jsonConfig"
             },
             {
-              "name": "kafkaAuthConfigMapName"
-            },
-            {
-              "name": "kafkaAuthType"
-            },
-            {
-              "name": "kafkaSecretName"
-            },
-            {
-              "name": "kafkaCaSecretName"
-            },
-            {
               "name": "listenPort"
             },
             {
@@ -167,12 +130,6 @@
               "name": "tlsSecretName"
             },
             {
-              "name": "crdName"
-            },
-            {
-              "name": "crdUid"
-            },
-            {
               "name": "imageCaptureProxyLocation"
             },
             {
@@ -181,41 +138,13 @@
           ]
         },
         "resource": {
-          "manifest": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: \"{{inputs.parameters.proxyName}}\"\n  ownerReferences:\n    - apiVersion: migrations.opensearch.org/v1alpha1\n      kind: CapturedTraffic\n      name: \"{{inputs.parameters.crdName}}\"\n      uid: \"{{inputs.parameters.crdUid}}\"\n      blockOwnerDeletion: true\n      controller: false\nspec:\n  replicas: {{=fromJSON(inputs.parameters.podReplicas)}}\n  strategy:\n    type: Recreate\n  selector:\n    matchLabels:\n      migrations/proxy: \"{{inputs.parameters.proxyName}}\"\n  template:\n    metadata:\n      labels:\n        migrations/proxy: \"{{inputs.parameters.proxyName}}\"\n    spec:\n      containers:\n        - name: proxy\n          image: \"{{inputs.parameters.imageCaptureProxyLocation}}\"\n          imagePullPolicy: \"{{inputs.parameters.imageCaptureProxyPullPolicy}}\"\n          args:\n            - ---INLINE-JSON\n            - \"{{=toBase64(inputs.parameters.jsonConfig)}}\"\n          ports:\n            - containerPort: {{inputs.parameters.listenPort}}\n          resources: {{=fromJSON(inputs.parameters.resources)}}\n          env:\n            - name: CAPTURE_PROXY_KAFKA_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: \"{{=((inputs.parameters.kafkaAuthType == 'scram-sha-512') ? (inputs.parameters.kafkaSecretName) : ('empty'))}}\"\n                  key: password\n                  optional: {{=!(inputs.parameters.kafkaAuthType == 'scram-sha-512')}}\n          volumeMounts:\n            - name: kafka-auth-config\n              mountPath: /config/kafka-auth\n              readOnly: true\n            - name: kafka-ca\n              mountPath: /config/kafka-ca\n              readOnly: true\n            - name: tls-certs\n              mountPath: /etc/proxy-tls\n              readOnly: true\n      volumes:\n        - name: kafka-auth-config\n          configMap:\n            name: \"{{inputs.parameters.kafkaAuthConfigMapName}}\"\n        - name: kafka-ca\n          secret:\n            secretName: \"{{=((inputs.parameters.kafkaAuthType == 'scram-sha-512') ? (inputs.parameters.kafkaCaSecretName) : ('empty'))}}\"\n            optional: {{=!(inputs.parameters.kafkaAuthType == 'scram-sha-512')}}\n        - name: tls-certs\n          secret:\n            secretName: \"{{inputs.parameters.tlsSecretName}}\"\n",
-          "action": "apply",
-          "setOwnerReference": false,
-          "successCondition": "status.readyReplicas > 0"
-        },
-        "retryStrategy": {
-          "limit": "6",
-          "retryPolicy": "OnError",
-          "backoff": {
-            "duration": "10",
-            "factor": "2",
-            "cap": "60"
-          }
-        },
-        "outputs": {
-          "parameters": []
-        }
-      },
-      {
-        "name": "createkafkaclientpropertiesconfigmap",
-        "inputs": {
-          "parameters": [
-            {
-              "name": "name"
-            }
-          ]
-        },
-        "resource": {
-          "manifest": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: \"{{inputs.parameters.name}}\"\ndata:\n  client.properties: |-\n    ssl.truststore.type=PEM\n    ssl.truststore.location=/config/kafka-ca/ca.crt\n",
+          "manifest": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: \"{{inputs.parameters.proxyName}}\"\nspec:\n  replicas: {{=fromJSON(inputs.parameters.podReplicas)}}\n  selector:\n    matchLabels:\n      migrations/proxy: \"{{inputs.parameters.proxyName}}\"\n  template:\n    metadata:\n      labels:\n        migrations/proxy: \"{{inputs.parameters.proxyName}}\"\n    spec:\n      containers:\n        - name: proxy\n          image: \"{{inputs.parameters.imageCaptureProxyLocation}}\"\n          imagePullPolicy: \"{{inputs.parameters.imageCaptureProxyPullPolicy}}\"\n          args:\n            - ---INLINE-JSON\n            - \"{{=toBase64(inputs.parameters.jsonConfig)}}\"\n          ports:\n            - containerPort: {{inputs.parameters.listenPort}}\n          resources: {{=fromJSON(inputs.parameters.resources)}}\n          volumeMounts:\n            - name: tls-certs\n              mountPath: /etc/proxy-tls\n              readOnly: true\n      volumes:\n        - name: tls-certs\n          secret:\n            secretName: \"{{inputs.parameters.tlsSecretName}}\"\n",
           "action": "apply",
           "setOwnerReference": false
         },
         "retryStrategy": {
           "limit": "6",
-          "retryPolicy": "OnError",
+          "retryPolicy": "Always",
           "backoff": {
             "duration": "10",
             "factor": "2",
@@ -263,7 +192,7 @@
         },
         "retryStrategy": {
           "limit": "6",
-          "retryPolicy": "OnError",
+          "retryPolicy": "Always",
           "backoff": {
             "duration": "10",
             "factor": "2",
@@ -316,24 +245,6 @@
               "name": "podReplicas"
             },
             {
-              "name": "crdName"
-            },
-            {
-              "name": "crdUid"
-            },
-            {
-              "name": "resolvedKafkaConnection",
-              "value": ""
-            },
-            {
-              "name": "resolvedKafkaListenerName",
-              "value": ""
-            },
-            {
-              "name": "resolvedKafkaAuthType",
-              "value": ""
-            },
-            {
               "name": "imageCaptureProxyLocation"
             },
             {
@@ -351,14 +262,6 @@
               "arguments": {
                 "parameters": [
                   {
-                    "name": "crdName",
-                    "value": "{{inputs.parameters.crdName}}"
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": "{{inputs.parameters.crdUid}}"
-                  },
-                  {
                     "name": "clusterName",
                     "value": "{{inputs.parameters.kafkaClusterName}}"
                   },
@@ -367,16 +270,8 @@
                     "value": "{{inputs.parameters.kafkaTopicName}}"
                   },
                   {
-                    "name": "partitions",
-                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['topicSpecOverrides']['partitions']}}"
-                  },
-                  {
-                    "name": "replicas",
-                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['topicSpecOverrides']['replicas']}}"
-                  },
-                  {
-                    "name": "topicConfig",
-                    "value": "{{=toJSON(fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['topicSpecOverrides']['config'])}}"
+                    "name": "clusterConfig",
+                    "value": "{{=toJSON({})}}"
                   },
                   {
                     "name": "retryGroupName_view",
@@ -385,20 +280,6 @@
                 ]
               },
               "name": "createKafkaTopic"
-            }
-          ],
-          [
-            {
-              "template": "createkafkaclientpropertiesconfigmap",
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "name",
-                    "value": "{{=inputs.parameters.proxyName+'-kafka-auth'}}"
-                  }
-                ]
-              },
-              "name": "createKafkaClientConfig"
             }
           ],
           [
@@ -417,14 +298,6 @@
                   {
                     "name": "internetFacing",
                     "value": "{{=sprig.dig('internetFacing', false, fromJSON(inputs.parameters.proxyConfig)['proxyConfig'])}}"
-                  },
-                  {
-                    "name": "crdName",
-                    "value": "{{inputs.parameters.crdName}}"
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": "{{inputs.parameters.crdUid}}"
                   }
                 ]
               },
@@ -445,27 +318,27 @@
                   },
                   {
                     "name": "issuerName",
-                    "value": "{{=sprig.dig('tls', 'issuerRef', 'name', '', fromJSON(inputs.parameters.proxyConfig)['proxyConfig'])}}"
+                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['proxyConfig']['tls']['issuerRef']['name']}}"
                   },
                   {
                     "name": "issuerKind",
-                    "value": "{{=sprig.dig('tls', 'issuerRef', 'kind', 'ClusterIssuer', fromJSON(inputs.parameters.proxyConfig)['proxyConfig'])}}"
+                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['proxyConfig']['tls']['issuerRef']['kind']}}"
                   },
                   {
                     "name": "issuerGroup",
-                    "value": "{{=sprig.dig('tls', 'issuerRef', 'group', 'cert-manager.io', fromJSON(inputs.parameters.proxyConfig)['proxyConfig'])}}"
+                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['proxyConfig']['tls']['issuerRef']['group']}}"
                   },
                   {
                     "name": "dnsNames",
-                    "value": "{{=toJSON(sprig.dig('tls', 'dnsNames', [], fromJSON(inputs.parameters.proxyConfig)['proxyConfig']))}}"
+                    "value": "{{=toJSON(fromJSON(inputs.parameters.proxyConfig)['proxyConfig']['tls']['dnsNames'])}}"
                   },
                   {
                     "name": "duration",
-                    "value": "{{=sprig.dig('tls', 'duration', '2160h', fromJSON(inputs.parameters.proxyConfig)['proxyConfig'])}}"
+                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['proxyConfig']['tls']['duration']}}"
                   },
                   {
                     "name": "renewBefore",
-                    "value": "{{=sprig.dig('tls', 'renewBefore', '360h', fromJSON(inputs.parameters.proxyConfig)['proxyConfig'])}}"
+                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['proxyConfig']['tls']['renewBefore']}}"
                   }
                 ]
               },
@@ -506,14 +379,6 @@
                     "value": "{{inputs.parameters.podReplicas}}"
                   },
                   {
-                    "name": "crdName",
-                    "value": "{{inputs.parameters.crdName}}"
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": "{{inputs.parameters.crdUid}}"
-                  },
-                  {
                     "name": "imageCaptureProxyLocation",
                     "value": "{{inputs.parameters.imageCaptureProxyLocation}}"
                   },
@@ -522,28 +387,12 @@
                     "value": "{{inputs.parameters.imageCaptureProxyPullPolicy}}"
                   },
                   {
-                    "name": "kafkaAuthConfigMapName",
-                    "value": "{{=inputs.parameters.proxyName+'-kafka-auth'}}"
-                  },
-                  {
-                    "name": "kafkaAuthType",
-                    "value": "{{=((!(inputs.parameters.resolvedKafkaAuthType == '')) ? (inputs.parameters.resolvedKafkaAuthType) : (fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['authType']))}}"
-                  },
-                  {
-                    "name": "kafkaSecretName",
-                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['secretName']}}"
-                  },
-                  {
-                    "name": "kafkaCaSecretName",
-                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['caSecretName']}}"
-                  },
-                  {
                     "name": "resources",
                     "value": "{{=toJSON(fromJSON(inputs.parameters.proxyConfig)['proxyConfig']['resources'])}}"
                   },
                   {
                     "name": "jsonConfig",
-                    "value": "{{=toJSON(sprig.merge(sprig.omit(fromJSON(inputs.parameters.proxyConfig)['proxyConfig'], 'loggingConfigurationOverrideConfigMap', 'internetFacing', 'podReplicas', 'resources'), sprig.merge(((sprig.dig('proxyConfig', 'noCapture', false, fromJSON(inputs.parameters.proxyConfig))) ? (sprig.dict()) : (sprig.dict(\"kafkaConnection\", ((!(inputs.parameters.resolvedKafkaConnection == '')) ? (inputs.parameters.resolvedKafkaConnection) : (fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['kafkaConnection']))))), sprig.merge(sprig.dict(\"destinationUri\", fromJSON(inputs.parameters.proxyConfig)['sourceEndpoint'], \"insecureDestination\", fromJSON(inputs.parameters.proxyConfig)['sourceAllowInsecure'], \"kafkaTopic\", jsonpath(inputs.parameters.proxyConfig, '$.kafkaConfig.kafkaTopic'), \"kafkaListenerName\", ((!(inputs.parameters.resolvedKafkaListenerName == '')) ? (inputs.parameters.resolvedKafkaListenerName) : (fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['listenerName'])), \"kafkaAuthType\", ((!(inputs.parameters.resolvedKafkaAuthType == '')) ? (inputs.parameters.resolvedKafkaAuthType) : (fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['authType'])), \"kafkaSecretName\", fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['secretName'], \"kafkaUserName\", fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['kafkaUserName']), ((((!(inputs.parameters.resolvedKafkaAuthType == '')) ? (inputs.parameters.resolvedKafkaAuthType) : (fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['authType'])) == 'scram-sha-512') ? (sprig.dict(\"kafkaPropertyFile\", '/config/kafka-auth/client.properties')) : (sprig.dict()))))))}}"
+                    "value": "{{=toJSON(sprig.merge(sprig.omit(fromJSON(inputs.parameters.proxyConfig)['proxyConfig'], 'loggingConfigurationOverrideConfigMap', 'internetFacing', 'podReplicas', 'resources'), sprig.merge(((sprig.dig('proxyConfig', 'noCapture', false, fromJSON(inputs.parameters.proxyConfig))) ? ({}) : (sprig.dict(\"kafkaConnection\", jsonpath(inputs.parameters.proxyConfig, '$.kafkaConfig.kafkaConnection')))), sprig.dict(\"destinationUri\", fromJSON(inputs.parameters.proxyConfig)['sourceEndpoint'], \"insecureDestination\", fromJSON(inputs.parameters.proxyConfig)['sourceAllowInsecure'], \"kafkaTopic\", jsonpath(inputs.parameters.proxyConfig, '$.kafkaConfig.kafkaTopic')))))}}"
                   }
                 ]
               },
@@ -567,14 +416,6 @@
                     "value": "{{inputs.parameters.podReplicas}}"
                   },
                   {
-                    "name": "crdName",
-                    "value": "{{inputs.parameters.crdName}}"
-                  },
-                  {
-                    "name": "crdUid",
-                    "value": "{{inputs.parameters.crdUid}}"
-                  },
-                  {
                     "name": "imageCaptureProxyLocation",
                     "value": "{{inputs.parameters.imageCaptureProxyLocation}}"
                   },
@@ -583,32 +424,16 @@
                     "value": "{{inputs.parameters.imageCaptureProxyPullPolicy}}"
                   },
                   {
-                    "name": "kafkaAuthConfigMapName",
-                    "value": "{{=inputs.parameters.proxyName+'-kafka-auth'}}"
-                  },
-                  {
-                    "name": "kafkaAuthType",
-                    "value": "{{=((!(inputs.parameters.resolvedKafkaAuthType == '')) ? (inputs.parameters.resolvedKafkaAuthType) : (fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['authType']))}}"
-                  },
-                  {
-                    "name": "kafkaSecretName",
-                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['secretName']}}"
-                  },
-                  {
-                    "name": "kafkaCaSecretName",
-                    "value": "{{=fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['caSecretName']}}"
-                  },
-                  {
                     "name": "resources",
                     "value": "{{=toJSON(fromJSON(inputs.parameters.proxyConfig)['proxyConfig']['resources'])}}"
                   },
                   {
                     "name": "tlsSecretName",
-                    "value": "{{=((sprig.dig('tls', 'mode', '', fromJSON(inputs.parameters.proxyConfig)['proxyConfig']) == 'certManager') ? (inputs.parameters.proxyName+'-tls') : (((sprig.dig('tls', 'mode', '', fromJSON(inputs.parameters.proxyConfig)['proxyConfig']) == 'existingSecret') ? (sprig.dig('tls', 'secretName', '', fromJSON(inputs.parameters.proxyConfig)['proxyConfig'])) : (''))))}}"
+                    "value": "{{=((sprig.dig('tls', 'mode', '', fromJSON(inputs.parameters.proxyConfig)['proxyConfig']) == 'certManager') ? (inputs.parameters.proxyName+'-tls') : (((sprig.dig('tls', 'mode', '', fromJSON(inputs.parameters.proxyConfig)['proxyConfig']) == 'existingSecret') ? (fromJSON(inputs.parameters.proxyConfig)['proxyConfig']['tls']['secretName']) : (''))))}}"
                   },
                   {
                     "name": "jsonConfig",
-                    "value": "{{=toJSON(sprig.merge(sprig.merge(sprig.omit(fromJSON(inputs.parameters.proxyConfig)['proxyConfig'], 'loggingConfigurationOverrideConfigMap', 'internetFacing', 'podReplicas', 'resources'), sprig.merge(((sprig.dig('proxyConfig', 'noCapture', false, fromJSON(inputs.parameters.proxyConfig))) ? (sprig.dict()) : (sprig.dict(\"kafkaConnection\", ((!(inputs.parameters.resolvedKafkaConnection == '')) ? (inputs.parameters.resolvedKafkaConnection) : (fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['kafkaConnection']))))), sprig.merge(sprig.dict(\"destinationUri\", fromJSON(inputs.parameters.proxyConfig)['sourceEndpoint'], \"insecureDestination\", fromJSON(inputs.parameters.proxyConfig)['sourceAllowInsecure'], \"kafkaTopic\", jsonpath(inputs.parameters.proxyConfig, '$.kafkaConfig.kafkaTopic'), \"kafkaListenerName\", ((!(inputs.parameters.resolvedKafkaListenerName == '')) ? (inputs.parameters.resolvedKafkaListenerName) : (fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['listenerName'])), \"kafkaAuthType\", ((!(inputs.parameters.resolvedKafkaAuthType == '')) ? (inputs.parameters.resolvedKafkaAuthType) : (fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['authType'])), \"kafkaSecretName\", fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['secretName'], \"kafkaUserName\", fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['kafkaUserName']), ((((!(inputs.parameters.resolvedKafkaAuthType == '')) ? (inputs.parameters.resolvedKafkaAuthType) : (fromJSON(inputs.parameters.proxyConfig)['kafkaConfig']['authType'])) == 'scram-sha-512') ? (sprig.dict(\"kafkaPropertyFile\", '/config/kafka-auth/client.properties')) : (sprig.dict()))))), sprig.dict(\"sslCertChainFile\", '/etc/proxy-tls/tls.crt', \"sslKeyFile\", '/etc/proxy-tls/tls.key')))}}"
+                    "value": "{{=toJSON(sprig.merge(sprig.merge(sprig.omit(fromJSON(inputs.parameters.proxyConfig)['proxyConfig'], 'loggingConfigurationOverrideConfigMap', 'internetFacing', 'podReplicas', 'resources'), sprig.merge(((sprig.dig('proxyConfig', 'noCapture', false, fromJSON(inputs.parameters.proxyConfig))) ? ({}) : (sprig.dict(\"kafkaConnection\", jsonpath(inputs.parameters.proxyConfig, '$.kafkaConfig.kafkaConnection')))), sprig.dict(\"destinationUri\", fromJSON(inputs.parameters.proxyConfig)['sourceEndpoint'], \"insecureDestination\", fromJSON(inputs.parameters.proxyConfig)['sourceAllowInsecure'], \"kafkaTopic\", jsonpath(inputs.parameters.proxyConfig, '$.kafkaConfig.kafkaTopic')))), sprig.dict(\"sslCertChainFile\", '/etc/proxy-tls/tls.crt', \"sslKeyFile\", '/etc/proxy-tls/tls.key')))}}"
                   }
                 ]
               },

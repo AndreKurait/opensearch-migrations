@@ -1,149 +1,44 @@
 import {
+    AllowLiteralOrExpression,
     BaseExpression,
     expr,
+    INLINE,
     INTERNAL,
     makeDirectTypeProxy,
-    makeStringTypeProxy,
     Serialized,
     typeToken,
     WorkflowBuilder
 } from "@opensearch-migrations/argo-workflow-builders";
 import {CommonWorkflowParameters} from "./commonUtils/workflowParameters";
-import {KAFKA_CLUSTER_CREATION_CONFIG} from "@opensearch-migrations/schemas";
+import {KAFKA_CLUSTER_CREATION_CONFIG, NAMED_KAFKA_CLUSTER_CONFIG} from "@opensearch-migrations/schemas";
 import {z} from "zod";
 import {K8S_RESOURCE_RETRY_STRATEGY} from "./commonUtils/resourceRetryStrategy";
-import {ResourceManagement} from "./resourceManagement";
 
 type KafkaConfig = z.infer<typeof KAFKA_CLUSTER_CREATION_CONFIG>;
 
-function getKafkaAuthType(config: BaseExpression<Serialized<KafkaConfig>>) {
-    return expr.dig(expr.deserializeRecord(config), ["auth", "type"], "none");
-}
-
-function makePlainListener() {
-    return expr.makeDict({
-        name: "plain",
-        port: 9092,
-        type: "internal",
-        tls: false
-    });
-}
-
-function makeTlsListener() {
-    return expr.makeDict({
-        name: "tls",
-        port: 9093,
-        type: "internal",
-        tls: true
-    });
-}
-
-function makeScramListener() {
-    return expr.makeDict({
-        name: "tls",
-        port: 9093,
-        type: "internal",
-        tls: true,
-        authentication: expr.makeDict({type: "scram-sha-512"})
-    });
-}
-
-function makeManagedKafkaListeners(authType: BaseExpression<string>) {
-    return expr.ternary(
-        expr.equals(authType, expr.literal("scram-sha-512")),
-        expr.toArray(makeScramListener()),
-        expr.toArray(makePlainListener(), makeTlsListener())
-    );
-}
-
-function makeManagedKafkaUserManifest(args: {
-    clusterName: BaseExpression<string>,
-    userSpec: BaseExpression<Serialized<Record<string, any>>>,
-}): Record<string, any> {
-    return {
-        apiVersion: "kafka.strimzi.io/v1",
-        kind: "KafkaUser",
-        metadata: {
-            name: expr.concat(args.clusterName, expr.literal("-migration-app")),
-            labels: {"strimzi.io/cluster": args.clusterName}
-        },
-        spec: makeDirectTypeProxy(args.userSpec as any) as any
-    };
-}
-
 function makeDeployKafkaNodePool(args: {
     clusterName: BaseExpression<string>,
-    nodePoolSpec: BaseExpression<Serialized<Record<string, any>>>,
-    crdName: BaseExpression<string>,
-    crdUid: BaseExpression<string>,
-}): Record<string, any> {
+    replicas: BaseExpression<number>,
+}) {
     return {
         apiVersion: "kafka.strimzi.io/v1",
         kind: "KafkaNodePool",
         metadata: {
             name: "dual-role", // TODO - make this a user setting!
-            labels: {"strimzi.io/cluster": args.clusterName},
-            ownerReferences: [{
-                apiVersion: "migrations.opensearch.org/v1alpha1",
-                kind: "KafkaCluster",
-                name: args.crdName,
-                uid: args.crdUid,
-                blockOwnerDeletion: true,
-                controller: false
-            }]
+            labels: {"strimzi.io/cluster": args.clusterName}
         },
-        spec: makeDirectTypeProxy(args.nodePoolSpec as any) as any
+        spec: {
+            replicas: makeDirectTypeProxy(args.replicas),
+            roles: ["controller", "broker"],
+            storage: {type: "persistent-claim", size: "1Gi", deleteClaim: true}
+        }
     };
-}
-
-function makeManagedKafkaSpecNoAuth(args: {
-    version: BaseExpression<string>,
-    clusterConfig: BaseExpression<Serialized<KafkaConfig>>,
-}) {
-    const config = expr.deserializeRecord(args.clusterConfig);
-    const kafkaSpecOverrides = expr.dig(config, ["clusterSpecOverrides", "kafka"], expr.makeDict({}));
-
-    return expr.mergeDicts(
-        expr.makeDict({
-            version: args.version,
-            metadataVersion: "4.0-IV3",
-            listeners: expr.toArray(makePlainListener(), makeTlsListener())
-        }),
-        kafkaSpecOverrides
-    );
-}
-
-function makeManagedKafkaSpecScram(args: {
-    version: BaseExpression<string>,
-    clusterConfig: BaseExpression<Serialized<KafkaConfig>>,
-}) {
-    const config = expr.deserializeRecord(args.clusterConfig);
-    const kafkaSpecOverrides = expr.dig(config, ["clusterSpecOverrides", "kafka"], expr.makeDict({}));
-
-    return expr.mergeDicts(
-        expr.makeDict({
-            version: args.version,
-            metadataVersion: "4.0-IV3",
-            listeners: expr.toArray(makeScramListener())
-        }),
-        kafkaSpecOverrides
-    );
-}
-
-function makeManagedKafkaUserSpec(clusterConfig: BaseExpression<Serialized<KafkaConfig>>) {
-    return expr.makeDict({
-        authentication: expr.makeDict({
-            type: expr.dig(expr.deserializeRecord(clusterConfig), ["auth", "type"], "none")
-        })
-    });
 }
 
 function makeDeployKafkaClusterKraftManifest(args: {
     clusterName: BaseExpression<string>,
-    kafkaSpec: BaseExpression<Serialized<Record<string, any>>>,
-    crdName: BaseExpression<string>,
-    crdUid: BaseExpression<string>,
-}): Record<string, any> {
+    version: BaseExpression<string>,
+}) {
     return {
         apiVersion: "kafka.strimzi.io/v1",
         kind: "Kafka",
@@ -152,55 +47,49 @@ function makeDeployKafkaClusterKraftManifest(args: {
             annotations: {
                 "strimzi.io/node-pools": "enabled",
                 "strimzi.io/kraft": "enabled"
-            },
-            ownerReferences: [{
-                apiVersion: "migrations.opensearch.org/v1alpha1",
-                kind: "KafkaCluster",
-                name: args.crdName,
-                uid: args.crdUid,
-                blockOwnerDeletion: true,
-                controller: false
-            }]
+            }
         },
         spec: {
-            kafka: makeDirectTypeProxy(args.kafkaSpec as any) as any,
+            kafka: {
+                version: args.version,
+                metadataVersion: "4.0-IV3",
+                readinessProbe: {initialDelaySeconds: 1, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 1},
+                livenessProbe: {initialDelaySeconds: 1, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 2},
+                listeners: [
+                    {name: "plain", port: 9092, type: "internal", tls: false},
+                    {name: "tls", port: 9093, type: "internal", tls: true}
+                ],
+                config: {
+                    "auto.create.topics.enable": false,
+                    "offsets.topic.replication.factor": 1,
+                    "transaction.state.log.replication.factor": 1,
+                    "transaction.state.log.min.isr": 1,
+                    "default.replication.factor": 1,
+                    "min.insync.replicas": 1
+                }
+            },
             entityOperator: {topicOperator: {}, userOperator: {}}
         }
     };
 }
 
-function shouldCreateManagedKafkaUser(clusterConfig: BaseExpression<Serialized<KafkaConfig>>) {
-    return expr.equals(getKafkaAuthType(clusterConfig), expr.literal("scram-sha-512"));
-}
-
 function makeKafkaTopicManifest(args: {
     clusterName: BaseExpression<string>,
     topicName: BaseExpression<string>,
-    partitions: BaseExpression<Serialized<number>>,
-    replicas: BaseExpression<Serialized<number>>,
-    topicConfig: BaseExpression<Serialized<Record<string, any>>>,
-    crdName: BaseExpression<string>,
-    crdUid: BaseExpression<string>,
-}): Record<string, any> {
+    topicPartitions: BaseExpression<number>,
+    topicReplicas: BaseExpression<number>
+}) {
     return {
         apiVersion: "kafka.strimzi.io/v1",
         kind: "KafkaTopic",
         metadata: {
             name: args.topicName,
-            labels: {"strimzi.io/cluster": args.clusterName},
-            ownerReferences: [{
-                apiVersion: "migrations.opensearch.org/v1alpha1",
-                kind: "KafkaCluster",
-                name: args.crdName,
-                uid: args.crdUid,
-                blockOwnerDeletion: true,
-                controller: false
-            }]
+            labels: {"strimzi.io/cluster": args.clusterName}
         },
         spec: {
-            partitions: makeDirectTypeProxy(args.partitions),
-            replicas: makeDirectTypeProxy(args.replicas),
-            config: makeDirectTypeProxy(args.topicConfig as any) as any,
+            partitions: makeDirectTypeProxy(args.topicPartitions),
+            replicas: makeDirectTypeProxy(args.topicReplicas),
+            config: {"retention.ms": 604800000, "segment.bytes": 1073741824}
         }
     };
 }
@@ -219,29 +108,23 @@ export const SetupKafka = WorkflowBuilder.create({
 
     .addTemplate("deployKafkaNodePool", t => t
         .addRequiredInput("clusterName", typeToken<string>())
-        .addRequiredInput("nodePoolSpec", typeToken<Serialized<Record<string, any>>>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
+        .addRequiredInput("clusterConfig", typeToken<KafkaConfig>())
         .addResourceTask(b => b
             .setDefinition({
                 action: "apply",
                 setOwnerReference: false,
                 manifest: makeDeployKafkaNodePool({
                     clusterName: b.inputs.clusterName,
-                    nodePoolSpec: b.inputs.nodePoolSpec,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
+                    replicas: expr.dig(expr.deserializeRecord(b.inputs.clusterConfig), ["replicas"], 1),
                 })
             }))
         .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
     )
 
 
-    .addTemplate("deployKafkaClusterKraftNoAuth", t => t
+    .addTemplate("deployKafkaClusterKraft", t => t
         .addRequiredInput("clusterName", typeToken<string>())
-        .addRequiredInput("kafkaSpec", typeToken<Serialized<Record<string, any>>>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
+        .addRequiredInput("version", typeToken<string>())
         .addResourceTask(b => b
             .setDefinition({
                 action: "apply",
@@ -249,35 +132,10 @@ export const SetupKafka = WorkflowBuilder.create({
                 successCondition: "status.listeners",
                 manifest: makeDeployKafkaClusterKraftManifest({
                     clusterName: b.inputs.clusterName,
-                    kafkaSpec: b.inputs.kafkaSpec,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
+                    version: b.inputs.version,
                 })
             }))
         .addJsonPathOutput("brokers", "{.status.listeners[?(@.name=='plain')].bootstrapServers}",
-            typeToken<string>())
-        .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
-    )
-
-
-    .addTemplate("deployKafkaClusterKraftScram", t => t
-        .addRequiredInput("clusterName", typeToken<string>())
-        .addRequiredInput("kafkaSpec", typeToken<Serialized<Record<string, any>>>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
-        .addResourceTask(b => b
-            .setDefinition({
-                action: "apply",
-                setOwnerReference: false,
-                successCondition: "status.listeners",
-                manifest: makeDeployKafkaClusterKraftManifest({
-                    clusterName: b.inputs.clusterName,
-                    kafkaSpec: b.inputs.kafkaSpec,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
-                })
-            }))
-        .addJsonPathOutput("brokers", "{.status.listeners[?(@.name=='tls')].bootstrapServers}",
             typeToken<string>())
         .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
     )
@@ -287,51 +145,29 @@ export const SetupKafka = WorkflowBuilder.create({
         .addRequiredInput("clusterName", typeToken<string>())
         .addRequiredInput("version", typeToken<string>())
         .addRequiredInput("clusterConfig", typeToken<KafkaConfig>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
 
         .addSteps(b => b
-            .addStep("deployNoAuthCluster", INTERNAL, "deployKafkaClusterKraftNoAuth", c =>
+            .addStep("deployPool", INTERNAL, "deployKafkaNodePool", c =>
                 c.register({
                     clusterName: b.inputs.clusterName,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
-                    kafkaSpec: expr.recordToString(makeManagedKafkaSpecNoAuth({
-                        version: b.inputs.version,
-                        clusterConfig: b.inputs.clusterConfig,
-                    })),
-                }),
-                {when: c => ({templateExp: expr.not(shouldCreateManagedKafkaUser(b.inputs.clusterConfig))})}
+                    clusterConfig: b.inputs.clusterConfig,
+                })
             )
-            .addStep("deployScramCluster", INTERNAL, "deployKafkaClusterKraftScram", c =>
+            .addStep("deployCluster", INTERNAL, "deployKafkaClusterKraft", c =>
                 c.register({
                     clusterName: b.inputs.clusterName,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
-                    kafkaSpec: expr.recordToString(makeManagedKafkaSpecScram({
-                        version: b.inputs.version,
-                        clusterConfig: b.inputs.clusterConfig,
-                    })),
-                }),
-                {when: c => ({templateExp: shouldCreateManagedKafkaUser(b.inputs.clusterConfig)})}
+                    version: b.inputs.version,
+                })
             )
         )
-        .addExpressionOutput("bootstrapServers", c => expr.ternary(
-            shouldCreateManagedKafkaUser(c.inputs.clusterConfig),
-            c.steps.deployScramCluster.outputs.brokers,
-            c.steps.deployNoAuthCluster.outputs.brokers
-        ))
+        .addExpressionOutput("bootstrapServers", c => c.steps.deployCluster.outputs.brokers)
     )
 
 
     .addTemplate("createKafkaTopic", t => t
         .addRequiredInput("clusterName", typeToken<string>())
         .addRequiredInput("topicName", typeToken<string>())
-        .addRequiredInput("partitions", typeToken<number>())
-        .addRequiredInput("replicas", typeToken<number>())
-        .addRequiredInput("topicConfig", typeToken<Serialized<Record<string, any>>>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
+        .addRequiredInput("clusterConfig", typeToken<KafkaConfig>())
 
         .addResourceTask(b => b
             .setDefinition({
@@ -341,30 +177,11 @@ export const SetupKafka = WorkflowBuilder.create({
                 manifest: makeKafkaTopicManifest({
                     clusterName: b.inputs.clusterName,
                     topicName: b.inputs.topicName,
-                    partitions: b.inputs.partitions,
-                    replicas: b.inputs.replicas,
-                    topicConfig: b.inputs.topicConfig,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
+                    topicPartitions: expr.dig(expr.deserializeRecord(b.inputs.clusterConfig), ["partitions"], 1),
+                    topicReplicas: expr.dig(expr.deserializeRecord(b.inputs.clusterConfig), ["topicReplicas"], 1),
                 })
             }))
         .addJsonPathOutput("topicName", "{.status.topicName}", typeToken<string>())
-        .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
-    )
-
-    .addTemplate("createKafkaUser", t => t
-        .addRequiredInput("clusterName", typeToken<string>())
-        .addRequiredInput("userSpec", typeToken<Serialized<Record<string, any>>>())
-        .addResourceTask(b => b
-            .setDefinition({
-                action: "apply",
-                setOwnerReference: false,
-                successCondition: "status.conditions",
-                manifest: makeManagedKafkaUserManifest({
-                    clusterName: b.inputs.clusterName,
-                    userSpec: b.inputs.userSpec,
-                })
-            }))
         .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
     )
 
@@ -389,21 +206,13 @@ export const SetupKafka = WorkflowBuilder.create({
     .addTemplate("deployKafkaNodePoolWithRetry", t => t
         .addRequiredInput("clusterName", typeToken<string>())
         .addRequiredInput("clusterConfig", typeToken<KafkaConfig>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
         .addOptionalInput("retryGroupName_view", c => "Apply")
 
         .addSteps(b => b
             .addStep("tryApply", INTERNAL, "deployKafkaNodePool", c =>
                 c.register({
                     clusterName: b.inputs.clusterName,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
-                    nodePoolSpec: expr.recordToString(expr.dig(
-                        expr.deserializeRecord(b.inputs.clusterConfig),
-                        ["nodePoolSpecOverrides"],
-                        expr.makeDict({})
-                    )),
+                    clusterConfig: b.inputs.clusterConfig,
                 }),
                 {continueOn: {failed: true}}
             )
@@ -413,23 +222,13 @@ export const SetupKafka = WorkflowBuilder.create({
                 }),
                 {when: c => ({templateExp: expr.equals(c.tryApply.status, "Failed")})}
             )
-            .addStep("patchApproval", ResourceManagement, "patchApprovalAnnotation", c =>
-                c.register({
-                    resourceApiVersion: expr.literal("kafka.strimzi.io/v1"),
-                    resourceKind: expr.literal("KafkaNodePool"),
-                    resourceName: expr.literal("dual-role"),
-                }),
-                {when: c => ({templateExp: expr.equals(c.waitForFix.status, "Succeeded")})}
-            )
             .addStepToSelf("retryLoop", c =>
                 c.register({
                     clusterName: b.inputs.clusterName,
                     clusterConfig: b.inputs.clusterConfig,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
                     retryGroupName_view: b.inputs.retryGroupName_view,
                 }),
-                {when: c => ({templateExp: expr.equals(c.patchApproval.status, "Succeeded")})}
+                {when: c => ({templateExp: expr.equals(c.waitForFix.status, "Succeeded")})}
             )
         )
     )
@@ -437,19 +236,13 @@ export const SetupKafka = WorkflowBuilder.create({
     .addTemplate("deployKafkaClusterKraftWithRetry", t => t
         .addRequiredInput("clusterName", typeToken<string>())
         .addRequiredInput("version", typeToken<string>())
-        .addRequiredInput("clusterConfig", typeToken<KafkaConfig>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
         .addOptionalInput("retryGroupName_view", c => "Apply")
 
         .addSteps(b => b
-            .addStep("tryApply", INTERNAL, "deployKafkaCluster", c =>
+            .addStep("tryApply", INTERNAL, "deployKafkaClusterKraft", c =>
                 c.register({
                     clusterName: b.inputs.clusterName,
                     version: b.inputs.version,
-                    clusterConfig: b.inputs.clusterConfig,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
                 }),
                 {continueOn: {failed: true}}
             )
@@ -459,37 +252,22 @@ export const SetupKafka = WorkflowBuilder.create({
                 }),
                 {when: c => ({templateExp: expr.equals(c.tryApply.status, "Failed")})}
             )
-            .addStep("patchApproval", ResourceManagement, "patchApprovalAnnotation", c =>
-                c.register({
-                    resourceApiVersion: expr.literal("kafka.strimzi.io/v1"),
-                    resourceKind: expr.literal("Kafka"),
-                    resourceName: b.inputs.clusterName,
-                }),
-                {when: c => ({templateExp: expr.equals(c.waitForFix.status, "Succeeded")})}
-            )
             .addStepToSelf("retryLoop", c =>
                 c.register({
                     clusterName: b.inputs.clusterName,
                     version: b.inputs.version,
-                    clusterConfig: b.inputs.clusterConfig,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
                     retryGroupName_view: b.inputs.retryGroupName_view,
                 }),
-                {when: c => ({templateExp: expr.equals(c.patchApproval.status, "Succeeded")})}
+                {when: c => ({templateExp: expr.equals(c.waitForFix.status, "Succeeded")})}
             )
         )
-        .addExpressionOutput("brokers", c => c.steps.tryApply.outputs.bootstrapServers)
+        .addExpressionOutput("brokers", c => c.steps.tryApply.outputs.brokers)
     )
 
     .addTemplate("createKafkaTopicWithRetry", t => t
         .addRequiredInput("clusterName", typeToken<string>())
         .addRequiredInput("topicName", typeToken<string>())
-        .addRequiredInput("partitions", typeToken<number>())
-        .addRequiredInput("replicas", typeToken<number>())
-        .addRequiredInput("topicConfig", typeToken<Serialized<Record<string, any>>>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
+        .addRequiredInput("clusterConfig", typeToken<KafkaConfig>())
         .addOptionalInput("retryGroupName_view", c => "Apply")
 
         .addSteps(b => b
@@ -497,11 +275,7 @@ export const SetupKafka = WorkflowBuilder.create({
                 c.register({
                     clusterName: b.inputs.clusterName,
                     topicName: b.inputs.topicName,
-                    partitions: b.inputs.partitions,
-                    replicas: b.inputs.replicas,
-                    topicConfig: b.inputs.topicConfig,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
+                    clusterConfig: b.inputs.clusterConfig,
                 }),
                 {continueOn: {failed: true}}
             )
@@ -511,67 +285,17 @@ export const SetupKafka = WorkflowBuilder.create({
                 }),
                 {when: c => ({templateExp: expr.equals(c.tryApply.status, "Failed")})}
             )
-            .addStep("patchApproval", ResourceManagement, "patchApprovalAnnotation", c =>
-                c.register({
-                    resourceApiVersion: expr.literal("kafka.strimzi.io/v1"),
-                    resourceKind: expr.literal("KafkaTopic"),
-                    resourceName: b.inputs.topicName,
-                }),
-                {when: c => ({templateExp: expr.equals(c.waitForFix.status, "Succeeded")})}
-            )
             .addStepToSelf("retryLoop", c =>
                 c.register({
                     clusterName: b.inputs.clusterName,
                     topicName: b.inputs.topicName,
-                    partitions: b.inputs.partitions,
-                    replicas: b.inputs.replicas,
-                    topicConfig: b.inputs.topicConfig,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
-                    retryGroupName_view: b.inputs.retryGroupName_view,
-                }),
-                {when: c => ({templateExp: expr.equals(c.patchApproval.status, "Succeeded")})}
-            )
-        )
-        .addExpressionOutput("topicName", c => c.steps.tryApply.outputs.topicName)
-    )
-
-    .addTemplate("createKafkaUserWithRetry", t => t
-        .addRequiredInput("clusterName", typeToken<string>())
-        .addRequiredInput("clusterConfig", typeToken<KafkaConfig>())
-        .addOptionalInput("retryGroupName_view", c => "Apply")
-
-        .addSteps(b => b
-            .addStep("tryApply", INTERNAL, "createKafkaUser", c =>
-                c.register({
-                    clusterName: b.inputs.clusterName,
-                    userSpec: expr.recordToString(makeManagedKafkaUserSpec(b.inputs.clusterConfig)),
-                }),
-                {continueOn: {failed: true}}
-            )
-            .addStep("waitForFix", INTERNAL, "suspendForRetry", c =>
-                c.register({
-                    name: expr.literal("KafkaUser")
-                }),
-                {when: c => ({templateExp: expr.equals(c.tryApply.status, "Failed")})}
-            )
-            .addStep("patchApproval", ResourceManagement, "patchApprovalAnnotation", c =>
-                c.register({
-                    resourceApiVersion: expr.literal("kafka.strimzi.io/v1"),
-                    resourceKind: expr.literal("KafkaUser"),
-                    resourceName: expr.concat(b.inputs.clusterName, expr.literal("-migration-app")),
-                }),
-                {when: c => ({templateExp: expr.equals(c.waitForFix.status, "Succeeded")})}
-            )
-            .addStepToSelf("retryLoop", c =>
-                c.register({
-                    clusterName: b.inputs.clusterName,
                     clusterConfig: b.inputs.clusterConfig,
                     retryGroupName_view: b.inputs.retryGroupName_view,
                 }),
-                {when: c => ({templateExp: expr.equals(c.patchApproval.status, "Succeeded")})}
+                {when: c => ({templateExp: expr.equals(c.waitForFix.status, "Succeeded")})}
             )
         )
+        .addExpressionOutput("topicName", c => c.steps.tryApply.outputs.topicName)
     )
 
     // Combined retry template for full Kafka cluster deployment
@@ -579,54 +303,24 @@ export const SetupKafka = WorkflowBuilder.create({
         .addRequiredInput("clusterName", typeToken<string>())
         .addRequiredInput("version", typeToken<string>())
         .addRequiredInput("clusterConfig", typeToken<KafkaConfig>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
 
         .addSteps(b => b
-            .addStep("checkExisting", ResourceManagement, "readKafkaConnectionProfile", c =>
-                c.register({
-                    resourceName: b.inputs.clusterName,
-                }),
-                {continueOn: {failed: true}}
-            )
             .addStep("deployPool", INTERNAL, "deployKafkaNodePoolWithRetry", c =>
                 c.register({
                     clusterName: b.inputs.clusterName,
                     clusterConfig: b.inputs.clusterConfig,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
                     retryGroupName_view: expr.concat(expr.literal("KafkaNodePool: "), b.inputs.clusterName),
-                }),
-                {when: c => ({templateExp: expr.not(expr.equals(c.checkExisting.status, "Succeeded"))})}
+                })
             )
             .addStep("deployCluster", INTERNAL, "deployKafkaClusterKraftWithRetry", c =>
                 c.register({
                     clusterName: b.inputs.clusterName,
                     version: b.inputs.version,
-                    clusterConfig: b.inputs.clusterConfig,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
                     retryGroupName_view: expr.concat(expr.literal("KafkaCluster: "), b.inputs.clusterName),
-                }),
-                {when: c => ({templateExp: expr.not(expr.equals(c.checkExisting.status, "Succeeded"))})}
-            )
-            .addStep("createKafkaUser", INTERNAL, "createKafkaUserWithRetry", c =>
-                c.register({
-                    clusterName: b.inputs.clusterName,
-                    clusterConfig: b.inputs.clusterConfig,
-                    retryGroupName_view: expr.concat(expr.literal("KafkaUser: "), b.inputs.clusterName),
-                }),
-                {when: c => ({templateExp: expr.and(
-                    expr.not(expr.equals(c.checkExisting.status, "Succeeded")),
-                    shouldCreateManagedKafkaUser(b.inputs.clusterConfig)
-                )})}
+                })
             )
         )
-        .addExpressionOutput("bootstrapServers", c => expr.ternary(
-            expr.equals(c.steps.checkExisting.status, "Succeeded"),
-            c.steps.checkExisting.outputs.bootstrapServers,
-            c.steps.deployCluster.outputs.brokers
-        ))
+        .addExpressionOutput("bootstrapServers", c => c.steps.deployCluster.outputs.brokers)
     )
 
 

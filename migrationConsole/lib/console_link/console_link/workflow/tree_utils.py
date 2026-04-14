@@ -354,10 +354,7 @@ def get_node_phase(node: dict) -> str:
     return node['phase']
 
 
-def get_step_rich_label(
-    node: dict, status_output: Optional[Union[str, ArtifactRef]],
-    show_approval_name: bool = True
-) -> str:
+def get_step_rich_label(node: dict, status_output: str, show_approval_name: bool = True) -> str:
     """Get rich-formatted label for a workflow step node.
 
     Args:
@@ -423,8 +420,7 @@ def get_step_rich_label(
     full_unformatted_line = _construct_full_label_line(
         step_name_and_timestamp_str, step_phase, step_type, approval_name
     )
-    status_suffix = f': {status_output}' if status_output and isinstance(status_output, str) else ''
-    return f"[{color}]{symbol} {full_unformatted_line}{status_suffix} [/{color}]"
+    return f"[{color}]{symbol} {full_unformatted_line}{': ' + status_output if status_output else ''} [/{color}]"
 
 
 def _construct_full_label_line(step_name_and_timestamp_str, step_phase, step_type, approval_name=None):

@@ -42,7 +42,6 @@ export const ResourceManagement = WorkflowBuilder.create({
 
     .addTemplate("waitForKafkaClusterReady", t => t
         .addRequiredInput("resourceName", typeToken<string>())
-        .addRequiredInput("configChecksum", typeToken<string>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["MigrationConsole"]))
         .addWaitForExistingResource(b => b
             .setDefinition({
@@ -51,13 +50,7 @@ export const ResourceManagement = WorkflowBuilder.create({
                     kind: "Kafka",
                     name: b.inputs.resourceName
                 },
-                conditions: {
-                    successCondition: expr.concat(
-                        expr.literal("status.listeners, metadata.annotations.migration-configChecksum == "),
-                        b.inputs.configChecksum
-                    ),
-                    failureCondition: "status.conditions.0.type == NotReady"
-                }
+                conditions: {successCondition: "status.listeners"}
             })
             .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
         )
@@ -66,17 +59,18 @@ export const ResourceManagement = WorkflowBuilder.create({
 
     .addTemplate("waitForKafkaCluster", t => t
         .addRequiredInput("resourceName", typeToken<string>())
-        .addRequiredInput("configChecksum", typeToken<string>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["MigrationConsole"]))
         .addSteps(b => b
             .addStep("waitForCreation", INTERNAL, "waitForKafkaClusterCreated", c =>
                 c.register({...selectInputsForRegister(b, c), resourceName: b.inputs.resourceName})
             )
             .addStep("waitForReady", INTERNAL, "waitForKafkaClusterReady", c =>
-                c.register({...selectInputsForRegister(b, c), resourceName: b.inputs.resourceName, configChecksum: b.inputs.configChecksum})
+                c.register({...selectInputsForRegister(b, c), resourceName: b.inputs.resourceName})
             )
         )
     )
+
+
 
 
     .addTemplate("readKafkaConnectionProfile", t => t
@@ -115,8 +109,6 @@ export const ResourceManagement = WorkflowBuilder.create({
 
     .addTemplate("waitForCapturedTraffic", t => t
         .addRequiredInput("resourceName", typeToken<string>())
-        .addRequiredInput("configChecksum", typeToken<string>())
-        .addRequiredInput("checksumField", typeToken<string>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["MigrationConsole"]))
         .addWaitForExistingResource(b => b
             .setDefinition({
@@ -125,15 +117,7 @@ export const ResourceManagement = WorkflowBuilder.create({
                     kind: "CapturedTraffic",
                     name: b.inputs.resourceName
                 },
-                conditions: {
-                    successCondition: expr.concat(
-                        expr.literal("status.phase == Ready, status."),
-                        b.inputs.checksumField,
-                        expr.literal(" == "),
-                        b.inputs.configChecksum
-                    ),
-                    failureCondition: "status.phase == Error"
-                }
+                conditions: {successCondition: "status.phase == Ready"}
             })
             .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
         )
@@ -142,8 +126,6 @@ export const ResourceManagement = WorkflowBuilder.create({
 
     .addTemplate("waitForDataSnapshot", t => t
         .addRequiredInput("resourceName", typeToken<string>())
-        .addRequiredInput("configChecksum", typeToken<string>())
-        .addRequiredInput("checksumField", typeToken<string>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["MigrationConsole"]))
         .addWaitForExistingResource(b => b
             .setDefinition({
@@ -152,15 +134,7 @@ export const ResourceManagement = WorkflowBuilder.create({
                     kind: "DataSnapshot",
                     name: b.inputs.resourceName
                 },
-                conditions: {
-                    successCondition: expr.concat(
-                        expr.literal("status.phase == Completed, status."),
-                        b.inputs.checksumField,
-                        expr.literal(" == "),
-                        b.inputs.configChecksum
-                    ),
-                    failureCondition: "status.phase == Error"
-                }
+                conditions: {successCondition: "status.phase == Ready"}
             })
             .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
         )
@@ -169,8 +143,6 @@ export const ResourceManagement = WorkflowBuilder.create({
 
     .addTemplate("waitForSnapshotMigration", t => t
         .addRequiredInput("resourceName", typeToken<string>())
-        .addRequiredInput("configChecksum", typeToken<string>())
-        .addRequiredInput("checksumField", typeToken<string>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["MigrationConsole"]))
         .addWaitForExistingResource(b => b
             .setDefinition({
@@ -179,15 +151,7 @@ export const ResourceManagement = WorkflowBuilder.create({
                     kind: "SnapshotMigration",
                     name: b.inputs.resourceName
                 },
-                conditions: {
-                    successCondition: expr.concat(
-                        expr.literal("status.phase == Completed, status."),
-                        b.inputs.checksumField,
-                        expr.literal(" == "),
-                        b.inputs.configChecksum
-                    ),
-                    failureCondition: "status.phase == Error"
-                }
+                conditions: {successCondition: "status.phase == Ready"}
             })
             .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
         )
@@ -216,7 +180,6 @@ export const ResourceManagement = WorkflowBuilder.create({
     .addTemplate("patchDataSnapshotReady", t => t
         .addRequiredInput("resourceName", typeToken<string>())
         .addRequiredInput("snapshotName", typeToken<string>())
-        .addRequiredInput("configChecksum", typeToken<string>())
         .addResourceTask(b => b
             .setDefinition({
                 action: "patch",
@@ -225,12 +188,7 @@ export const ResourceManagement = WorkflowBuilder.create({
                     apiVersion: CRD_API_VERSION,
                     kind: "DataSnapshot",
                     metadata: {name: b.inputs.resourceName},
-                    status: {
-                        phase: "Completed",
-                        snapshotName: b.inputs.snapshotName,
-                        configChecksum: makeStringTypeProxy(b.inputs.configChecksum),
-                        checksumForSnapshotMigration: makeStringTypeProxy(b.inputs.configChecksum),
-                    }
+                    status: {phase: "Ready", snapshotName: b.inputs.snapshotName}
                 }
             }))
         .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
@@ -239,8 +197,6 @@ export const ResourceManagement = WorkflowBuilder.create({
 
     .addTemplate("patchSnapshotMigrationReady", t => t
         .addRequiredInput("resourceName", typeToken<string>())
-        .addRequiredInput("configChecksum", typeToken<string>())
-        .addRequiredInput("checksumForReplayer", typeToken<string>())
         .addResourceTask(b => b
             .setDefinition({
                 action: "patch",
@@ -249,11 +205,7 @@ export const ResourceManagement = WorkflowBuilder.create({
                     apiVersion: CRD_API_VERSION,
                     kind: "SnapshotMigration",
                     metadata: {name: b.inputs.resourceName},
-                    status: {
-                        phase: "Completed",
-                        configChecksum: makeStringTypeProxy(b.inputs.configChecksum),
-                        checksumForReplayer: makeStringTypeProxy(b.inputs.checksumForReplayer),
-                    }
+                    status: {phase: "Ready"}
                 }
             }))
         .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
@@ -274,108 +226,6 @@ export const ResourceManagement = WorkflowBuilder.create({
             .addJsonPathOutput("snapshotName", "{.status.snapshotName}", typeToken<string>()))
         .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
     )
-
-
-    // ── Generic phase patch template ────────────────────────────────────
-
-    .addTemplate("readResourcePhase", t => t
-        .addRequiredInput("resourceKind", typeToken<string>())
-        .addRequiredInput("resourceName", typeToken<string>())
-        .addResourceTask(b => b
-            .setDefinition({
-                action: "get",
-                manifest: {
-                    apiVersion: CRD_API_VERSION,
-                    kind: makeStringTypeProxy(b.inputs.resourceKind),
-                    metadata: { name: b.inputs.resourceName }
-                }
-            })
-            .addJsonPathOutput("phase", "{.status.phase}", typeToken<string>())
-            .addJsonPathOutput("configChecksum", "{.status.configChecksum}", typeToken<string>()))
-        .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
-    )
-
-    .addTemplate("patchResourcePhase", t => t
-        .addRequiredInput("resourceKind", typeToken<string>())
-        .addRequiredInput("resourceName", typeToken<string>())
-        .addRequiredInput("phase", typeToken<string>())
-        .addOptionalInput("configChecksum", c => "")
-        .addOptionalInput("checksumForSnapshot", c => "")
-        .addOptionalInput("checksumForReplayer", c => "")
-        .addOptionalInput("checksumForSnapshotMigration", c => "")
-        .addResourceTask(b => b
-            .setDefinition({
-                action: "patch",
-                flags: ["--type", "merge", "--subresource=status"],
-                manifest: {
-                    apiVersion: CRD_API_VERSION,
-                    kind: makeStringTypeProxy(b.inputs.resourceKind),
-                    metadata: { name: b.inputs.resourceName },
-                    status: {
-                        phase: makeStringTypeProxy(b.inputs.phase),
-                        configChecksum: makeStringTypeProxy(b.inputs.configChecksum),
-                        checksumForSnapshot: makeStringTypeProxy(b.inputs.checksumForSnapshot),
-                        checksumForReplayer: makeStringTypeProxy(b.inputs.checksumForReplayer),
-                        checksumForSnapshotMigration: makeStringTypeProxy(b.inputs.checksumForSnapshotMigration),
-                    }
-                }
-            }))
-        .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
-    )
-
-
-    // ── Config checksum annotation patch (for resources we don't own) ────
-
-    .addTemplate("patchConfigChecksumAnnotation", t => t
-        .addRequiredInput("resourceApiVersion", typeToken<string>())
-        .addRequiredInput("resourceKind", typeToken<string>())
-        .addRequiredInput("resourceName", typeToken<string>())
-        .addRequiredInput("configChecksum", typeToken<string>())
-        .addResourceTask(b => b
-            .setDefinition({
-                action: "patch",
-                flags: ["--type", "merge"],
-                manifest: {
-                    apiVersion: makeStringTypeProxy(b.inputs.resourceApiVersion),
-                    kind: makeStringTypeProxy(b.inputs.resourceKind),
-                    metadata: {
-                        name: b.inputs.resourceName,
-                        annotations: {
-                            "migration-configChecksum": makeStringTypeProxy(b.inputs.configChecksum)
-                        }
-                    }
-                }
-            }))
-        .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
-    )
-
-
-    // ── Workflow UID approval annotation patch ───────────────────────────
-
-    .addTemplate("patchApprovalAnnotation", t => t
-        .addRequiredInput("resourceApiVersion", typeToken<string>())
-        .addRequiredInput("resourceKind", typeToken<string>())
-        .addRequiredInput("resourceName", typeToken<string>())
-        .addResourceTask(b => b
-            .setDefinition({
-                action: "patch",
-                flags: ["--type", "merge"],
-                manifest: {
-                    apiVersion: makeStringTypeProxy(b.inputs.resourceApiVersion),
-                    kind: makeStringTypeProxy(b.inputs.resourceKind),
-                    metadata: {
-                        name: b.inputs.resourceName,
-                        annotations: {
-                            "migrations.opensearch.org/approved-by-run":
-                                makeStringTypeProxy(expr.getWorkflowValue("uid"))
-                        }
-                    }
-                }
-            }))
-        .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
-    )
-
-
 
 
     // ── Approval gate templates ─────────────────────────────────────────
@@ -409,6 +259,32 @@ export const ResourceManagement = WorkflowBuilder.create({
                 conditions: {successCondition: "status.phase == Approved"}
             })
         )
+    )
+
+
+    // ── Workflow UID approval annotation patch ───────────────────────────
+
+    .addTemplate("patchApprovalAnnotation", t => t
+        .addRequiredInput("resourceApiVersion", typeToken<string>())
+        .addRequiredInput("resourceKind", typeToken<string>())
+        .addRequiredInput("resourceName", typeToken<string>())
+        .addResourceTask(b => b
+            .setDefinition({
+                action: "patch",
+                flags: ["--type", "merge"],
+                manifest: {
+                    apiVersion: makeStringTypeProxy(b.inputs.resourceApiVersion),
+                    kind: makeStringTypeProxy(b.inputs.resourceKind),
+                    metadata: {
+                        name: b.inputs.resourceName,
+                        annotations: {
+                            "migrations.opensearch.org/approved-by-run":
+                                makeStringTypeProxy(expr.getWorkflowValue("uid"))
+                        }
+                    }
+                }
+            }))
+        .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
     )
 
 

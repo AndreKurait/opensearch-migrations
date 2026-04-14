@@ -59,11 +59,7 @@ function formatParameterDefinition<T extends PlainObject, P extends InputParamDe
     }
     if (isDefault(input)) {
         if (input.defaultValue.expression !== undefined) {
-            const transformed = transformExpressionsDeep(input.defaultValue.expression);
-            // Argo parameter values must be strings; serialize object/array defaults as JSON
-            out.value = (typeof transformed === "object" && transformed !== null)
-                ? JSON.stringify(transformed)
-                : transformed;
+            out.value = transformExpressionsDeep(input.defaultValue.expression);
         }
         if (input.defaultValue.from !== undefined) {
             const f = input.defaultValue.from;

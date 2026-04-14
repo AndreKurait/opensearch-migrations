@@ -1,8 +1,9 @@
-import {loadUnifiedSchema} from "./unifiedSchemaBuilder";
+import {OVERALL_MIGRATION_CONFIG} from "./userSchemas";
+import {zodSchemaToJsonSchema} from "./getSchemaFromZod";
 
 export async function main() {
-    const unifiedSchema = loadUnifiedSchema();
-    console.log(JSON.stringify(unifiedSchema.schema, null, 2));
+    const userJsonSchema = zodSchemaToJsonSchema(OVERALL_MIGRATION_CONFIG);
+    console.log(JSON.stringify(userJsonSchema, null, 2));
 }
 
 if (require.main === module && !process.env.SUPPRESS_AUTO_LOAD) {
