@@ -395,6 +395,11 @@ export const USER_RFS_OPTIONS = z.object({
         );
 });
 
+export const KAFKA_AUTH_CONFIG = z.union([
+    z.object({ type: z.literal("scram-sha-512"), secretName: z.string().optional(), caSecretName: z.string().optional(), kafkaUserName: z.string().optional() }),
+    z.object({ type: z.literal("none") }),
+]);
+
 export const KAFKA_CLUSTER_CREATION_CONFIG = z.object({
     replicas: z.number().int().min(1).default(1).optional(),
     storage: z.discriminatedUnion("type", [
@@ -403,11 +408,15 @@ export const KAFKA_CLUSTER_CREATION_CONFIG = z.object({
     ]).default({ type: "ephemeral" }).optional(),
     partitions: z.number().int().min(1).default(1).optional(),
     topicReplicas: z.number().int().min(1).default(1).optional(),
+    auth: KAFKA_AUTH_CONFIG.default({ type: "scram-sha-512" }).optional(),
+    topicSpecOverrides: z.record(z.string(), z.any()).optional(),
 });
 
 export const KAFKA_CLUSTER_CONFIG = z.union([
     z.object({autoCreate: KAFKA_CLUSTER_CREATION_CONFIG}),
-    z.object({existing: KAFKA_CLIENT_CONFIG })
+    z.object({existing: KAFKA_CLIENT_CONFIG.extend({
+        auth: KAFKA_AUTH_CONFIG.optional(),
+    })})
 ]);
 
 export const HTTP_AUTH_BASIC = z.object({

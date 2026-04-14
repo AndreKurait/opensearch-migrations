@@ -101,9 +101,6 @@ export const FullMigration = WorkflowBuilder.create({
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["MigrationConsole"]))
 
         .addSteps(b => b
-            .addStep("createCrd", ResourceManagement, "createKafkaCluster", c =>
-                c.register({resourceName: b.inputs.clusterName})
-            )
             .addStep("getCrdUid", ResourceManagement, "getResourceUid", c =>
                 c.register({
                     resourceName: b.inputs.clusterName,
@@ -154,9 +151,6 @@ export const FullMigration = WorkflowBuilder.create({
                     ...selectInputsForRegister(b, c),
                     resourceName: b.inputs.kafkaClusterName,
                 })
-            )
-            .addStep("createCrd", ResourceManagement, "createCapturedTraffic", c =>
-                c.register({resourceName: b.inputs.proxyName})
             )
             .addStep("getCrdUid", ResourceManagement, "getResourceUid", c =>
                 c.register({
@@ -210,7 +204,7 @@ export const FullMigration = WorkflowBuilder.create({
             .addStep("waitForProxyDeps", ResourceManagement, "waitForCapturedTraffic", c =>
                     c.register({
                         ...selectInputsForRegister(b, c),
-                        resourceName: c.item
+                        resourceName: expr.get(c.item, "name")
                     }), {
                     loopWith: makeParameterLoop(
                         expr.get(expr.deserializeRecord(b.inputs.snapshotItemConfig), "dependsOnProxySetups")),
@@ -381,9 +375,6 @@ export const FullMigration = WorkflowBuilder.create({
         .addInputsFromRecord(ImageParameters)
 
         .addSteps(b => b
-            .addStep("createCrd", ResourceManagement, "createSnapshotMigration", c =>
-                c.register({resourceName: b.inputs.resourceName})
-            )
             .addStep("getCrdUid", ResourceManagement, "getResourceUid", c =>
                 c.register({
                     resourceName: b.inputs.resourceName,
@@ -466,6 +457,7 @@ export const FullMigration = WorkflowBuilder.create({
     // ── Section 5: Traffic Replays ───────────────────────────────────────
 
     .addTemplate("runSingleReplay", t => t
+        .addRequiredInput("name", typeToken<string>())
         .addRequiredInput("kafkaConfig", typeToken<z.infer<typeof KAFKA_CLIENT_CONFIG>>())
         .addRequiredInput("kafkaClusterName", typeToken<string>())
         .addRequiredInput("fromProxy", typeToken<string>())
@@ -478,11 +470,7 @@ export const FullMigration = WorkflowBuilder.create({
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["MigrationConsole", "TrafficReplayer"]))
 
         .addSteps(b => {
-            const replayerName = expr.concat(
-                b.inputs.fromProxy,
-                expr.literal("-"),
-                expr.get(expr.deserializeRecord(b.inputs.targetConfig), "label"),
-                expr.literal("-replayer"));
+            const replayerName = b.inputs.name;
 
             return b
                 .addStep("waitForSnapshotMigrationDeps", ResourceManagement, "waitForSnapshotMigration", c => {
@@ -512,13 +500,6 @@ export const FullMigration = WorkflowBuilder.create({
                     c.register({
                         ...selectInputsForRegister(b, c),
                         resourceName: b.inputs.kafkaClusterName,
-                    })
-                )
-                // Create TrafficReplay CRD and read its UID
-                .addStep("createTrafficReplay", ResourceManagement, "createTrafficReplay", c =>
-                    c.register({
-                        ...selectInputsForRegister(b, c),
-                        resourceName: replayerName,
                     })
                 )
                 .addStep("getCrdUid", ResourceManagement, "getResourceUid", c =>
