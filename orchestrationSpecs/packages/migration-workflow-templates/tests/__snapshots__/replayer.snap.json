@@ -82,7 +82,7 @@
         },
         "retryStrategy": {
           "limit": "6",
-          "retryPolicy": "Always",
+          "retryPolicy": "OnError",
           "backoff": {
             "duration": "10",
             "factor": "2",
@@ -109,7 +109,7 @@
         },
         "retryStrategy": {
           "limit": "6",
-          "retryPolicy": "Always",
+          "retryPolicy": "OnError",
           "backoff": {
             "duration": "10",
             "factor": "2",
