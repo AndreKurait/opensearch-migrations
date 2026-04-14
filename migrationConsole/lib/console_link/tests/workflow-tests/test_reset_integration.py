@@ -299,7 +299,7 @@ class TestResetSingleIntegration:
         _create_crd_instance(reset_ns, "capturedtraffics", "proxy-c", phase="Ready")
         _create_crd_instance(reset_ns, "snapshotmigrations", "snap-c", phase="Ready")
 
-        result = runner.invoke(workflow_cli, ["reset", "proxy-c", "--namespace", reset_ns])
+        result = runner.invoke(workflow_cli, ["reset", "proxy-c", "--include-proxies", "--namespace", reset_ns])
         assert result.exit_code == 0
         assert "✓ Deleted proxy-c" in result.output
 
@@ -336,7 +336,7 @@ class TestResetAllIntegration:
         _create_crd_instance(reset_ns, "trafficreplays", "replay-f", phase="Ready")
 
         result = runner.invoke(workflow_cli, [
-            "reset", "--all", "--namespace", reset_ns,
+            "reset", "--all", "--include-proxies", "--namespace", reset_ns,
         ])
 
         # All CRDs should be deleted (404)

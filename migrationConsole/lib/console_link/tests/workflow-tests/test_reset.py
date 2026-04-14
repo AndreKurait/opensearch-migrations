@@ -164,7 +164,7 @@ class TestResetCommandDelete:
     @patch('console_link.workflow.commands.reset._delete_crd')
     @patch('console_link.workflow.commands.reset.load_k8s_config')
     @patch('console_link.workflow.commands.reset.list_migration_resources')
-    def test_reset_all(self, mock_list, mock_k8s, mock_delete, mock_wait, mock_wf):
+    def test_reset_all_include_proxies(self, mock_list, mock_k8s, mock_delete, mock_wait, mock_wf):
         mock_list.return_value = [
             ('capturedtraffics', 'source-proxy', 'Ready', []),
             ('trafficreplays', 'src-tgt-replayer', 'Ready', ['source-proxy']),
@@ -172,11 +172,34 @@ class TestResetCommandDelete:
         mock_delete.return_value = True
 
         runner = CliRunner()
-        result = runner.invoke(workflow_cli, ['reset', '--all'])
+        result = runner.invoke(workflow_cli, ['reset', '--all', '--include-proxies'])
         assert result.exit_code == 0
         assert '✓ Deleted source-proxy' in result.output
         assert '✓ Deleted src-tgt-replayer' in result.output
         mock_wf.assert_called_once_with('ma')
+        assert 'Done.' in result.output
+
+    @patch('console_link.workflow.commands.reset._stop_and_delete_workflows')
+    @patch('console_link.workflow.commands.proxy._set_capture_mode_headless')
+    @patch('console_link.workflow.commands.reset._wait_until_gone')
+    @patch('console_link.workflow.commands.reset._delete_crd')
+    @patch('console_link.workflow.commands.reset.load_k8s_config')
+    @patch('console_link.workflow.commands.reset.list_migration_resources')
+    def test_reset_all_default_disables_proxy_capture(self, mock_list, mock_k8s, mock_delete, mock_wait, mock_headless, mock_wf):
+        mock_list.return_value = [
+            ('capturedtraffics', 'source-proxy', 'Ready', []),
+            ('trafficreplays', 'src-tgt-replayer', 'Ready', ['source-proxy']),
+        ]
+        mock_delete.return_value = True
+        mock_headless.return_value = True
+
+        runner = CliRunner()
+        result = runner.invoke(workflow_cli, ['reset', '--all'])
+        assert result.exit_code == 0
+        mock_headless.assert_called_once_with('ma', ['source-proxy'], enable=False)
+        assert '✓ Deleted src-tgt-replayer' in result.output
+        # Proxy is NOT deleted — capture is disabled instead
+        assert '✓ Deleted source-proxy' not in result.output
         assert 'Done.' in result.output
 
     @patch('console_link.workflow.commands.reset.load_k8s_config')
