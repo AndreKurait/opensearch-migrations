@@ -29,23 +29,13 @@ const KAFKA_CA_MOUNT_PATH = "/config/kafka-ca";
 function makeProxyServiceManifest(
     proxyName: BaseExpression<string>,
     listenPort: BaseExpression<Serialized<number>>,
-    internetFacing: BaseExpression<boolean>,
-    crdName: BaseExpression<string>,
-    crdUid: BaseExpression<string>
+    internetFacing: BaseExpression<boolean>
 ) {
     return {
         apiVersion: "v1",
         kind: "Service",
         metadata: {
             name: proxyName,
-            ownerReferences: [{
-                apiVersion: "migrations.opensearch.org/v1alpha1",
-                kind: "CapturedTraffic",
-                name: crdName,
-                uid: crdUid,
-                blockOwnerDeletion: true,
-                controller: false
-            }],
             annotations: {
                 // NLB IP mode for EKS Auto Mode — ignored on minikube/standard K8s
                 "service.beta.kubernetes.io/aws-load-balancer-type": "external",
@@ -213,8 +203,6 @@ function makeProxyDeploymentManifest(args: {
     kafkaSecretName: BaseExpression<string>,
     kafkaCaSecretName: BaseExpression<string>,
     tlsSecretName?: BaseExpression<string>,
-    crdName: BaseExpression<string>,
-    crdUid: BaseExpression<string>,
 }) {
     const isScramAuth = expr.equals(args.kafkaAuthType, expr.literal("scram-sha-512"));
     const container: Record<string, any> = {
@@ -287,17 +275,7 @@ function makeProxyDeploymentManifest(args: {
     return {
         apiVersion: "apps/v1",
         kind: "Deployment",
-        metadata: {
-            name: args.proxyName,
-            ownerReferences: [{
-                apiVersion: "migrations.opensearch.org/v1alpha1",
-                kind: "CapturedTraffic",
-                name: args.crdName,
-                uid: args.crdUid,
-                blockOwnerDeletion: true,
-                controller: false
-            }]
-        },
+        metadata: {name: args.proxyName},
         spec: {
             replicas: makeDirectTypeProxy(args.podReplicas),
             strategy: {
@@ -418,8 +396,6 @@ export const SetupCapture = WorkflowBuilder.create({
     .addTemplate("deployProxyService", t => t
         .addRequiredInput("proxyName", typeToken<string>())
         .addRequiredInput("listenPort", typeToken<number>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
         .addOptionalInput("internetFacing", c => false)
         .addResourceTask(b => b
             .setDefinition({
@@ -428,9 +404,7 @@ export const SetupCapture = WorkflowBuilder.create({
                 manifest: makeProxyServiceManifest(
                     b.inputs.proxyName,
                     b.inputs.listenPort,
-                    expr.deserializeRecord(b.inputs.internetFacing),
-                    b.inputs.crdName,
-                    b.inputs.crdUid
+                    expr.deserializeRecord(b.inputs.internetFacing)
                 )
             }))
         .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
@@ -447,8 +421,6 @@ export const SetupCapture = WorkflowBuilder.create({
         .addRequiredInput("listenPort", typeToken<number>())
         .addRequiredInput("podReplicas", typeToken<number>())
         .addRequiredInput("resources", typeToken<ResourceRequirementsType>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
         .addOptionalInput("tlsSecretName", c => "")
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["CaptureProxy"]))
         .addResourceTask(b => b
@@ -464,8 +436,6 @@ export const SetupCapture = WorkflowBuilder.create({
                     podReplicas: expr.deserializeRecord(b.inputs.podReplicas),
                     resources: expr.deserializeRecord(b.inputs.resources),
                     jsonConfig: expr.toBase64(b.inputs.jsonConfig),
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
                     kafkaAuthConfigMapName: b.inputs.kafkaAuthConfigMapName,
                     kafkaAuthType: b.inputs.kafkaAuthType,
                     kafkaSecretName: b.inputs.kafkaSecretName,
@@ -487,8 +457,6 @@ export const SetupCapture = WorkflowBuilder.create({
         .addRequiredInput("podReplicas", typeToken<number>())
         .addRequiredInput("resources", typeToken<ResourceRequirementsType>())
         .addRequiredInput("tlsSecretName", typeToken<string>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["CaptureProxy"]))
         .addResourceTask(b => b
             .setDefinition({
@@ -508,8 +476,6 @@ export const SetupCapture = WorkflowBuilder.create({
                     kafkaSecretName: b.inputs.kafkaSecretName,
                     kafkaCaSecretName: b.inputs.kafkaCaSecretName,
                     tlsSecretName: b.inputs.tlsSecretName,
-                    crdName: b.inputs.crdName,
-                    crdUid: b.inputs.crdUid,
                 })
             }))
         .addRetryParameters(K8S_RESOURCE_RETRY_STRATEGY)
@@ -580,8 +546,6 @@ export const SetupCapture = WorkflowBuilder.create({
         .addRequiredInput("proxyName", typeToken<string>())
         .addRequiredInput("listenPort", typeToken<number>())
         .addRequiredInput("podReplicas", typeToken<number>())
-        .addRequiredInput("crdName", typeToken<string>())
-        .addRequiredInput("crdUid", typeToken<string>())
         .addOptionalInput("resolvedKafkaConnection", c => "")
         .addOptionalInput("resolvedKafkaListenerName", c => "")
         .addOptionalInput("resolvedKafkaAuthType", c => "")
@@ -627,8 +591,6 @@ export const SetupCapture = WorkflowBuilder.create({
                         partitions: expr.get(topicSpecOverrides, "partitions"),
                         replicas: expr.get(topicSpecOverrides, "replicas"),
                         topicConfig: expr.serialize(expr.get(topicSpecOverrides, "config")),
-                        crdName: b.inputs.crdName,
-                        crdUid: b.inputs.crdUid,
                         retryGroupName_view: expr.concat(expr.literal("KafkaTopic: "), b.inputs.kafkaTopicName),
                     })
                 )
@@ -643,8 +605,6 @@ export const SetupCapture = WorkflowBuilder.create({
                             proxyName: b.inputs.proxyName,
                             listenPort: b.inputs.listenPort,
                             internetFacing: expr.dig(proxyOpts, ["internetFacing"], false),
-                            crdName: b.inputs.crdName,
-                            crdUid: b.inputs.crdUid,
                         })
                     )
                     .addStep("provisionCert", INTERNAL, "provisionProxyCert", c =>
@@ -687,8 +647,6 @@ export const SetupCapture = WorkflowBuilder.create({
                                         b.inputs.resolvedKafkaAuthType
                                     )
                                 )),
-                                crdName: b.inputs.crdName,
-                                crdUid: b.inputs.crdUid,
                             }),
                         {when: {templateExp: expr.not(hasTls)}}
                     )
@@ -718,8 +676,6 @@ export const SetupCapture = WorkflowBuilder.create({
                                         })
                                     )
                                 )),
-                                crdName: b.inputs.crdName,
-                                crdUid: b.inputs.crdUid,
                             }),
                         {when: {templateExp: hasTls}}
                     )

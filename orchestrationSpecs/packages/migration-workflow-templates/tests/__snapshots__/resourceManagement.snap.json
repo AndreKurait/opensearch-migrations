@@ -703,6 +703,437 @@
         "outputs": {
           "parameters": []
         }
+      },
+      {
+        "name": "createapprovalgate",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: ApprovalGate\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\nstatus:\n  phase: Pending\n",
+          "action": "apply",
+          "setOwnerReference": false
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "waitforapproval",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: ApprovalGate\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\n",
+          "action": "get",
+          "successCondition": "status.phase == Approved"
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "waitforteardown",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            },
+            {
+              "name": "resourceKind"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: \"{{inputs.parameters.resourceKind}}\"\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\n",
+          "action": "get",
+          "successCondition": "status.phase == Teardown"
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "patchteardown",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            },
+            {
+              "name": "resourceKind"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: \"{{inputs.parameters.resourceKind}}\"\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\nstatus:\n  phase: Teardown\n",
+          "action": "patch",
+          "flags": [
+            "--type",
+            "merge",
+            "--subresource=status"
+          ]
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "deletedeployment",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "deploymentName"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: \"{{inputs.parameters.deploymentName}}\"\n",
+          "action": "delete",
+          "flags": [
+            "--ignore-not-found"
+          ]
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "createtrafficreplay",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: TrafficReplay\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\nstatus:\n  phase: Running\n",
+          "action": "apply",
+          "setOwnerReference": false
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "patchtrafficreplayready",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: TrafficReplay\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\nstatus:\n  phase: Ready\n",
+          "action": "patch",
+          "flags": [
+            "--type",
+            "merge",
+            "--subresource=status"
+          ]
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "createkafkacluster",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: KafkaCluster\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\nstatus:\n  phase: Created\n",
+          "action": "apply",
+          "setOwnerReference": false
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "createsnapshotmigration",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: SnapshotMigration\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\nstatus:\n  phase: Created\n",
+          "action": "apply",
+          "setOwnerReference": false
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "createcapturedtraffic",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: CapturedTraffic\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\nstatus:\n  phase: Created\n",
+          "action": "apply",
+          "setOwnerReference": false
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "patchkafkaclusterready",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: KafkaCluster\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\nstatus:\n  phase: Ready\n",
+          "action": "patch",
+          "flags": [
+            "--type",
+            "merge",
+            "--subresource=status"
+          ]
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "getresourceuid",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            },
+            {
+              "name": "resourceKind"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: \"{{inputs.parameters.resourceKind}}\"\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\n",
+          "action": "get"
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": [
+            {
+              "name": "uid",
+              "valueFrom": {
+                "jsonPath": "{.metadata.uid}"
+              }
+            },
+            {
+              "name": "phase",
+              "valueFrom": {
+                "jsonPath": "{.status.phase}"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "waitforcrddeletion",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            },
+            {
+              "name": "resourceKind"
+            },
+            {
+              "name": "imageMigrationConsoleLocation"
+            },
+            {
+              "name": "imageMigrationConsolePullPolicy"
+            }
+          ]
+        },
+        "container": {
+          "env": [],
+          "image": "{{inputs.parameters.imageMigrationConsoleLocation}}",
+          "imagePullPolicy": "{{inputs.parameters.imageMigrationConsolePullPolicy}}",
+          "command": [
+            "kubectl"
+          ],
+          "args": [
+            "wait",
+            "--for=delete",
+            "{{=inputs.parameters.resourceKind+'.migrations.opensearch.org/'+inputs.parameters.resourceName}}",
+            "--timeout=31536000s"
+          ],
+          "resources": {
+            "limits": {
+              "cpu": "50m",
+              "memory": "64Mi"
+            },
+            "requests": {
+              "cpu": "50m",
+              "memory": "64Mi"
+            }
+          }
+        },
+        "metadata": {
+          "annotations": {
+            "karpenter.sh/do-not-disrupt": "true"
+          }
+        },
+        "retryStrategy": {
+          "retryPolicy": "Always",
+          "backoff": {
+            "duration": "5",
+            "factor": "1"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
+      },
+      {
+        "name": "deletecrd",
+        "inputs": {
+          "parameters": [
+            {
+              "name": "resourceName"
+            },
+            {
+              "name": "resourceKind"
+            }
+          ]
+        },
+        "resource": {
+          "manifest": "apiVersion: migrations.opensearch.org/v1alpha1\nkind: \"{{inputs.parameters.resourceKind}}\"\nmetadata:\n  name: \"{{inputs.parameters.resourceName}}\"\n",
+          "action": "delete",
+          "flags": [
+            "--ignore-not-found"
+          ]
+        },
+        "retryStrategy": {
+          "limit": "6",
+          "retryPolicy": "OnError",
+          "backoff": {
+            "duration": "10",
+            "factor": "2",
+            "cap": "60"
+          }
+        },
+        "outputs": {
+          "parameters": []
+        }
       }
     ]
   }

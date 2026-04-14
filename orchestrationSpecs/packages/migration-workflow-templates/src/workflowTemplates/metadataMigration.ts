@@ -28,7 +28,6 @@ import {
     getApprovalMap,
     getSourceTargetPathAndSnapshotAndMigrationIndex
 } from "./commonUtils/configContextPathConstructors";
-import {ResourceManagement} from "./resourceManagement";
 
 const COMMON_METADATA_PARAMETERS = {
     snapshotConfig: defineRequiredParam<z.infer<typeof COMPLETE_SNAPSHOT_CONFIG>>({
@@ -212,21 +211,11 @@ export const MetadataMigration = WorkflowBuilder.create({
 
     .addTemplate("approveEvaluate", t => t
         .addRequiredInput("name", typeToken<string>())
-        .addSteps(b => b
-            .addStep("createGate", ResourceManagement, "createApprovalGate", c =>
-                c.register({resourceName: b.inputs.name}))
-            .addStep("waitForApproval", ResourceManagement, "waitForApproval", c =>
-                c.register({resourceName: b.inputs.name}))
-        )
+        .addSuspend()
     )
     .addTemplate("approveMigrate", t => t
         .addRequiredInput("name", typeToken<string>())
-        .addSteps(b => b
-            .addStep("createGate", ResourceManagement, "createApprovalGate", c =>
-                c.register({resourceName: b.inputs.name}))
-            .addStep("waitForApproval", ResourceManagement, "waitForApproval", c =>
-                c.register({resourceName: b.inputs.name}))
-        )
+        .addSuspend()
     )
 
 

@@ -164,42 +164,7 @@
             }
           ]
         },
-        "steps": [
-          [
-            {
-              "templateRef": {
-                "template": "createapprovalgate",
-                "name": "resource-management"
-              },
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "resourceName",
-                    "value": "{{inputs.parameters.name}}"
-                  }
-                ]
-              },
-              "name": "createGate"
-            }
-          ],
-          [
-            {
-              "templateRef": {
-                "template": "waitforapproval",
-                "name": "resource-management"
-              },
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "resourceName",
-                    "value": "{{inputs.parameters.name}}"
-                  }
-                ]
-              },
-              "name": "waitForApproval"
-            }
-          ]
-        ],
+        "suspend": {},
         "outputs": {
           "parameters": []
         }
@@ -213,42 +178,7 @@
             }
           ]
         },
-        "steps": [
-          [
-            {
-              "templateRef": {
-                "template": "createapprovalgate",
-                "name": "resource-management"
-              },
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "resourceName",
-                    "value": "{{inputs.parameters.name}}"
-                  }
-                ]
-              },
-              "name": "createGate"
-            }
-          ],
-          [
-            {
-              "templateRef": {
-                "template": "waitforapproval",
-                "name": "resource-management"
-              },
-              "arguments": {
-                "parameters": [
-                  {
-                    "name": "resourceName",
-                    "value": "{{inputs.parameters.name}}"
-                  }
-                ]
-              },
-              "name": "waitForApproval"
-            }
-          ]
-        ],
+        "suspend": {},
         "outputs": {
           "parameters": []
         }
