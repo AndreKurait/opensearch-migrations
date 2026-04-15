@@ -40,8 +40,7 @@ def call(Map config = [:]) {
             )
             string(name: 'SPEEDUP_FACTOR', defaultValue: '20', description: 'Speedup factor for traffic replayer')
             string(name: 'REGION', defaultValue: 'us-east-1', description: 'AWS region for deployment')
-            booleanParam(name: 'BUILD_IMAGES', defaultValue: true, description: 'Build container images from source instead of using public images')
-            booleanParam(name: 'BUILD_CHART_AND_DASHBOARDS', defaultValue: true, description: 'Build Helm chart and dashboards from source instead of using release artifacts')
+            booleanParam(name: 'BUILD', defaultValue: true, description: 'Build all artifacts from source (images, CFN, chart). When false, downloads published release artifacts.')
             booleanParam(name: 'USE_RELEASE_BOOTSTRAP', defaultValue: false, description: 'Download aws-bootstrap.sh from the latest GitHub release instead of using the source checkout version')
             string(name: 'VERSION', defaultValue: 'latest', description: 'Release version to deploy (e.g. "2.8.2" or "latest"). Determines which release artifacts to download.')
         }
@@ -84,8 +83,7 @@ def call(Map config = [:]) {
     Test IDs:               ${params.TEST_IDS}
     Source:                 ${params.SOURCE_VERSION}
     Target:                 ${params.TARGET_VERSION}
-    Build Images:           ${params.BUILD_IMAGES}
-    Build Chart:            ${params.BUILD_CHART_AND_DASHBOARDS}
+    Build:                  ${params.BUILD}
     Use Release Bootstrap:  ${params.USE_RELEASE_BOOTSTRAP}
     Version:                ${params.VERSION}
     ================================================================
@@ -123,8 +121,7 @@ def call(Map config = [:]) {
 
                             def bootstrap = resolveBootstrap(
                                 useReleaseBootstrap: params.USE_RELEASE_BOOTSTRAP,
-                                buildImages: params.BUILD_IMAGES,
-                                buildChartAndDashboards: params.BUILD_CHART_AND_DASHBOARDS,
+                                build: params.BUILD,
                                 skipTestImages: true,
                                 version: params.VERSION
                             )

@@ -57,7 +57,7 @@ chmod +x aws-bootstrap.sh
 | `--region` | - | AWS region |
 | `--version` | latest | Release version for artifacts |
 | `--skip-console-exec` | false | Skip kubectl exec into console |
-| `--build-images` | false | Build images from source |
+| `--build` | false | Build all artifacts from source (images, CFN, chart) |
 | `--use-public-images` | false | Opt out of mirroring to private ECR |
 | `--namespace` | ma | Kubernetes namespace |
 
