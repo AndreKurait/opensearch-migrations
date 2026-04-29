@@ -2,7 +2,23 @@
   "sourceClusters": {
     "solr-source": {
       "version": "SOLR 8.11.4",
-      "endpoint": "http://solr:8983"
+      "endpoint": "http://solr:8983",
+      "snapshotInfo": {
+        "repos": {
+          "my-repo": {
+            "awsRegion": "us-east-1",
+            "s3RepoPathUri": "s3://my-bucket/solr-snapshots"
+          }
+        },
+        "snapshots": {
+          "snap1": {
+            "repoName": "my-repo",
+            "config": {
+              "externallyManagedSnapshotName": "snap1"
+            }
+          }
+        }
+      }
     }
   },
   "targetClusters": {
@@ -10,5 +26,18 @@
       "endpoint": "http://target:9200"
     }
   },
-  "snapshotMigrationConfigs": []
+  "snapshotMigrationConfigs": [
+    {
+      "fromSource": "solr-source",
+      "toTarget": "target",
+      "perSnapshotConfig": {
+        "snap1": [
+          {
+            "label": "docs",
+            "documentBackfillConfig": {}
+          }
+        ]
+      }
+    }
+  ]
 }

@@ -1057,6 +1057,26 @@ export const OVERALL_MIGRATION_CONFIG = //validateOptionalDefaultConsistency
                 "All top-level items are independent, but replayers can declare dependencies on snapshot migrations to ensure data consistency.")
             .optional()
     }).describe("Top-level migration configuration defining source clusters, target clusters, snapshot migrations, and optional traffic capture/replay.").superRefine((data, ctx) => {
+        // A migration must do something. Either at least one snapshotMigrationConfigs entry
+        // has a perSnapshotConfig that defines metadata / document-backfill passes, or a
+        // traffic capture-and-replay configuration is present. Otherwise the workflow has
+        // nothing to do and will complete immediately with every step Skipped, which is
+        // almost always a configuration error rather than the user's intent.
+        const hasSnapshotWork = data.snapshotMigrationConfigs.some(
+            mc => mc.perSnapshotConfig && Object.keys(mc.perSnapshotConfig).length > 0
+        );
+        const hasTrafficWork = data.traffic !== undefined;
+        if (!hasSnapshotWork && !hasTrafficWork) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Migration has nothing to do. Define at least one " +
+                    "snapshotMigrationConfigs[*].perSnapshotConfig entry (for snapshot-based " +
+                    "document backfill / metadata migration) or a 'traffic' block (for " +
+                    "live capture-and-replay).",
+                path: ['snapshotMigrationConfigs']
+            });
+        }
+
         for (let i = 0; i < data.snapshotMigrationConfigs.length; i++) {
             const mc = data.snapshotMigrationConfigs[i];
 
