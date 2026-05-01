@@ -146,3 +146,39 @@ In committed text (reports, commits, PRs, code comments), say
 version or wire protocol). Never cite Elastic Inc. marketing copy or
 copy from elastic.co docs. Companion is parallel to, not derived from,
 upstream Elastic work.
+
+## Solr snapshot backfill reports Completed with zero docs transferred
+
+On a Solr source with an externally-managed snapshot (the
+`snapshotInfo.repos` + `externallyManagedSnapshotName` path), the
+workflow can finish every step Succeeded — metadata creates the target
+indices with correct mappings, `startHistoricalBackfill` spins up the
+RFS Deployment, `checkBackfillStatus` reports
+`{status: Completed, shard_complete: 2, shard_total: 2}` — yet the
+target indices end up with `docs.count=0`.
+
+Cause (working hypothesis): the `checkBackfillStatus` template polls the
+RFS coordinator (the work-queue OpenSearch StatefulSet) almost
+immediately after `startHistoricalBackfill`. If the coordinator sees no
+in-progress leases and an empty work queue it reports "Completed" even
+though the worker Deployment's pods are still in `ContainerCreating`
+and never had a chance to enqueue or claim any shards. A secondary
+cause, distinguishable only by reading real worker logs, is the RFS
+SolrSnapshotReader silently failing on a Solr-native backup layout
+(different from the ES `index-N` repo format RFS was originally built
+for).
+
+Diagnosis signal for the agent: if post-migration
+`target./<idx>/_count` returns `0` but the mapping is present and
+non-empty, **do not** claim the migration succeeded. Mark backfill as
+**failed** in the report, keep the metadata-side analysis (mapping
+diff, field-type sanity, analyzer probes on the mapping), and point
+the user at `solrMigrationDevSandbox/README.md` and
+`AIAdvisor/skills/solr-opensearch-migration-advisor/` for the
+Solr-specific backfill investigation path. Do not run Layer 2 query
+battery or Layer 3 relevancy showcase on an empty target.
+
+Argo does not persist RFS-worker Deployment pod logs (only workflow-step
+pods get S3-archived). To capture them, patch the RFS Deployment
+template's entrypoint with a short pre-sleep, or stream
+`kubectl logs -f` from a tight loop before the pod terminates.
