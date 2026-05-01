@@ -47,6 +47,24 @@ if [[ -f "${OUT_DIR}/cluster-versions.env" ]]; then
   source "${OUT_DIR}/cluster-versions.env"
 fi
 
+# Capitalize engine names for display. Avoid ${VAR^} — that's bash 4+,
+# and macOS still ships bash 3.2. Special-case the canonical brand spellings.
+_cap() {
+  local s="$1"
+  case "$s" in
+    opensearch)    printf 'OpenSearch' ;;
+    elasticsearch) printf 'Elasticsearch' ;;
+    solr)          printf 'Solr' ;;
+    *)
+      local first="$(printf '%s' "$s" | cut -c1 | tr '[:lower:]' '[:upper:]')"
+      local rest="$(printf '%s' "$s" | cut -c2-)"
+      printf '%s%s' "$first" "$rest"
+      ;;
+  esac
+}
+SOURCE_ENGINE_CAP="$(_cap "${SOURCE_ENGINE}")"
+TARGET_ENGINE_CAP="$(_cap "${TARGET_ENGINE}")"
+
 # Sanity: port-forwards up?
 curl -sk -u admin:admin https://localhost:19200 >/dev/null \
   || { echo "Source not reachable on localhost:19200. Re-run 01-setup-cluster.sh." >&2; exit 1; }
@@ -58,12 +76,12 @@ curl -sk -u admin:admin https://localhost:19201 >/dev/null \
 read -r -d '' PROMPT <<EOF || true
 Run an empirical migration plan for these clusters:
 
-  Source (${SOURCE_ENGINE^} ${SOURCE_VERSION}):
+  Source (${SOURCE_ENGINE_CAP} ${SOURCE_VERSION}):
     endpoint: https://localhost:19200
     auth: basic admin:admin
     allow_insecure: true
 
-  Target (${TARGET_ENGINE^} ${TARGET_VERSION}):
+  Target (${TARGET_ENGINE_CAP} ${TARGET_VERSION}):
     endpoint: https://localhost:19201
     auth: basic admin:admin
     allow_insecure: true
@@ -74,7 +92,7 @@ Run an empirical migration plan for these clusters:
 
 The source/target engine and version are already known — DO NOT ask the
 user to confirm them. Report the migration as
-"${SOURCE_ENGINE^} ${SOURCE_VERSION} → ${TARGET_ENGINE^} ${TARGET_VERSION} Migration Report".
+"${SOURCE_ENGINE_CAP} ${SOURCE_VERSION} → ${TARGET_ENGINE_CAP} ${TARGET_VERSION} Migration Report".
 
 Do this in order, without asking for confirmation:
 
