@@ -66,6 +66,19 @@ Snapshot-only means **omit** `kafkaClusterConfiguration` and `traffic`.
 - Replayer's `removeAuthHeader: true` conflicts with target having
   `basic` or `sigv4` auth.
 
+## Solr sources: currently not supported end-to-end
+
+If the interview in Phase 1 identified a Solr source (`version: "SOLR …"`),
+**stop and tell the user**: the companion cannot drive a Solr migration
+end-to-end right now. The orchestrator's `CreateSnapshot` workflow step
+renders `--source-type=elasticsearch` unconditionally, and the companion
+is not permitted to work around that by creating a Solr backup manually
+outside the workflow. That rule is non-negotiable (see SKILL.md).
+
+Re-enabling Solr here is gated on the orchestrator learning to render
+`--source-type=solr` + `--solr-collections` for Solr-flavored source
+configs (tracked separately). Until then, the honest answer is "not yet".
+
 ## Validate before submit
 
 Do NOT apply to the live session blindly. First dry-run the YAML through

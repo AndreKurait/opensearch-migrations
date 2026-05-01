@@ -59,6 +59,24 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
   cd "${REPO_ROOT}"
   bash deployment/k8s/kindTesting.sh
 
+  # kindTesting.sh returns before the kyverno admission webhook service
+  # has endpoints, which makes the next `helm upgrade` race against
+  # "service kyverno-svc not found" from pre-install hooks. Wait for
+  # the admission controller to be Ready before proceeding.
+  say "Waiting for Kyverno admission controller (kyverno-ma ns) to be Ready"
+  kubectl --context "${KIND_CONTEXT}" -n kyverno-ma rollout status \
+    deploy/kyverno-admission-controller --timeout=300s || true
+  kubectl --context "${KIND_CONTEXT}" -n kyverno-ma wait \
+    --for=condition=Available deploy/kyverno-admission-controller \
+    --timeout=300s || true
+  # Also wait for the webhook Service to have at least one endpoint.
+  for _ in $(seq 1 60); do
+    eps=$(kubectl --context "${KIND_CONTEXT}" -n kyverno-ma get endpoints \
+      kyverno-svc -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)
+    [ -n "${eps}" ] && break
+    sleep 2
+  done
+
   say "Applying companion-demo target overlay (OpenSearch ${TARGET_VERSION})"
   helm --kube-context "${KIND_CONTEXT}" upgrade tc \
     "${REPO_ROOT}/deployment/k8s/charts/aggregates/testClusters" \

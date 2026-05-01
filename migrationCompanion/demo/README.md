@@ -30,7 +30,13 @@ Artifacts land under `migrationCompanion/runs/<timestamp>/`.
 | `00-reset.sh`          | Wipe kind cluster, port-forwards, runs, agent.   |
 | `install-skill.sh`     | Register companion dir as Kiro agent.            |
 | `es-to-os.sh`          | ES 7.10 → OS 3.1 end-to-end on kind.             |
-| `solr-to-os.sh`        | Solr 9.x → OS 3.1 (stub — see file for status).  |
+
+A Solr → OpenSearch demo is not currently supported from this skill:
+the orchestrator's `CreateSnapshot` workflow step renders
+`--source-type=elasticsearch` unconditionally and the companion is
+forbidden from working around that with a manual pre-submit backup.
+Re-enabling Solr here is gated on the orchestrator growing a Solr
+branch (tracked separately).
 
 ## Modes
 

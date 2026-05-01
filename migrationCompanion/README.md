@@ -54,9 +54,7 @@ migrationCompanion/
 └── demo/                        local kind-based end-to-end demos
     ├── 00-reset.sh              wipe everything
     ├── install-skill.sh         register companion as Kiro agent
-    ├── es-to-os.sh              Elasticsearch 7.x → OpenSearch 3.x
-    ├── solr-to-os.sh            Apache Solr 8 → OpenSearch 3.x
-    └── solr8-standalone.yaml    single-pod Solr 8 k8s manifest
+    └── es-to-os.sh              Elasticsearch 7.x → OpenSearch 3.x
 ```
 
 ## Who uses this
@@ -93,12 +91,11 @@ the same behavior.
 
 - `demo/es-to-os.sh` — Elasticsearch 7.10 → OpenSearch 3.5 end-to-end on
   a local kind cluster.
-- `demo/solr-to-os.sh` — Apache Solr 8.11.4 → OpenSearch 3.5 end-to-end on
-  a local kind cluster. Deploys a single-pod SolrCloud (embedded ZK, plain
-  k8s Deployment — no solr-operator) alongside MA, seeds the canonical
-  `techproducts` and `films` collections, and exercises the skill's Solr
-  probe and Solr→OpenSearch query-translation guidance. Uses the same
-  Solr-8 image + `solr.xml` the repo's own integration tests use.
+
+Solr source support is tracked separately. Until the orchestrator's
+`CreateSnapshot` template learns to render `--source-type=solr`, the
+companion cannot drive a Solr migration end-to-end purely through
+`workflow submit`, and the skill will not pretend otherwise.
 
 ## Related
 

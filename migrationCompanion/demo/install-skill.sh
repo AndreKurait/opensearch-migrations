@@ -76,6 +76,5 @@ cat <<EOF
 
   Next: run one of
     bash migrationCompanion/demo/es-to-os.sh
-    bash migrationCompanion/demo/solr-to-os.sh
 ────────────────────────────────────────────────────────────────
 EOF

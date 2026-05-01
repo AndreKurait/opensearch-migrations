@@ -57,6 +57,5 @@ cat <<EOF
   Kiro agent:          removed
 
   Next: bash migrationCompanion/demo/es-to-os.sh
-    or: bash migrationCompanion/demo/solr-to-os.sh
 ────────────────────────────────────────────────────────────────
 EOF

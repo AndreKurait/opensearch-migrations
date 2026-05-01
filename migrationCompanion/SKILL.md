@@ -28,6 +28,14 @@ examples; everything else you decide at runtime.
 
 ## Non-negotiables
 
+- **All migration execution goes through `workflow submit`.** Never run
+  `/root/createSnapshot/bin/CreateSnapshot`,
+  `/root/migrateDocuments/bin/RfsMigrateDocuments`, or any other Java
+  binary directly. Never create a source-side backup out-of-band (no
+  `curl …/admin/collections?action=BACKUP`, no
+  `curl …/_snapshot/...`). If a flavor of source cannot currently be
+  driven by `workflow submit` end-to-end, say so and stop — do not
+  work around it manually.
 - **Trust the live JSON Schema at `/root/schema/workflowMigration.schema.json`
   inside the migration-console pod** over anything else — including the
   sample YAML, your training data, and the steering files. Re-read it at
