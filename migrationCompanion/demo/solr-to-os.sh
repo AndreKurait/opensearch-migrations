@@ -72,8 +72,12 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
 
   say "Waiting for Solr + OS target pods to be Ready"
   kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" rollout status deploy/solr --timeout=300s
-  kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" wait --for=condition=Ready pod \
-    -l 'app=opensearch-cluster-master' --timeout=600s
+  # The target OpenSearch cluster is a StatefulSet named opensearch-cluster-master
+  # from the 'target' subchart (labels: app.kubernetes.io/name=target,
+  # app.kubernetes.io/component=opensearch-cluster-master). rollout status on the
+  # StatefulSet is label-agnostic and waits for all replicas to be Ready.
+  kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" \
+    rollout status sts/opensearch-cluster-master --timeout=600s
 
   say "Port-forwarding Solr -> localhost:18983, OS target -> localhost:19201"
   pkill -f "port-forward.*svc/solr"                  2>/dev/null || true
