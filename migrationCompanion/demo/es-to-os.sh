@@ -160,15 +160,34 @@ EOF
 
 case "${MODE}" in
   autopilot)
-    echo "Running autopilot — artifacts will land under ${REPO_ROOT}/migrationCompanion/runs/"
-    kiro-cli chat \
+    RUNS_DIR="${REPO_ROOT}/migrationCompanion/runs"
+    BEFORE="$(ls -1 "${RUNS_DIR}" 2>/dev/null | sort | tail -1 || true)"
+    echo "Running autopilot — artifacts will land under ${RUNS_DIR}/"
+    echo "--- begin companion session ---"
+    # stdbuf -oL -eL keeps line-oriented output from kiro-cli interleaving
+    # cleanly when both its logs and the agent's streaming response land
+    # in the same terminal. Without it the two streams get chopped mid-
+    # line and status updates become unreadable.
+    stdbuf -oL -eL kiro-cli chat \
       --agent migration-companion \
       --model claude-opus-4.7 \
       --trust-all-tools \
       --no-interactive \
       "${PROMPT}"
-    echo
-    ls -la "${REPO_ROOT}/migrationCompanion/runs" 2>/dev/null || true
+    KIRO_EXIT=$?
+    echo "--- end companion session (kiro-cli exit=${KIRO_EXIT}) ---"
+
+    LATEST="$(ls -1 "${RUNS_DIR}" 2>/dev/null | sort | tail -1 || true)"
+    if [[ -n "${LATEST}" && "${LATEST}" != "${BEFORE}" && -f "${RUNS_DIR}/${LATEST}/report.md" ]]; then
+      ok "Run artifacts: ${RUNS_DIR}/${LATEST}/"
+      ok "Report:         ${RUNS_DIR}/${LATEST}/report.md"
+    else
+      warn "No report.md was produced."
+      if [[ -n "${LATEST}" && "${LATEST}" != "${BEFORE}" ]]; then
+        warn "Run dir exists but is incomplete: ${RUNS_DIR}/${LATEST}/"
+      fi
+      warn "Resume the session with:  kiro-cli chat --agent migration-companion --resume"
+    fi
     ;;
   interactive)
     echo "Starting interactive companion session. Ctrl-D to exit."
