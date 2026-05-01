@@ -23,7 +23,7 @@ NAMESPACE="${NAMESPACE:-ma}"
 OUT_DIR="${OUT_DIR:-/tmp/companion-demo}"
 
 SOURCE_VERSION="${SOURCE_VERSION:-9.7.0}"
-TARGET_VERSION="${TARGET_VERSION:-3.1.0}"
+TARGET_VERSION="${TARGET_VERSION:-3.5.0}"
 SOLR_FULLNAME="solr-source"                       # from testClusters values.yaml
 SOLR_SVC="${SOLR_FULLNAME}-solrcloud-common"      # solr-operator convention
 MODE="autopilot"
@@ -55,11 +55,33 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
   cd "${REPO_ROOT}"
   bash deployment/k8s/kindTesting.sh
 
+  say "Applying Solr + Zookeeper operator CRDs (helm upgrade skips crds/)"
+  # kindTesting.sh installs the tc release with the default values
+  # (solrSource disabled), so the solr-operator subchart and its CRDs
+  # have never been applied. Helm's upgrade path deliberately does not
+  # touch crds/ directories, so we apply them directly from the dep
+  # tarballs materialized by `helm dependency update`.
+  TC_CHART="${REPO_ROOT}/deployment/k8s/charts/aggregates/testClusters"
+  CRD_STAGING="$(mktemp -d)"
+  trap 'rm -rf "${CRD_STAGING}"' EXIT
+  tar xzf "${TC_CHART}/charts/solr-operator-0.9.1.tgz" -C "${CRD_STAGING}"
+
+  # Solr CRDs: static manifest, safe to kubectl apply verbatim.
+  kubectl --context "${KIND_CONTEXT}" apply -f \
+    "${CRD_STAGING}/solr-operator/crds/crds.yaml"
+
+  # Zookeeper CRD: templated behind .Values.crd.create inside the
+  # zookeeper-operator subchart. Render it via `helm template` and apply.
+  helm template zk-crd "${CRD_STAGING}/solr-operator/charts/zookeeper-operator" \
+    --set crd.create=true \
+    --show-only templates/zookeeper.pravega.io_zookeeperclusters_crd.yaml \
+    | kubectl --context "${KIND_CONTEXT}" apply -f -
+
   say "Overlaying Solr source onto the tc release (disables ES source, keeps OS target at ${TARGET_VERSION})"
   helm --kube-context "${KIND_CONTEXT}" upgrade tc \
-    "${REPO_ROOT}/deployment/k8s/charts/aggregates/testClusters" \
+    "${TC_CHART}" \
     -n "${NAMESPACE}" --reuse-values --wait --timeout 15m \
-    -f "${REPO_ROOT}/deployment/k8s/charts/aggregates/testClusters/valuesSolrSource.yaml" \
+    -f "${TC_CHART}/valuesSolrSource.yaml" \
     --set "solrSource.image.tag=${SOURCE_VERSION}" \
     --set "target.image.tag=${TARGET_VERSION}"
 
