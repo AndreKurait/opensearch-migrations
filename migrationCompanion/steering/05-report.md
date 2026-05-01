@@ -146,10 +146,9 @@ runs/<ts>/
   backfill failed: describe the metadata-side findings (mapping diff,
   field-type mapping, analyzer probes) fully, mark backfill as failed
   in §1 and §5, skip §§6–7 with a one-line note that those tests were
-  not run against an empty target, and in §8 point the user at
-  `solrMigrationDevSandbox/README.md` and
-  `AIAdvisor/skills/solr-opensearch-migration-advisor/` plus
-  `steering/99-pitfalls.md` ("Solr snapshot backfill reports Completed
-  with zero docs transferred") as the investigation starting points.
+  not run against an empty target, and in §8 describe the symptom in
+  your own words (what you saw, what you ruled out, what you couldn't
+  rule out) rather than deferring to a known-issue list — this is a
+  discovery report, not a lookup.
 - **Keep the report committable.** Under ~500 lines target. Push long
   query bodies into `<details>` blocks. The run dir has the raw data.

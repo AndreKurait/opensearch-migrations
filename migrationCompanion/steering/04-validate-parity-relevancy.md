@@ -65,15 +65,20 @@ success**:
   (query-shape battery) and Layer 3 (relevancy showcase) entirely;
   running them against an empty index produces no signal.
 - **Do not** claim the workflow's `Succeeded` status means the
-  migration succeeded. A Solr-source workflow in particular can report
-  every step Succeeded and still transfer zero documents — see the
-  zero-doc pitfall in `steering/99-pitfalls.md`.
+  migration succeeded. `workflow status` reflects what each step
+  returned; it does not independently verify that documents landed on
+  the target. Trust `target./<idx>/_count`, not the workflow phase.
 - In the report's Summary section, lead with the partial status
   (metadata ✓, backfill ✗). In Section 8 (Incompatibilities flagged),
-  add a bullet pointing the user at `solrMigrationDevSandbox/README.md`
-  and `AIAdvisor/skills/solr-opensearch-migration-advisor/` for the
-  Solr-specific investigation path, plus a note to inspect the RFS
-  worker Deployment logs (which Argo does not archive) before re-running.
+  describe what you observed directly — symptom (`_count=0`,
+  `shard_complete=N/N`, workflow `Succeeded`), what you ruled out
+  (mappings present, schema valid, auth succeeded), and what you
+  could not rule out without more data (RFS worker logs, which Argo
+  does not archive; snapshot reader compatibility with the source
+  backup layout). Point the user at the relevant Solr-source references
+  (`solrMigrationDevSandbox/README.md`,
+  `AIAdvisor/skills/solr-opensearch-migration-advisor/`) as
+  investigation starting points, not as conclusions.
 
 ---
 
