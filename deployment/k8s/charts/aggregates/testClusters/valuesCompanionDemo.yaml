@@ -1,0 +1,14 @@
+# Overlay applied by migrationCompanion/demo/*-to-os.sh after the baseline
+# kindTesting install completes. The baseline testClusters values.yaml pins
+# `target.image.tag: "2.11.1"` for the wider repo's test coverage; the
+# companion demo migrates to the current default target version instead.
+#
+# Applied via: helm upgrade tc <chart> --reuse-values -f valuesCompanionDemo.yaml
+#
+# Keep this file focused on differences from the baseline that are specific
+# to the companion demo. Anything shared between the companion demo and the
+# rest of the repo's test scenarios belongs in values.yaml.
+
+target:
+  image:
+    tag: "3.5.0"
