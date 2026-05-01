@@ -45,7 +45,9 @@ All demo drivers accept:
 - **Source not reachable on 19200**: a port-forward died. Re-run the
   demo or re-run just the port-forward block manually.
 - **Secret already exists**: the demo creates `source-creds` and
-  `target-creds` pre-populated with `admin:admin`. `00-reset.sh` wipes
+  `target-creds` pre-populated with the OS demo installer's admin password
+  (`admin:myStrongPassword123!`; `source-creds` for ES remains `admin:admin`).
+  `00-reset.sh` wipes
   them with the cluster.
 - **Workflow stuck at WAITING**: `skipApprovals: true` is set in the
   demo seed prompt, but the agent may still hit an approval if the

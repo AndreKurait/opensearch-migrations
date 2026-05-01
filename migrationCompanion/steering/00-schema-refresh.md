@@ -12,7 +12,7 @@ Goal: anchor this run to the live schema, not your memory.
 
 2. Pull the JSON Schema:
    ```
-   kubectl exec -n ma migration-console-0 -- cat /root/.workflowUser.schema.json \
+   kubectl exec -n ma migration-console-0 -- cat /root/schema/workflowMigration.schema.json \
      > migrationCompanion/runs/<ts>/schema.json
    sha256sum migrationCompanion/runs/<ts>/schema.json \
      | awk '{print $1}' > migrationCompanion/runs/<ts>/schema.sha256
@@ -39,7 +39,7 @@ Goal: anchor this run to the live schema, not your memory.
 Log the schema fingerprint:
 
 ```
-Schema fingerprint: sha256:<first-12-chars>  (from /root/.workflowUser.schema.json)
+Schema fingerprint: sha256:<first-12-chars>  (from /root/schema/workflowMigration.schema.json)
 ```
 
 No user interaction needed unless the schema failed to read.

@@ -78,7 +78,7 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
 
   for i in $(seq 1 30); do
     if curl -sk -u admin:admin https://localhost:19200 >/dev/null 2>&1 \
-       && curl -sk -u admin:admin https://localhost:19201 >/dev/null 2>&1; then
+       && curl -sk -u 'admin:myStrongPassword123!' https://localhost:19201 >/dev/null 2>&1; then
       ok "Port-forwards live"
       break
     fi
@@ -128,7 +128,7 @@ kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" create secret generic sour
   --from-literal=username=admin --from-literal=password=admin \
   --dry-run=client -o yaml | kubectl --context "${KIND_CONTEXT}" apply -f - >/dev/null
 kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" create secret generic target-creds \
-  --from-literal=username=admin --from-literal=password=admin \
+  --from-literal=username=admin --from-literal='password=myStrongPassword123!' \
   --dry-run=client -o yaml | kubectl --context "${KIND_CONTEXT}" apply -f - >/dev/null
 ok "Secrets present"
 
@@ -143,7 +143,7 @@ Mode:    snapshot-only, skipApprovals: true (demo).
 Output:  ${REPO_ROOT}/migrationCompanion/runs/<timestamp>/
 
 Drive the migration end-to-end per SKILL.md:
-  Phase 0 — schema refresh (cat /root/.workflowUser.schema.json inside pod)
+  Phase 0 — schema refresh (cat /root/schema/workflowMigration.schema.json inside pod)
   Phase 1 — probe both clusters via curl (skip the interview for these
             already-confirmed fields; do still pick deep-validate indices)
   Phase 2 — scaffold config.yaml against the live schema

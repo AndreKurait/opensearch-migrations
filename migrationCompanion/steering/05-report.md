@@ -29,7 +29,7 @@ Include any `kubectl create secret generic …` commands the run needed
 
 ### 3. Schema fingerprint
 ```
-sha256: <full-hex>     file: /root/.workflowUser.schema.json
+sha256: <full-hex>     file: /root/schema/workflowMigration.schema.json
 ```
 
 Note if it matches a prior run in this repo's `runs/` directory.

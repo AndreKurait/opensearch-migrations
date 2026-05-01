@@ -28,7 +28,7 @@ examples; everything else you decide at runtime.
 
 ## Non-negotiables
 
-- **Trust the live JSON Schema at `/root/.workflowUser.schema.json`
+- **Trust the live JSON Schema at `/root/schema/workflowMigration.schema.json`
   inside the migration-console pod** over anything else — including the
   sample YAML, your training data, and the steering files. Re-read it at
   the start of *every* run and record its sha256 in the report.
@@ -84,7 +84,7 @@ to the authoritative file at `kiro-cli/kiro-cli-config/steering/workflow.md`).
 Per run, create `migrationCompanion/runs/<UTC-ISO-timestamp>/` containing:
 
 - `config.yaml` — the exact user config submitted
-- `schema.json` — copy of `/root/.workflowUser.schema.json` at run time
+- `schema.json` — copy of `/root/schema/workflowMigration.schema.json` at run time
 - `schema.sha256` — fingerprint for drift detection
 - `probe-source.json` / `probe-target-before.json` / `probe-target-after.json`
 - `queries/<id>.source.json` / `queries/<id>.target.json` for each test

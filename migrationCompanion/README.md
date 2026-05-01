@@ -14,7 +14,7 @@ agent *is* the tool.
 Given a source cluster and a target OpenSearch cluster, the companion:
 
 1. **Reads the live JSON Schema** at
-   `/root/.workflowUser.schema.json` inside the migration-console pod.
+   `/root/schema/workflowMigration.schema.json` inside the migration-console pod.
    Every run. No stale training-data assumptions.
 2. **Probes both clusters** with `curl` — versions, field inventories,
    real sample documents, analyzer behavior.
@@ -104,5 +104,5 @@ the same behavior.
 
 - Workflow CLI command reference: `kiro-cli/kiro-cli-config/steering/workflow.md`
 - Workflow user schema source: `orchestrationSpecs/packages/schemas/src/userSchemas.ts`
-- Runtime schema (read every run): `/root/.workflowUser.schema.json` on the
+- Runtime schema (read every run): `/root/schema/workflowMigration.schema.json` on the
   migration-console pod.

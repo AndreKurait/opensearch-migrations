@@ -65,6 +65,11 @@ spec:
       labels:
         app: solr
     spec:
+      # Disable legacy docker-links-style env var injection. Kubernetes
+      # would otherwise inject SOLR_PORT=tcp://<clusterIP>:8983 (because the
+      # Service is named `solr`), which Solr's entrypoint parses as an int
+      # and crashes Jetty with NumberFormatException.
+      enableServiceLinks: false
       securityContext:
         runAsUser: 0
       containers:

@@ -4,7 +4,7 @@ Things that have bitten people. Check this list when something's weird.
 
 ## Schema drift
 
-The JSON Schema at `/root/.workflowUser.schema.json` changes between
+The JSON Schema at `/root/schema/workflowMigration.schema.json` changes between
 releases. Your training data is stale. Always `cat` the live file in
 Phase 0 and trust it over anything else — including the sample YAML,
 which itself drifts behind the schema. If a field you "know" exists is

@@ -19,7 +19,7 @@ kubectl exec -i -n ma migration-console-0 -- <cmd>     # with stdin
 
 ```bash
 # Phase 0 — schema
-kubectl exec -n ma migration-console-0 -- cat /root/.workflowUser.schema.json
+kubectl exec -n ma migration-console-0 -- cat /root/schema/workflowMigration.schema.json
 kubectl exec -n ma migration-console-0 -- workflow configure sample
 
 # Phase 3 — configure + submit
@@ -51,7 +51,7 @@ kubectl exec -n ma migration-console-0 -- workflow approve
 ## Schema file path
 
 ```
-/root/.workflowUser.schema.json        inside migration-console pod
+/root/schema/workflowMigration.schema.json        inside migration-console pod
                                         (ENV: WORKFLOW_SCHEMA_FILENAME)
 ```
 

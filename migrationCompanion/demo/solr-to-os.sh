@@ -55,6 +55,14 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
   cd "${REPO_ROOT}"
   bash deployment/k8s/kindTesting.sh
 
+  say "Overriding target OpenSearch image.tag to ${TARGET_VERSION}"
+  # testClusters chart pins OS to 2.11.1; bump to the demo default so the
+  # agent's scaffolded workflow uses a target version that matches reality.
+  helm --kube-context "${KIND_CONTEXT}" upgrade tc \
+    "${REPO_ROOT}/deployment/k8s/charts/aggregates/testClusters" \
+    -n "${NAMESPACE}" --reuse-values --wait --timeout 5m \
+    --set "target.image.tag=${TARGET_VERSION}"
+
   say "Deploying standalone Solr ${SOURCE_VERSION} into namespace ${NAMESPACE}"
   # Plain Deployment + Service — no solr-operator, no CRDs, no ZooKeeper CRD,
   # no chart overlays. Matches the pattern used by TestCreateSnapshotSolrS3
@@ -78,7 +86,7 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
 
   for i in $(seq 1 60); do
     if curl -sf "http://localhost:18983/solr/admin/collections?action=LIST&wt=json" >/dev/null 2>&1 \
-       && curl -sk -u admin:admin "https://localhost:19201" >/dev/null 2>&1; then
+       && curl -sk -u 'admin:myStrongPassword123!' "https://localhost:19201" >/dev/null 2>&1; then
       ok "Port-forwards live"
       break
     fi
@@ -127,10 +135,11 @@ if [[ ! -f "${HOME}/.kiro/agents/migration-companion.json" ]]; then
   bash "${REPO_ROOT}/migrationCompanion/demo/install-skill.sh"
 fi
 
-# Pre-create target creds (Solr demo has no source auth; target OS uses admin/admin).
+# Pre-create target creds. OS 2.12+ demo installer requires OPENSEARCH_INITIAL_ADMIN_PASSWORD;
+# testClusters chart sets it to the password below. Solr demo has no source auth.
 say "Ensuring demo secrets exist in namespace ${NAMESPACE}"
 kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" create secret generic target-creds \
-  --from-literal=username=admin --from-literal=password=admin \
+  --from-literal=username=admin --from-literal='password=myStrongPassword123!' \
   --dry-run=client -o yaml | kubectl --context "${KIND_CONTEXT}" apply -f - >/dev/null
 ok "Secrets present"
 
@@ -146,7 +155,7 @@ Mode:    snapshot-only, skipApprovals: true (demo).
 Output:  ${REPO_ROOT}/migrationCompanion/runs/<timestamp>/
 
 Drive the migration end-to-end per SKILL.md:
-  Phase 0 — schema refresh (cat /root/.workflowUser.schema.json inside pod)
+  Phase 0 — schema refresh (cat /root/schema/workflowMigration.schema.json inside pod)
   Phase 1 — probe Solr (/solr/admin/collections?action=LIST, schema, luke)
             and target OS via curl. Skip the interview for these already-
             confirmed fields; do still pick deep-validate collections.
