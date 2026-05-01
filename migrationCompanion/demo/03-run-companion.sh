@@ -36,6 +36,17 @@ command -v kiro-cli >/dev/null 2>&1 || { echo "kiro-cli not found" >&2; exit 1; 
 test -f "${HOME}/.kiro/agents/migration-companion.json" \
   || { echo "Run 02-install-steering.sh first." >&2; exit 1; }
 
+# Load cluster versions written by 01-setup-cluster.sh. Fall back to safe
+# defaults so this script still works if the user invokes it standalone.
+SOURCE_ENGINE="elasticsearch"
+SOURCE_VERSION="7.10.2"
+TARGET_ENGINE="opensearch"
+TARGET_VERSION="3.1.0"
+if [[ -f "${OUT_DIR}/cluster-versions.env" ]]; then
+  # shellcheck disable=SC1090
+  source "${OUT_DIR}/cluster-versions.env"
+fi
+
 # Sanity: port-forwards up?
 curl -sk -u admin:admin https://localhost:19200 >/dev/null \
   || { echo "Source not reachable on localhost:19200. Re-run 01-setup-cluster.sh." >&2; exit 1; }
@@ -47,12 +58,12 @@ curl -sk -u admin:admin https://localhost:19201 >/dev/null \
 read -r -d '' PROMPT <<EOF || true
 Run an empirical migration plan for these clusters:
 
-  Source (Elasticsearch 8.5.1):
+  Source (${SOURCE_ENGINE^} ${SOURCE_VERSION}):
     endpoint: https://localhost:19200
     auth: basic admin:admin
     allow_insecure: true
 
-  Target (OpenSearch 2.x):
+  Target (${TARGET_ENGINE^} ${TARGET_VERSION}):
     endpoint: https://localhost:19201
     auth: basic admin:admin
     allow_insecure: true
@@ -60,6 +71,10 @@ Run an empirical migration plan for these clusters:
   Output directory: ${OUT_DIR}
   Repo root:        ${REPO_ROOT}
   Kubeconfig:       default (current context: kind-ma, namespace: ma)
+
+The source/target engine and version are already known — DO NOT ask the
+user to confirm them. Report the migration as
+"${SOURCE_ENGINE^} ${SOURCE_VERSION} → ${TARGET_ENGINE^} ${TARGET_VERSION} Migration Report".
 
 Do this in order, without asking for confirmation:
 

@@ -57,19 +57,31 @@ know what moved and what it costs.
 How you work:
   1. Ask the user for source + target cluster endpoints and credentials
      (3 questions max — infer everything else).
-  2. Probe both clusters with scripts/probe_source.py.
-  3. Generate migration-plan.json conforming to
+  2. Probe both clusters with scripts/probe_source.py. The probe returns
+     the engine and version for each side. CAPTURE these exactly from
+     the probe output (do NOT guess from the endpoint or user prompt)
+     and use them in the report title and throughout. If the probe
+     fails to identify a version, ask the user once.
+  3. Before generating the plan, confirm the migration pair with the
+     user in one line, e.g.:
+       "Detected: Elasticsearch 7.10.2 → OpenSearch 3.1.0. Proceed? [Y/n]"
+     If the operator already supplied versions in the seed prompt or
+     the run harness (cluster-versions.env / 03-run-companion.sh), skip
+     this confirmation.
+  4. Generate migration-plan.json conforming to
      schemas/migration-plan.schema.json. Prefer createSnapshotConfig;
      use BYOS only for pre-existing/huge/air-gapped snapshots.
-  4. Validate with scripts/validate_plan.py.
-  5. Emit the Argo workflow with scripts/emit_workflow.py and submit via
+     The plan MUST record source.version and target.version exactly as
+     detected by the probe — those are the reproduction spec.
+  5. Validate with scripts/validate_plan.py.
+  6. Emit the Argo workflow with scripts/emit_workflow.py and submit via
      scripts/run_empirical.py (handles preflight cleanup of stale
      snapshotmigrations/approvalgates CRs; MA hardcodes the snapshot
      key to "testsnapshot" so stale CRs block re-runs).
-  6. Run parity with scripts/parity_check.py — this captures
+  7. Run parity with scripts/parity_check.py — this captures
      source_settings / target_settings / source_mapping / target_mapping
      per index. THOSE are the raw material for the report.
-  7. Write the report in the format below.
+  8. Write the report in the format below.
 
 ═══════════════════════════════════════════════════════════════════
 REPORT FORMAT — required
@@ -234,7 +246,8 @@ Hard rules
   - Basic-auth creds must be [REDACTED] in the report and in the
     reproduction plan.
   - ES port-forward is HTTPS not HTTP; always `curl -sk https://…`.
-  - Target OS 3.x via helm chart default; the demo uses 2.11.1.
+  - Target OpenSearch version is whatever the probe reports (the demo
+    defaults to 3.1.0; 2.11.1 and other 2.x/3.x tags also work).
   - Treat migration-plan.json as a versioned first-class artifact —
     it is the reproduction spec.
   - Parity bar: top-K overlap + error-free execution + count parity;
