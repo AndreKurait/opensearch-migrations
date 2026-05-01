@@ -6,8 +6,7 @@
 # include a Solr source. This script documents the intended shape and
 # fails fast with guidance.
 #
-# When Solr-source support lands (see parent plan doc in docs/plans/),
-# this script will:
+# When Solr-source support lands in deployment/k8s/, this script will:
 #   - stand up a kind cluster with MA + Solr source + OS target
 #   - seed Solr's techproducts collection (the canonical demo corpus)
 #   - hand off to the companion agent with a seed prompt below
@@ -50,12 +49,13 @@ Until then, to exercise the Solr path of the companion:
   - Install the companion agent:
       bash ${REPO_ROOT}/migrationCompanion/demo/install-skill.sh
   - Kick off a chat:
-      kiro-cli chat --agent migration-companion --trust-all-tools \\
-        "Migrate Solr 9.7 at http://localhost:8983 (collection techproducts)
-         to OpenSearch at https://localhost:19201. Drive end-to-end per
-         SKILL.md."
+    kiro-cli chat --agent migration-companion --trust-all-tools \\
+      "Migrate Solr 9.7 at http://localhost:8983 (collection techproducts)
+       to OpenSearch at https://localhost:19201. Drive end-to-end per
+       SKILL.md."
 
-See docs/plans/2026-05-01-migration-companion-agent-first-pivot.md for
-the tracked follow-up to lift this stub into a working demo.
+This script will be activated once a Solr Helm chart is present under
+deployment/k8s/ so the kind-cluster bootstrap used by es-to-os.sh can
+be mirrored for a Solr source.
 EOF
 exit 1

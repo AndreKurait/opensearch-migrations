@@ -88,21 +88,18 @@ the same behavior.
   numbers and its own judgment ("top-10 overlap 9/10 — noise given
   analyzer parity"). The reader can overrule.
 
-## Status
+## Demos
 
-Iteration on the design is live in
-`docs/plans/2026-05-01-migration-companion-agent-first-pivot.md`.
-First working path is Elasticsearch 7.10 → OpenSearch 3.1 via
-`demo/es-to-os.sh`. Solr source demo is stubbed pending a Solr Helm
-chart in `deployment/k8s/` — the skill itself already has Solr probe
-and query-translation guidance.
+- `demo/es-to-os.sh` — Elasticsearch 7.10 → OpenSearch 3.1 end-to-end on
+  a local kind cluster.
+- `demo/solr-to-os.sh` — Solr → OpenSearch placeholder. The skill itself
+  already carries Solr probe and query-translation guidance; the demo
+  script activates once a Solr Helm chart is available in
+  `deployment/k8s/`.
 
 ## Related
 
-- Issue: [#2503 — unified migration companion UX][issue-2503]
-- Workflow CLI steering (authoritative command reference):
-  `kiro-cli/kiro-cli-config/steering/workflow.md`
-- Workflow user schema source:
-  `orchestrationSpecs/packages/schemas/src/userSchemas.ts`
-
-[issue-2503]: https://github.com/opensearch-project/opensearch-migrations/issues/2503
+- Workflow CLI command reference: `kiro-cli/kiro-cli-config/steering/workflow.md`
+- Workflow user schema source: `orchestrationSpecs/packages/schemas/src/userSchemas.ts`
+- Runtime schema (read every run): `/root/.workflowUser.schema.json` on the
+  migration-console pod.
