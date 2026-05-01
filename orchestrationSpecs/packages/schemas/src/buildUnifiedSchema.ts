@@ -36,7 +36,11 @@ export async function main() {
     });
 
     fs.mkdirSync(path.dirname(outputPath), {recursive: true});
-    fs.writeFileSync(outputPath, JSON.stringify(unified.schema, null, 2) + "\n");
+    // Minified: the unified schema is large (~400KB+) and is consumed by
+    // JSON parsers (ajv, jq, the companion agent via `jq`). Single-line output
+    // also prevents tools that only read the head of a file from mistaking
+    // a partial read for a complete schema. Use `jq '.'` to pretty-print.
+    fs.writeFileSync(outputPath, JSON.stringify(unified.schema) + "\n");
     console.error(`Wrote ${unified.mode} unified schema to ${outputPath}`);
 }
 

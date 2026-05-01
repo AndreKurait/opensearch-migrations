@@ -18,7 +18,16 @@ Goal: anchor this run to the live schema, not your memory.
      | awk '{print $1}' > migrationCompanion/runs/<ts>/schema.sha256
    ```
 
-3. Read the schema. Specifically internalize:
+3. Read the schema. It is a **single-line minified JSON file** — do NOT
+   use `head`, `less`, or line-index tools on it; use `jq` to extract
+   what you need:
+   ```
+   jq '.properties | keys' migrationCompanion/runs/<ts>/schema.json
+   jq '.properties.snapshotMigrationConfigs' migrationCompanion/runs/<ts>/schema.json
+   jq '.$defs | keys' migrationCompanion/runs/<ts>/schema.json
+   jq '.. | .pattern? // empty' migrationCompanion/runs/<ts>/schema.json | sort -u
+   ```
+   Specifically internalize:
    - the **version regex** (`ES`/`OS`/`SOLR` literal + version digits)
    - required vs optional fields at the top level
    - what a minimal `snapshotMigrationConfigs[].perSnapshotConfig` looks like
@@ -48,6 +57,9 @@ No user interaction needed unless the schema failed to read.
 
 - Do **not** rely on your training data for the schema. It **will** be
   wrong on at least one field by the time you read this.
+- The schema is **minified (single line)**. Running `head`, `tail`, or
+  `sed -n '1,200p'` shows you essentially nothing, or misleadingly shows
+  you one enormous truncated string. Always go through `jq`.
 - The version regex is strict and literal. `Solr 8.11` fails; `SOLR 8.11.0`
   passes. Always include at least one `.N` segment.
 - If the JSON Schema file is missing (old image), fall back to piping
