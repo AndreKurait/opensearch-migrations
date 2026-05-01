@@ -6,26 +6,10 @@ summary and a complete reproducer.
 ## Sections, in order
 
 ### 1. Summary
-
-One paragraph, plain English. Lead with a per-phase status line:
-
-```
-Metadata:   ✓   (N indices, mappings match source schema)
-Backfill:   ✓   (M docs transferred)     OR    ✗   (target docs = 0, see §8)
-Parity:     ✓   OR   partial   OR   not run (backfill failed)
-```
-
-Then: "Migrated <engine> <version> at <src> to OS <version> at <tgt>.
-<N> indices, <M> docs. [Per-phase notable flags in one sentence.]"
-
-If backfill failed (docs = 0 on target), the summary MUST say so
-explicitly. Do not write a cheerful summary that contradicts the status
-line. Example:
-
-> "Metadata migration succeeded: 2 indices created on the target with
-> correctly translated mappings. Backfill failed: both target indices
-> report docs.count=0 despite the workflow reporting every step
-> Succeeded. See §8 for next steps."
+One paragraph, plain English. "Migrated <engine> <version> at <src> to
+OS <version> at <tgt>. <N> indices, <M> docs. Structural parity ✓.
+Query-shape battery: <k/n> within noise. Relevancy showcase: <k/n>
+top-5 identical. [Any notable flags in one sentence.]"
 
 ### 2. Reproduction
 A fenced block with the exact commands to replay this migration:
@@ -140,15 +124,6 @@ runs/<ts>/
   everywhere. Check the final file before writing.
 - **Never claim success that parity didn't demonstrate.** If doc counts
   don't match, the summary says "Migration completed but structural
-  parity failed; see section 5." If target docs = 0 on every index, the
-  summary leads with `Backfill: ✗` and points at §8 — never bury this.
-- **Report partial success honestly.** When metadata worked but
-  backfill failed: describe the metadata-side findings (mapping diff,
-  field-type mapping, analyzer probes) fully, mark backfill as failed
-  in §1 and §5, skip §§6–7 with a one-line note that those tests were
-  not run against an empty target, and in §8 describe the symptom in
-  your own words (what you saw, what you ruled out, what you couldn't
-  rule out) rather than deferring to a known-issue list — this is a
-  discovery report, not a lookup.
+  parity failed; see section 5."
 - **Keep the report committable.** Under ~500 lines target. Push long
   query bodies into `<details>` blocks. The run dir has the raw data.

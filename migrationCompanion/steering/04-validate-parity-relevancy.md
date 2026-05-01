@@ -51,35 +51,6 @@ If Layer 1 fails (doc count mismatch, large field loss), **stop and
 report before doing Layers 2 and 3.** No point running relevancy tests
 on a broken migration.
 
-### The empty-target case (target mapping present, docs = 0)
-
-If `target./<idx>/_count` returns 0 on every migrated index but the
-mappings are present and look correct, treat this as **partial
-success**:
-
-- **Metadata phase worked** — still diff source schema vs target
-  mapping, still probe 1–2 analyzer behaviors against the live mapping,
-  still list per-field type mappings in the report. None of this
-  requires documents to exist on the target.
-- **Backfill phase failed** — mark it so in the report. Skip Layer 2
-  (query-shape battery) and Layer 3 (relevancy showcase) entirely;
-  running them against an empty index produces no signal.
-- **Do not** claim the workflow's `Succeeded` status means the
-  migration succeeded. `workflow status` reflects what each step
-  returned; it does not independently verify that documents landed on
-  the target. Trust `target./<idx>/_count`, not the workflow phase.
-- In the report's Summary section, lead with the partial status
-  (metadata ✓, backfill ✗). In Section 8 (Incompatibilities flagged),
-  describe what you observed directly — symptom (`_count=0`,
-  `shard_complete=N/N`, workflow `Succeeded`), what you ruled out
-  (mappings present, schema valid, auth succeeded), and what you
-  could not rule out without more data (RFS worker logs, which Argo
-  does not archive; snapshot reader compatibility with the source
-  backup layout). Point the user at the relevant Solr-source references
-  (`solrMigrationDevSandbox/README.md`,
-  `AIAdvisor/skills/solr-opensearch-migration-advisor/`) as
-  investigation starting points, not as conclusions.
-
 ---
 
 ## Layer 2 — Query-shape battery
