@@ -1,0 +1,60 @@
+# Reference workflow config: Solr 8 source with an externally-managed
+# snapshot, targeting OpenSearch 3.5. This is the shape that validated
+# through `workflow configure edit --stdin` AND submitted + ran end-to-end
+# via `workflow submit` (metadata evaluate + migrate succeeded; RFS
+# backfill shards reported complete).
+#
+# Prerequisite: a Solr backup already written to the S3 repo prefix below.
+# Produced here by the CreateSnapshot Java CLI inside the migration-console
+# pod, mirroring what the Jenkins `solr8xK8sLocalTestCover` pipeline does.
+#
+# Cluster/label naming constraints (learned the hard way — see
+# steering/99-pitfalls.md):
+#   - sourceClusters.<name> / targetClusters.<name>: [A-Za-z0-9_]+ only.
+#     Hyphens pass JSON Schema but fail the runtime Zod check.
+#   - perSnapshotConfig[].label: lowercase RFC 1123 only. The label becomes
+#     part of a Kubernetes CR name (`<src>-<tgt>-<snap>-<label>`), so
+#     camelCase or underscores get rejected by the apiserver at submit.
+
+sourceClusters:
+  solrsrc:
+    version: "SOLR 8.11.4"
+    endpoint: "http://solr:8983"
+    allowInsecure: true
+    snapshotInfo:
+      repos:
+        s3-repo:
+          awsRegion: us-east-1
+          # NOTE: s3RepoPathUri is the REPO directory, not the snapshot path.
+          # Snapshot files live under <s3RepoPathUri>/<snapshotName>/.
+          s3RepoPathUri: s3://migrations-default-123456789012-dev-us-east-1/companion-solr-e2e
+          endpoint: localstack://localstack:4566
+      snapshots:
+        companion-solr-e2e-v1:
+          repoName: s3-repo
+          config:
+            externallyManagedSnapshotName: companion-solr-e2e-v1
+
+targetClusters:
+  # No `version` here on purpose — schema rejects it; workflow infers it
+  # from the live cluster.
+  ostgt:
+    endpoint: https://opensearch-cluster-master:9200
+    allowInsecure: true
+    authConfig:
+      basic:
+        # Secret must live in the `ma` namespace and contain `username`
+        # and `password` keys.
+        secretName: target-creds
+
+snapshotMigrationConfigs:
+  - fromSource: solrsrc
+    toTarget: ostgt
+    perSnapshotConfig:
+      companion-solr-e2e-v1:
+        - label: solrbackfill        # lowercase, alphanumeric only
+          metadataMigrationConfig:
+            skipEvaluateApproval: true
+            skipMigrateApproval: true
+          documentBackfillConfig:
+            skipApproval: true

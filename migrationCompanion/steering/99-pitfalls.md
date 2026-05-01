@@ -86,6 +86,59 @@ updateRequestProcessorChain, velocity templates) have no OpenSearch
 equivalent. The migration covers documents + mappings. Tell the user
 explicitly when you see these features.
 
+## targetClusters has no version field (schema asymmetry)
+
+`sourceClusters.<name>` requires `version`; `targetClusters.<name>` does not
+accept one. The target version is inferred by the workflow at runtime from
+the live cluster. Don't copy-paste a `version` line from the source block
+into the target block — it will be rejected as an unknown property.
+
+## authConfig shape differs from intuition
+
+It's `authConfig: { basic: { secretName: <name> } }`, not the nested
+`basicAuth: { usernameFromSecret: { name, key } }` shape that some upstream
+docs suggest. The referenced secret must contain keys `username` and
+`password` literally. Verify with `kubectl -n ma get secret <name> -o
+jsonpath='{.data}' | base64 -d` before submitting.
+
+## Cluster names: schema regex is looser than the runtime
+
+`sourceClusters.<name>` and `targetClusters.<name>` pass JSON Schema
+validation with hyphens (`my-src`, `os-tgt`) but then fail at transform
+time with a Zod error pointing at `snapshotMigrations[N].targetConfig.label`
+and pattern `^[a-zA-Z0-9_]+$`. Use alphanumerics + underscores only
+(`solrsrc`, `os_tgt`). The `workflow configure edit --stdin` validator
+accepts the hyphenated form; the failure only surfaces at `workflow submit`.
+
+## perSnapshotConfig labels must be RFC 1123 (lowercase)
+
+The `label` field under `perSnapshotConfig.<snapshot>[N]` accepts mixed
+case per the schema, but it becomes part of a Kubernetes resource name
+(`<src>-<tgt>-<snapshot>-<label>`). Kubernetes then rejects the
+SnapshotMigration CR with "must consist of lower case alphanumeric
+characters". Stick to lowercase letters and digits. No hyphens, no
+underscores, no camelCase.
+
+## Externally-managed Solr snapshot requires snapshotInfo.repos
+
+To point the workflow at a pre-created Solr S3 backup (e.g. produced by
+the Jenkins `solr8xK8sLocalTestCover` path or the CreateSnapshot CLI),
+declare both:
+
+    sourceClusters.<src>.snapshotInfo.repos.<repoName>:
+      awsRegion: <region>
+      s3RepoPathUri: s3://<bucket>/<prefix>     # directory, not snapshot
+      endpoint: localstack://localstack:4566    # for kind/localstack demos
+    sourceClusters.<src>.snapshotInfo.snapshots.<snapshotName>:
+      repoName: <repoName>
+      config:
+        externallyManagedSnapshotName: <snapshotName>
+
+Then reference `<snapshotName>` as a key under
+`snapshotMigrationConfigs[N].perSnapshotConfig`. The workflow will skip
+the create-snapshot step and go straight to metadata evaluation. See
+`demo/solr-externally-managed.yaml` for a full working example.
+
 ## Do not reference proprietary Elastic naming
 
 In committed text (reports, commits, PRs, code comments), say
