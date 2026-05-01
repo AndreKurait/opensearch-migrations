@@ -22,7 +22,10 @@ NAMESPACE="${NAMESPACE:-ma}"
 OUT_DIR="${OUT_DIR:-/tmp/companion-demo}"
 
 SOURCE_VERSION="${SOURCE_VERSION:-7.10.2}"
-TARGET_VERSION="${TARGET_VERSION:-3.5.0}"
+# Target OpenSearch version is owned by testClusters/valuesCompanionDemo.yaml.
+# Keep a string here only for labelling the status banner; changing it has no
+# effect on the deployed target image.
+TARGET_VERSION="3.5.0"
 MODE="autopilot"
 SKIP_SETUP="false"
 
@@ -32,7 +35,6 @@ while [[ $# -gt 0 ]]; do
     --autopilot)   MODE="autopilot";   shift ;;
     --skip-setup)  SKIP_SETUP="true";  shift ;;
     --source-version) SOURCE_VERSION="$2"; shift 2 ;;
-    --target-version) TARGET_VERSION="$2"; shift 2 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -57,11 +59,11 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
   cd "${REPO_ROOT}"
   bash deployment/k8s/kindTesting.sh
 
-  say "Overriding target OpenSearch image.tag to ${TARGET_VERSION}"
+  say "Applying companion-demo target overlay (OpenSearch ${TARGET_VERSION})"
   helm --kube-context "${KIND_CONTEXT}" upgrade tc \
     "${REPO_ROOT}/deployment/k8s/charts/aggregates/testClusters" \
     -n "${NAMESPACE}" --reuse-values --wait --timeout 5m \
-    --set "target.image.tag=${TARGET_VERSION}"
+    -f "${REPO_ROOT}/deployment/k8s/charts/aggregates/testClusters/valuesCompanionDemo.yaml"
 
   say "Waiting for ES + OS pods to be Ready"
   kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" wait --for=condition=Ready pod \

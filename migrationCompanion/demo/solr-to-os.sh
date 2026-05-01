@@ -25,7 +25,10 @@ NAMESPACE="${NAMESPACE:-ma}"
 OUT_DIR="${OUT_DIR:-/tmp/companion-demo}"
 
 SOURCE_VERSION="${SOURCE_VERSION:-8.11.4}"
-TARGET_VERSION="${TARGET_VERSION:-3.5.0}"
+# Target OpenSearch version is owned by testClusters/valuesCompanionDemo.yaml.
+# Keep a string here only for labelling the status banner; changing it has no
+# effect on the deployed target image.
+TARGET_VERSION="3.5.0"
 MODE="autopilot"
 SKIP_SETUP="false"
 
@@ -35,7 +38,6 @@ while [[ $# -gt 0 ]]; do
     --autopilot)   MODE="autopilot";   shift ;;
     --skip-setup)  SKIP_SETUP="true";  shift ;;
     --source-version) SOURCE_VERSION="$2"; shift 2 ;;
-    --target-version) TARGET_VERSION="$2"; shift 2 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -55,13 +57,14 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
   cd "${REPO_ROOT}"
   bash deployment/k8s/kindTesting.sh
 
-  say "Overriding target OpenSearch image.tag to ${TARGET_VERSION}"
-  # testClusters chart pins OS to 2.11.1; bump to the demo default so the
-  # agent's scaffolded workflow uses a target version that matches reality.
+  say "Applying companion-demo target overlay (OpenSearch ${TARGET_VERSION})"
+  # The shared testClusters values.yaml pins target.image.tag to an older
+  # version for the repo's test matrix; valuesCompanionDemo.yaml overrides
+  # it for the companion demo path. Native config idiom — not --set.
   helm --kube-context "${KIND_CONTEXT}" upgrade tc \
     "${REPO_ROOT}/deployment/k8s/charts/aggregates/testClusters" \
     -n "${NAMESPACE}" --reuse-values --wait --timeout 5m \
-    --set "target.image.tag=${TARGET_VERSION}"
+    -f "${REPO_ROOT}/deployment/k8s/charts/aggregates/testClusters/valuesCompanionDemo.yaml"
 
   say "Deploying standalone Solr ${SOURCE_VERSION} into namespace ${NAMESPACE}"
   # Plain Deployment + Service — no solr-operator, no CRDs, no ZooKeeper CRD,
