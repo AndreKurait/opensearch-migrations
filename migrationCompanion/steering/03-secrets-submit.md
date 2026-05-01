@@ -27,6 +27,90 @@ kubectl -n ma create secret generic <name> \
 
 Never echo the password to stdout or the report.
 
+## Solr pre-submit backup (Solr sources only)
+
+If any source in the config has `version: "SOLR ..."`, you must create
+the backup **before** `workflow submit`. The orchestrator's
+`CreateSnapshot` step assumes Elasticsearch and will not produce a
+usable Solr backup (tracked as a separate orchestrator change).
+
+### 1. Verify the backup repository is registered on Solr
+
+Do not guess bucket/prefix URIs. Ask Solr what it knows:
+
+```
+kubectl -n ma exec <solr-pod> -- \
+  curl -sS "http://localhost:8983/solr/admin/cores?action=STATUS&wt=json" \
+  | jq '.status | keys'
+
+kubectl -n ma exec <solr-pod> -- \
+  curl -sS "http://localhost:8983/api/cluster" \
+  | jq '.cluster.properties'
+```
+
+For an S3-backed backup, Solr must already have an
+`S3BackupRepository` entry in `solr.xml` (or `coreContainer` cluster
+properties). If no such repo is registered, **stop and report to the
+user** — the companion does not silently configure Solr repositories;
+that is a source-cluster operator decision.
+
+If the user has a repo registered, capture:
+
+- `REPO_NAME` — the `name` attribute on the `<repository>` element
+- `REPO_BUCKET` / `REPO_PREFIX` — inferred from repo config, then confirmed
+
+### 2. Issue the backup via Solr Collections API
+
+One `BACKUP` call per collection, not one big global call:
+
+```
+BACKUP_NAME="ma-$(date -u +%Y%m%d-%H%M%S)"
+for COLL in $(collections to migrate); do
+  kubectl -n ma exec <solr-pod> -- \
+    curl -sS -u "$SOLR_USER:$SOLR_PASS" \
+      "http://localhost:8983/solr/admin/collections" \
+      --data-urlencode "action=BACKUP" \
+      --data-urlencode "collection=${COLL}" \
+      --data-urlencode "name=${BACKUP_NAME}_${COLL}" \
+      --data-urlencode "repository=${REPO_NAME}" \
+      --data-urlencode "async=${BACKUP_NAME}_${COLL}" \
+  | jq
+done
+```
+
+`async=<id>` is not optional for large collections — without it the HTTP
+call blocks past most curl timeouts and Solr still runs the backup but
+you lose the return handle.
+
+### 3. Poll REQUESTSTATUS until each completes
+
+```
+for COLL in ...; do
+  while true; do
+    STATE=$(kubectl -n ma exec <solr-pod> -- \
+      curl -sS "http://localhost:8983/solr/admin/collections?action=REQUESTSTATUS&requestid=${BACKUP_NAME}_${COLL}&wt=json" \
+      | jq -r '.status.state')
+    case "$STATE" in
+      completed) break ;;
+      failed)    echo "Solr BACKUP failed for ${COLL}"; exit 1 ;;
+      *)         sleep 10 ;;
+    esac
+  done
+done
+```
+
+### 4. Record the backup name in the workflow config
+
+The value of `externallyManagedSnapshotName` in `config.yaml` must be
+`${BACKUP_NAME}_${COLL}` (one `snapshotInfo.snapshots[...]` entry per
+collection). If you have multiple collections, you have multiple
+snapshot entries and multiple `perSnapshotConfig` entries pointing at
+them.
+
+**Do not** run any Java `CreateSnapshot` or `RfsMigrateDocuments`
+binary directly. The only CLI surfaces the companion uses are
+`kubectl`, `curl`, `jq`, and `workflow`.
+
 ## Save the session
 
 ```
