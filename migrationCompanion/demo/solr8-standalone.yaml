@@ -1,0 +1,120 @@
+# Standalone Solr 8.11.4 for the migrationCompanion Solr demo.
+#
+# Single-pod SolrCloud with embedded ZooKeeper — the simplest dev deployment
+# that still exposes the Collections API. Configured with the S3 backup
+# repository pointing at the in-namespace localstack service so MA's
+# CreateSnapshot (sourceType=solr) can drive the backup directly.
+#
+# Applied by demo/solr-to-os.sh; matches the canonical fixture in
+# orchestrationSpecs/packages/schemas/tests/fixtures/valid/solr-source.json
+# (version "SOLR 8.11.4", endpoint "http://solr:8983").
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: solr-config
+  namespace: ma
+data:
+  solr.xml: |
+    <?xml version="1.0" encoding="UTF-8" ?>
+    <solr>
+      <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
+      <str name="sharedLib">/opt/solr/contrib/s3-repository/lib</str>
+      <str name="allowPaths">${solr.allowPaths:}</str>
+
+      <solrcloud>
+        <str name="host">${host:}</str>
+        <int name="hostPort">${solr.port.advertise:0}</int>
+        <str name="hostContext">${hostContext:solr}</str>
+        <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
+        <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
+        <int name="distribUpdateSoTimeout">${distribUpdateSoTimeout:600000}</int>
+        <int name="distribUpdateConnTimeout">${distribUpdateConnTimeout:60000}</int>
+      </solrcloud>
+
+      <backup>
+        <repository name="s3" class="org.apache.solr.s3.S3BackupRepository" default="true">
+          <str name="s3.bucket.name">${S3_BUCKET_NAME:}</str>
+          <str name="s3.region">${S3_REGION:us-east-1}</str>
+          <str name="s3.endpoint">${S3_ENDPOINT:}</str>
+        </repository>
+      </backup>
+
+      <shardHandlerFactory name="shardHandlerFactory" class="HttpShardHandlerFactory">
+        <int name="socketTimeout">${socketTimeout:600000}</int>
+        <int name="connTimeout">${connTimeout:60000}</int>
+      </shardHandlerFactory>
+
+      <metrics enabled="${metricsEnabled:true}"/>
+    </solr>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solr
+  namespace: ma
+  labels:
+    app: solr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: solr
+  template:
+    metadata:
+      labels:
+        app: solr
+    spec:
+      securityContext:
+        runAsUser: 0
+      containers:
+        - name: solr
+          image: mirror.gcr.io/library/solr:8.11.4
+          ports:
+            - containerPort: 8983
+              name: http
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: "test"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "test"
+            - name: SOLR_OPTS
+              value: "-DS3_BUCKET_NAME=migrations-default-123456789012-dev-us-east-1 -DS3_REGION=us-east-1 -DS3_ENDPOINT=http://localstack.ma.svc.cluster.local:4566"
+            - name: SOLR_SECURITY_MANAGER_ENABLED
+              value: "false"
+          command: ["bash", "-c"]
+          args:
+            - |
+              cp /opt/solr/dist/solr-s3-repository-*.jar /opt/solr/contrib/s3-repository/lib/
+              cp /solr-config/solr.xml /var/solr/data/solr.xml
+              exec solr -c -f -force
+          volumeMounts:
+            - name: solr-config
+              mountPath: /solr-config
+          readinessProbe:
+            httpGet:
+              path: /solr/admin/collections?action=LIST&wt=json
+              port: 8983
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 60
+      volumes:
+        - name: solr-config
+          configMap:
+            name: solr-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: solr
+  namespace: ma
+  labels:
+    app: solr
+spec:
+  type: ClusterIP
+  selector:
+    app: solr
+  ports:
+    - name: http
+      port: 8983
+      targetPort: 8983

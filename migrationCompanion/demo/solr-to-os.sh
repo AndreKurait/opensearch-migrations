@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 #
-# migrationCompanion demo — Apache Solr 9.x → OpenSearch 3.x
+# migrationCompanion demo — Apache Solr 8 → OpenSearch 3.x
 #
-# End-to-end: stands up a kind cluster with MA + target OS, overlays the
-# Solr source via valuesSolrSource.yaml, seeds two canonical Solr
-# collections (techproducts, films), then hands control to the companion
-# agent (loaded as a Kiro agent via install-skill.sh).
+# End-to-end: stands up a kind cluster with MA + target OS (via kindTesting.sh),
+# deploys a single-pod Solr 8.11.4 in the ma namespace (plain Deployment, no
+# operator, no CRDs — mirrors the TestCreateSnapshotSolrS3 testcontainer setup),
+# seeds two SolrCloud collections with demo documents, then hands off to the
+# companion agent. MA's CreateSnapshot (sourceType=solr) handles the S3 push to
+# the in-namespace localstack directly — no aws-cli sidecar, no shared volumes.
 #
 # Flags:
 #   --interactive   Drop into interactive kiro-cli chat after setup.
 #   --autopilot     (default) Kiro runs end-to-end non-interactively.
 #   --skip-setup    Assume clusters are already up; just run the agent.
 #
-# Idempotent. Wall-clock: ~20-30 min cold, ~4-6 min warm.
+# Idempotent. Wall-clock: ~10-15 min cold, ~3-5 min warm.
 
 set -euo pipefail
 
@@ -22,10 +24,8 @@ KIND_CONTEXT="kind-${KIND_CLUSTER_NAME}"
 NAMESPACE="${NAMESPACE:-ma}"
 OUT_DIR="${OUT_DIR:-/tmp/companion-demo}"
 
-SOURCE_VERSION="${SOURCE_VERSION:-9.7.0}"
+SOURCE_VERSION="${SOURCE_VERSION:-8.11.4}"
 TARGET_VERSION="${TARGET_VERSION:-3.5.0}"
-SOLR_FULLNAME="solr-source"                       # from testClusters values.yaml
-SOLR_SVC="${SOLR_FULLNAME}-solrcloud-common"      # solr-operator convention
 MODE="autopilot"
 SKIP_SETUP="false"
 
@@ -44,7 +44,7 @@ say()  { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
 ok()   { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }
 
-for bin in docker kind kubectl helm jq curl; do
+for bin in docker kind kubectl jq curl; do
   command -v "$bin" >/dev/null 2>&1 || { echo "Missing required tool: $bin" >&2; exit 1; }
 done
 
@@ -55,55 +55,29 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
   cd "${REPO_ROOT}"
   bash deployment/k8s/kindTesting.sh
 
-  say "Applying Solr + Zookeeper operator CRDs (helm upgrade skips crds/)"
-  # kindTesting.sh installs the tc release with the default values
-  # (solrSource disabled), so the solr-operator subchart and its CRDs
-  # have never been applied. Helm's upgrade path deliberately does not
-  # touch crds/ directories, so we apply them directly from the dep
-  # tarballs materialized by `helm dependency update`.
-  TC_CHART="${REPO_ROOT}/deployment/k8s/charts/aggregates/testClusters"
-  CRD_STAGING="$(mktemp -d)"
-  trap 'rm -rf "${CRD_STAGING}"' EXIT
-  tar xzf "${TC_CHART}/charts/solr-operator-0.9.1.tgz" -C "${CRD_STAGING}"
-
-  # Solr CRDs: static manifest, safe to kubectl apply verbatim.
+  say "Deploying standalone Solr ${SOURCE_VERSION} into namespace ${NAMESPACE}"
+  # Plain Deployment + Service — no solr-operator, no CRDs, no ZooKeeper CRD,
+  # no chart overlays. Matches the pattern used by TestCreateSnapshotSolrS3
+  # (CreateSnapshot/src/test/java/org/opensearch/migrations/TestCreateSnapshotSolrS3.java).
   kubectl --context "${KIND_CONTEXT}" apply -f \
-    "${CRD_STAGING}/solr-operator/crds/crds.yaml"
+    "${REPO_ROOT}/migrationCompanion/demo/solr8-standalone.yaml"
 
-  # Zookeeper CRD: templated behind .Values.crd.create inside the
-  # zookeeper-operator subchart. Render it via `helm template` and apply.
-  helm template zk-crd "${CRD_STAGING}/solr-operator/charts/zookeeper-operator" \
-    --set crd.create=true \
-    --show-only templates/zookeeper.pravega.io_zookeeperclusters_crd.yaml \
-    | kubectl --context "${KIND_CONTEXT}" apply -f -
-
-  say "Overlaying Solr source onto the tc release (disables ES source, keeps OS target at ${TARGET_VERSION})"
-  helm --kube-context "${KIND_CONTEXT}" upgrade tc \
-    "${TC_CHART}" \
-    -n "${NAMESPACE}" --reuse-values --wait --timeout 15m \
-    -f "${TC_CHART}/valuesSolrSource.yaml" \
-    --set "solrSource.image.tag=${SOURCE_VERSION}" \
-    --set "target.image.tag=${TARGET_VERSION}"
-
-  say "Waiting for SolrCloud + OS pods to be Ready"
-  # SolrCloud resource is managed by the Solr operator; the solrcloud-common
-  # service is only created once the statefulset has at least one Ready pod.
-  kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" wait --for=condition=Ready pod \
-    -l "solr-cloud=${SOLR_FULLNAME}" --timeout=900s
+  say "Waiting for Solr + OS target pods to be Ready"
+  kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" rollout status deploy/solr --timeout=300s
   kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" wait --for=condition=Ready pod \
     -l 'app=opensearch-cluster-master' --timeout=600s
 
-  say "Starting port-forwards (Solr source -> 18983, OS target -> 19201)"
-  pkill -f "port-forward.*${SOLR_SVC}"                2>/dev/null || true
-  pkill -f "port-forward.*opensearch-cluster-master"  2>/dev/null || true
+  say "Port-forwarding Solr -> localhost:18983, OS target -> localhost:19201"
+  pkill -f "port-forward.*svc/solr"                  2>/dev/null || true
+  pkill -f "port-forward.*opensearch-cluster-master" 2>/dev/null || true
   sleep 1
   kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" \
-    port-forward "svc/${SOLR_SVC}" 18983:80 >/tmp/pf-solr.log 2>&1 &
+    port-forward svc/solr 18983:8983 >/tmp/pf-solr.log 2>&1 &
   kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" \
     port-forward svc/opensearch-cluster-master 19201:9200 >/tmp/pf-target.log 2>&1 &
 
   for i in $(seq 1 60); do
-    if curl -sf "http://localhost:18983/solr/admin/info/system" >/dev/null 2>&1 \
+    if curl -sf "http://localhost:18983/solr/admin/collections?action=LIST&wt=json" >/dev/null 2>&1 \
        && curl -sk -u admin:admin "https://localhost:19201" >/dev/null 2>&1; then
       ok "Port-forwards live"
       break
@@ -114,18 +88,9 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
   SOLR="http://localhost:18983/solr"
 
   say "Seeding Solr with fixture collections (techproducts, films)"
-  # techproducts — the canonical Solr demo corpus, here synthesized small
+  # techproducts — canonical Solr demo corpus (electronics/accessory facet)
   curl -sf "${SOLR}/admin/collections?action=CREATE&name=techproducts&numShards=1&replicationFactor=1&wt=json" >/dev/null \
     || warn "techproducts may already exist; continuing"
-  curl -sf -H 'Content-Type: application/json' \
-    -d '{"add-field":[
-          {"name":"manu",   "type":"string", "stored":true, "indexed":true},
-          {"name":"cat",    "type":"strings","stored":true, "indexed":true},
-          {"name":"features","type":"text_general","stored":true,"indexed":true},
-          {"name":"price",  "type":"pfloat", "stored":true, "indexed":true},
-          {"name":"inStock","type":"boolean","stored":true, "indexed":true}
-        ]}' \
-    "${SOLR}/techproducts/schema" >/dev/null 2>&1 || true
 
   TP_DOCS='['
   for i in $(seq 1 30); do
@@ -136,16 +101,9 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
     -d "${TP_DOCS}" \
     "${SOLR}/techproducts/update?commit=true" >/dev/null
 
-  # films — classic Solr tutorial dataset
+  # films — director/genre/date facet corpus
   curl -sf "${SOLR}/admin/collections?action=CREATE&name=films&numShards=1&replicationFactor=1&wt=json" >/dev/null \
     || warn "films may already exist; continuing"
-  curl -sf -H 'Content-Type: application/json' \
-    -d '{"add-field":[
-          {"name":"directed_by","type":"strings","stored":true,"indexed":true},
-          {"name":"genre",      "type":"strings","stored":true,"indexed":true},
-          {"name":"initial_release_date","type":"pdate","stored":true,"indexed":true}
-        ]}' \
-    "${SOLR}/films/schema" >/dev/null 2>&1 || true
 
   FILM_DOCS='['
   GENRES=(Drama Comedy Action Sci-Fi Horror Documentary)
@@ -163,13 +121,13 @@ if [[ "${SKIP_SETUP}" != "true" ]]; then
   curl -s "${SOLR}/films/select?q=*:*&rows=0&wt=json"        | jq -r '"films:        " + (.response.numFound|tostring)'
 fi
 
-# Ensure the companion agent is registered.
+# Register the companion skill as a Kiro agent if it's missing.
 if [[ ! -f "${HOME}/.kiro/agents/migration-companion.json" ]]; then
   say "Installing companion skill as Kiro agent"
   bash "${REPO_ROOT}/migrationCompanion/demo/install-skill.sh"
 fi
 
-# Pre-create target creds (Solr demo has no auth; target OS uses admin/admin).
+# Pre-create target creds (Solr demo has no source auth; target OS uses admin/admin).
 say "Ensuring demo secrets exist in namespace ${NAMESPACE}"
 kubectl --context "${KIND_CONTEXT}" -n "${NAMESPACE}" create secret generic target-creds \
   --from-literal=username=admin --from-literal=password=admin \
@@ -180,7 +138,7 @@ say "Handoff to companion agent"
 
 read -r -d '' PROMPT <<EOF || true
 Source:  Solr ${SOURCE_VERSION}          http://localhost:18983  (no auth)
-         In-cluster: http://${SOLR_SVC}.${NAMESPACE}.svc.cluster.local:80
+         In-cluster: http://solr.${NAMESPACE}.svc.cluster.local:8983
 Target:  OpenSearch ${TARGET_VERSION}    https://localhost:19201 (basic, target-creds)
 Target uses self-signed TLS; set allowInsecure: true on the target cluster.
 Scope:   all non-system collections (techproducts, films).
@@ -194,6 +152,7 @@ Drive the migration end-to-end per SKILL.md:
             confirmed fields; do still pick deep-validate collections.
   Phase 2 — scaffold config.yaml against the live schema. Source version
             MUST be literal "SOLR ${SOURCE_VERSION}" (uppercase SOLR).
+            Source endpoint in config: "http://solr:8983" (in-cluster DNS).
   Phase 3 — submit via workflow submit, watch.
   Phase 4/5 — structural parity + 5-8 query-shape tests translated from
               Solr q/fq/facet to OpenSearch DSL, plus 2 relevancy showcase
