@@ -89,7 +89,7 @@ PROMPT
   }' > "${AGENT_FILE}"
 
 say "Validating agent config"
-kiro-cli agent validate "${AGENT_FILE}"
+kiro-cli agent validate --path "${AGENT_FILE}"
 
 ok "Installed Kiro agent: migration-companion"
 cat <<EOF
