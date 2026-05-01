@@ -100,6 +100,11 @@ def diff_indices(src_ep, tgt_ep, src_auth, tgt_auth, src_insec, tgt_insec, names
             entry["mapping_diff"] = mapping_diff[:20]
             entry["settings_diff_unexpected"] = unexpected_set_diff[:20]
             entry["settings_diff_benign"] = [k for k in raw_set_diff if _is_allowed_settings_diff(k)][:20]
+        # Always record full before/after so the report can show them, not just the delta.
+        entry["source_settings"] = _settings(src_ep, *src_auth, src_insec, idx) or {}
+        entry["target_settings"] = _settings(tgt_ep, *tgt_auth, tgt_insec, idx) or {}
+        entry["source_mapping"] = _mapping(src_ep, *src_auth, src_insec, idx) or {}
+        entry["target_mapping"] = _mapping(tgt_ep, *tgt_auth, tgt_insec, idx) or {}
         report["indices"][idx] = entry
     return report
 
