@@ -1,7 +1,0 @@
-{
-  "version": "1.0.0",
-  "name": "minimal",
-  "source": {"engine": "elasticsearch", "version": "7.10"},
-  "target": {"engine": "opensearch", "endpoint": "https://example-os:9200"},
-  "mode": "full-backfill"
-}

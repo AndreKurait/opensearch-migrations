@@ -1,72 +1,108 @@
 # Migration Companion
 
-**Migration Companion is a skill, not a binary.** An AI agent (Claude, Cursor, Hermes, etc.) loads this directory and guides a user end-to-end through an OpenSearch migration — Solr or Elastic — using nothing but `docker`, `kind`, `helm`, `kubectl`, `curl`, and a small kit of deterministic Python helpers shipped here.
+**Migration Companion is a skill, not a binary.** An AI agent (Claude,
+Kiro, Cursor, Hermes, etc.) loads this directory and guides a user
+end-to-end through an OpenSearch migration — from Elasticsearch,
+OpenSearch, or Solr — using nothing but `kubectl`, `curl`, `jq`, and
+the migration-console pod's `workflow` CLI.
 
-There is no `mc` CLI to install. The agent *is* the tool.
+There is no `mc` CLI to install. No Python helpers. No templates. The
+agent *is* the tool.
 
 ## What it does
 
-Given a source cluster and target cluster (or the intent to stand up one), the companion:
+Given a source cluster and a target OpenSearch cluster, the companion:
 
-1. **Interviews** the user (~6 questions) and produces `migration-plan.json`.
-2. **Empirically assesses** the plan by running a real `opensearch-migrations` Argo workflow against a sample of the source on a local `kind` cluster.
-3. **Reports** ground-truth errors, parity metrics, time estimates, and expected-benign drifts.
-4. **Emits** a validated `workflow.yaml` the user (or the agent) submits to a production cluster.
+1. **Reads the live JSON Schema** at
+   `/root/.workflowUser.schema.json` inside the migration-console pod.
+   Every run. No stale training-data assumptions.
+2. **Probes both clusters** with `curl` — versions, field inventories,
+   real sample documents, analyzer behavior.
+3. **Scaffolds a `config.yaml`** the user sends to the pod via
+   `workflow configure edit --stdin`, validates it, and submits.
+4. **Watches the workflow**, surfacing phase transitions and pausing
+   for approval gates.
+5. **Validates the target** in three layers: structural parity (doc
+   counts, mappings), a query-shape battery (5–10 queries across field
+   types), and a relevancy showcase (2–3 natural-language queries with
+   side-by-side top-5 tables and hypothesis narrative).
+6. **Writes a self-contained `report.md`** — human-readable summary
+   above, complete reproduction commands below — into
+   `migrationCompanion/runs/<timestamp>/`.
 
-Unified path: Solr and Elastic/OpenSearch sources both converge on the same `migration-plan.json`, same Argo workflow template (`full-migration-imported-clusters`), same report shape.
+Unified path: Solr, Elasticsearch, and self-managed OpenSearch sources
+all converge on the same `workflow` configure → submit → validate →
+report flow.
 
 ## Layout
 
 ```
 migrationCompanion/
 ├── README.md                  you are here
-├── SKILL.md                   agent instructions (primary entrypoint)
-├── steering/                  narrative rules the agent follows
-│   ├── interview.md           the ~6-question flow
-│   ├── empirical-probe.md     how to drive the kind dry-run
-│   ├── parity-rules.md        what counts as match vs benign drift
-│   └── pitfalls.md            PF1-PF9 from iter-0 field report
-├── schemas/
-│   └── migration-plan.schema.json
-├── scripts/                   deterministic Python helpers (~500 LOC total)
-│   ├── validate_plan.py       lint migration-plan.json
-│   ├── probe_source.py        introspect source cluster -> plan draft
-│   ├── emit_workflow.py       migration-plan.json -> Argo Workflow YAML
-│   ├── run_empirical.py       orchestrates kind probe end-to-end
-│   └── parity_check.py        source vs target diff w/ allowlist
-├── fixtures/
-│   └── es7_sample.json        synthetic fixture for local dry-run
+├── SKILL.md                   agent entrypoint — rules + phase map
+├── steering/
+│   ├── 00-schema-refresh.md            pull live JSON Schema
+│   ├── 01-interview-probe.md           probe source & target
+│   ├── 02-scaffold-config.md           build config.yaml
+│   ├── 03-secrets-submit.md            submit + watch
+│   ├── 04-validate-parity-relevancy.md structural + queries + showcase
+│   ├── 05-report.md                    report.md contract
+│   └── 99-pitfalls.md                  landmines + expected drifts
 ├── references/
-│   ├── plan-v3.md             link to docs/plans/*-unified-ux.md
-│   └── iter0-report.md        link to docs/plans/*-iteration-0-*.md
-└── examples/
-    ├── minimal-plan.json
-    └── es7-to-os3-plan.json
+│   └── ma-workflow-cli.md              quick CLI reference
+├── runs/                        per-run artifacts (gitignored)
+└── demo/                        local kind-based end-to-end demos
+    ├── 00-reset.sh              wipe everything
+    ├── install-skill.sh         register companion as Kiro agent
+    ├── es-to-os.sh              Elasticsearch 7.x → OpenSearch 3.x
+    └── solr-to-os.sh            Solr 9.x → OpenSearch 3.x (stub)
 ```
 
-## Quickstart (for an agent)
+## Who uses this
 
-```
-You: "Help me migrate my ES cluster to OpenSearch."
+The companion is authored as a **skill directory**. Any agent that can
+follow markdown instructions and exec `kubectl`/`curl` can drive it.
+The bundled demo registers it as a Kiro CLI agent so you can do:
 
-Agent: <loads SKILL.md>
-       <asks 6 questions from steering/interview.md>
-       <writes migration-plan.json>
-       <runs scripts/run_empirical.py against user's kind cluster>
-       <shows report.md + workflow.yaml>
+```bash
+bash migrationCompanion/demo/install-skill.sh
+kiro-cli chat --agent migration-companion --trust-all-tools \
+  "Migrate ES 7.10 at https://src:9200 to OS 3.1 at https://tgt:9200."
 ```
 
-## Quickstart (for a human verifying the flow)
+Any other agent runtime (Hermes skill loader, Cursor MDC, Claude
+Projects file upload) can load the same SKILL.md + steering/ and get
+the same behavior.
 
-```
-cd migrationCompanion
-# Assume you already have a kind cluster 'ma' with MA helm chart deployed.
-python3 scripts/run_empirical.py \
-  --plan examples/es7-to-os3-plan.json \
-  --kubeconfig /tmp/kind-iter0-logs/kubeconfig2 \
-  --namespace ma \
-  --out /tmp/companion-report
-# -> /tmp/companion-report/report.md
-# -> /tmp/companion-report/workflow.yaml
-# -> /tmp/companion-report/findings.json
-```
+## Design principles
+
+- **The JSON Schema is the truth.** Not training data. Not samples.
+  Not this README. Agents re-read it every run and record a sha256.
+- **No helper scripts.** Every step is something an attentive human
+  could do with a terminal and judgment. The agent supplies the
+  judgment.
+- **Checkpoint before destructive steps.** Submit, secret creation, and
+  approval gates all require explicit user confirmation. Non-
+  interactive demos log what they would have asked.
+- **Parity is a verdict, not a threshold.** The agent reports raw
+  numbers and its own judgment ("top-10 overlap 9/10 — noise given
+  analyzer parity"). The reader can overrule.
+
+## Status
+
+Iteration on the design is live in
+`docs/plans/2026-05-01-migration-companion-agent-first-pivot.md`.
+First working path is Elasticsearch 7.10 → OpenSearch 3.1 via
+`demo/es-to-os.sh`. Solr source demo is stubbed pending a Solr Helm
+chart in `deployment/k8s/` — the skill itself already has Solr probe
+and query-translation guidance.
+
+## Related
+
+- Issue: [#2503 — unified migration companion UX][issue-2503]
+- Workflow CLI steering (authoritative command reference):
+  `kiro-cli/kiro-cli-config/steering/workflow.md`
+- Workflow user schema source:
+  `orchestrationSpecs/packages/schemas/src/userSchemas.ts`
+
+[issue-2503]: https://github.com/opensearch-project/opensearch-migrations/issues/2503

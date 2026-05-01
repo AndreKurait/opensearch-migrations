@@ -1,43 +1,70 @@
-# migrationCompanion — Demo runner
+# migrationCompanion demos
 
-Three scripts. Run in order. Each is idempotent.
+End-to-end demos that stand up a local kind cluster with Migration
+Assistant (MA) + a source cluster + a target OpenSearch cluster, then
+hand control to the companion agent.
 
 ## Prerequisites
-- docker, kind, kubectl, helm, jq, curl, python3
-- kiro-cli installed and logged in (`kiro-cli login`)
-- ~16 GB RAM free for the kind cluster
 
-## 1. Bring up the cluster
-```
-bash migrationCompanion/demo/01-setup-cluster.sh
-```
-Creates a kind cluster named `ma`, deploys Migration Assistant + Argo,
-stands up an Elasticsearch 8.5.1 source and an OpenSearch 2.x target,
-seeds the source with three synthetic indices (`products`,
-`legacy_orders`, `events-2025.05`), and opens port-forwards on
-`localhost:19200` (source) and `localhost:19201` (target).
+- docker, kind, kubectl, helm, jq, curl
+- kiro-cli (`kiro-cli whoami` must succeed)
+- ~10 GB free disk for the cold-start image builds
 
-Cold run: ~15–25 min (image builds). Warm re-run: ~3–5 min.
+## Start here
 
-## 2. Install the steering docs as a Kiro agent
-```
-bash migrationCompanion/demo/02-install-steering.sh
-```
-Writes `~/.kiro/agents/migration-companion.json` that pulls in the
-companion README, plan schema, example plans, helper scripts, and
-design plans as `file://` resources — so every Kiro turn is grounded
-in them.
+```bash
+# One-off: register the companion skill as a Kiro agent.
+bash migrationCompanion/demo/install-skill.sh
 
-## 3. Run the companion
+# End-to-end Elasticsearch 7.10 → OpenSearch 3.1 demo.
+bash migrationCompanion/demo/es-to-os.sh
 ```
-bash migrationCompanion/demo/03-run-companion.sh              # autopilot (default)
-bash migrationCompanion/demo/03-run-companion.sh --interactive  # chat session
-```
-Kiro probes both clusters, drafts `plan.json`, validates it, submits an
-Argo workflow, waits for it to finish, runs a parity check, and writes
-`report.md`. Artifacts land in `/tmp/companion-demo/`.
 
-## Tear down
+`es-to-os.sh` is idempotent — re-run it to iterate on the skill.
+Artifacts land under `migrationCompanion/runs/<timestamp>/`.
+
+## Scripts
+
+| Script                 | Purpose                                          |
+|------------------------|--------------------------------------------------|
+| `00-reset.sh`          | Wipe kind cluster, port-forwards, runs, agent.   |
+| `install-skill.sh`     | Register companion dir as Kiro agent.            |
+| `es-to-os.sh`          | ES 7.10 → OS 3.1 end-to-end on kind.             |
+| `solr-to-os.sh`        | Solr 9.x → OS 3.1 (stub — see file for status).  |
+
+## Modes
+
+All demo drivers accept:
+
+- `--autopilot` (default) — Kiro runs non-interactively to completion.
+- `--interactive` — drop into a chat session after setup.
+- `--skip-setup` — assume clusters already up; just invoke the agent.
+
+## Troubleshooting
+
+- **Source not reachable on 19200**: a port-forward died. Re-run the
+  demo or re-run just the port-forward block manually.
+- **Secret already exists**: the demo creates `source-creds` and
+  `target-creds` pre-populated with `admin:admin`. `00-reset.sh` wipes
+  them with the cluster.
+- **Workflow stuck at WAITING**: `skipApprovals: true` is set in the
+  demo seed prompt, but the agent may still hit an approval if the
+  schema version changed. Run `kiro-cli chat --agent migration-companion
+  --trust-all-tools "Resume. Check workflow status and approve if the
+  output looks correct."`
+- **Kiro agent not found**: re-run `install-skill.sh`.
+
+## What gets created
+
 ```
-kind delete cluster --name ma
+/tmp/companion-demo/                  (scratch — port-forward logs)
+migrationCompanion/runs/<UTC-ts>/     (per-run artifacts, gitignored)
+  ├── config.yaml
+  ├── schema.json + schema.sha256
+  ├── probe-source.json
+  ├── probe-target-before.json
+  ├── probe-target-after.json
+  ├── queries/q*.{source,target,summary}.json
+  └── report.md
+~/.kiro/agents/migration-companion.json
 ```
