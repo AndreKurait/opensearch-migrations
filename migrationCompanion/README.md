@@ -92,10 +92,10 @@ the same behavior.
 
 - `demo/es-to-os.sh` — Elasticsearch 7.10 → OpenSearch 3.1 end-to-end on
   a local kind cluster.
-- `demo/solr-to-os.sh` — Solr → OpenSearch placeholder. The skill itself
-  already carries Solr probe and query-translation guidance; the demo
-  script activates once a Solr Helm chart is available in
-  `deployment/k8s/`.
+- `demo/solr-to-os.sh` — Apache Solr 9.x → OpenSearch 3.1 end-to-end on
+  a local kind cluster. Seeds the canonical `techproducts` and `films`
+  collections and exercises the skill's Solr probe and Solr→OpenSearch
+  query-translation guidance.
 
 ## Related
 
