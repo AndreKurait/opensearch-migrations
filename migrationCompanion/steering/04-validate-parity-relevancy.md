@@ -107,10 +107,69 @@ You decide what's significant. Rough intuitions:
   versions). Scores drifting 50%+ warrants looking at analyzer config.
 - `took_ms` is not a correctness signal — note perf deltas separately.
 
+Verify `hits.total.relation` equals `"eq"` on every hit-total claim.
+A `"gte"` relation means the number is a lower bound — never treat
+it as exact.
+
 Write the verdict in the report as a sentence, not a number. "Top-10
 overlap Jaccard 0.9 — same documents, minor reorder, consistent with
 analyzer parity." Include the raw numbers so the reader can overrule
 your call.
+
+### Principle 3a — undefined metrics are a real value
+
+When computing rank-correlation metrics (Spearman-ρ, Kendall-τ) across
+source↔target top-N lists, some cells will be **mathematically
+undefined**:
+
+- **Single-hit result set** — one element can't form a ranking; both
+  ρ and τ are undefined (division by zero in the variance term).
+- **Zero-variance ranking** — all elements tied at the same rank;
+  same issue.
+- **`size:0` query** (e.g. pure aggregation or count) — there is no
+  hit list to correlate.
+
+Report these as `undefined (single-hit)` or `undefined (size:0)` —
+not 0, not 1, not "N/A", not omitted. When you summarize in the
+verdict banner, count them separately: "N of N **defined** metrics
+are 1.0; M cells undefined for trivial reasons."
+
+Jaccard@K and nDCG@K *are* defined on single-hit sets (trivially 1.0
+if both sides return the same single doc), so they don't need this
+special-case handling.
+
+### Principle 3b — classify each query before running
+
+Label every query in the battery as either:
+
+- **Load-bearing** — non-trivial queries whose cross-cluster parity
+  is meaningful evidence. Multi-hit match queries, compound bool
+  clauses, aggregations, numeric/date ranges.
+- **Control** — trivial queries that pass either way. Single-hit
+  exact-term match, `match_all` on an empty index, `size:0` probes.
+
+Controls are fine to keep in the battery — they exercise code paths
+and catch regressions — but they are NOT load-bearing evidence.
+When the report summarizes "9 query cases passed", it must separately
+note how many were load-bearing versus controls.
+
+### Principle 3c — score drift is often bimodal
+
+When scores drift between source and target, it's common for the
+ratio to cluster into two modes:
+
+- single-clause queries (`match`, `term`, `match_phrase` alone) drift
+  one way (e.g. target/source ≈ 0.41–0.45)
+- compound-bool queries with filters/multiple musts drift the other
+  way (e.g. target/source ≈ 0.98)
+
+Report the bimodality explicitly with the actual min and max — do
+NOT collapse to a single average. "Scores drift bimodally:
+0.4119–0.4545 on single-clause queries, 0.9808 on the one
+compound-bool query."
+
+Range edges in the report must be the actual extrema from the data.
+Never round a 0.4119–0.4545 range out to "~0.4" or in to "0.42–0.45".
 
 ### Principle 4 — translate Solr queries faithfully
 
@@ -186,10 +245,14 @@ identical top-5 sets with scores within 3%. No narrative needed."
 Summarize to the user before writing the report:
 
 ```
-Structural parity:   23/23 indices OK
-Query-shape battery: 8/10 within noise, 2/10 flagged
-  - q5_numeric_range: hit-count delta 12% (investigating)
-  - q7_agg:          2 new bucket values on target (expected, see notes)
+Structural parity:   23/23 indices OK, mappings byte-identical src↔target
+Query-shape battery: 10 queries — 7 load-bearing, 3 controls
+  Load-bearing: 6/7 within noise, 1 flagged
+    - q5_numeric_range: hit-count delta 12% (investigating)
+  Controls:     3/3 passed (trivially)
+Rank metrics:        26 of 26 defined cells at 1.0; 4 cells undefined
+                     (single-hit / size:0)
+Score drift:         bimodal — 0.41–0.45× single-clause, 0.98× compound
 Relevancy showcase:  3/3 showcase queries — top-5 overlap [5,5,4] of 5
 
 Write report and stop? (yes / investigate / rerun with different queries)

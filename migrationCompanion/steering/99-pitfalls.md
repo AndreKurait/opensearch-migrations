@@ -68,3 +68,75 @@ In committed text (reports, commits, PRs, code comments), say
 specific version or wire protocol). Never cite Elastic Inc. marketing
 copy or copy from elastic.co docs. Companion is parallel to, not
 derived from, upstream Elastic work.
+
+## Deployment gotchas the agent cannot infer from the schema
+
+These are deterministic runtime failures that repeat across every
+fresh demo run and have nothing to do with user input. Keep the list
+short — only entries whose root cause is invisible from the schema
+and whose error message does not name the real field belong here.
+
+### Port-forwards vs in-cluster workflow pods
+
+Both the ES and Solr demos expose port-forwarded endpoints on the host
+(`https://localhost:19200`, `http://localhost:18983`, etc.) for agent
+probing. Those hostnames **do not resolve** inside the cluster — the
+migration-console pod runs its snapshot / backfill workflows as
+separate pods in namespace `ma`, and `localhost:19200` inside those
+pods is the pod's own loopback. Scaffolded `workflow` configs must use
+the in-cluster service DNS (`elasticsearch-master.ma.svc:9200`,
+`opensearch-cluster-master.ma.svc:9200`) even though the agent probed
+through `localhost:...`. The Zod schema does not know about
+port-forwards; this must be substituted at scaffold time.
+
+### Localstack S3 endpoint shape
+
+The `snapshotInfo.repos.<name>.endpoint` field accepts any URL. In the
+demo, S3 is served by localstack in-cluster at
+`localstack.ma.svc.cluster.local:4566`, addressed as
+`localstack://localstack.ma.svc.cluster.local:4566` (not
+`http://`). Using `http://...` passes schema validation but the
+workflow then fails with an opaque `AccessDenied` from the
+localstack-injected STS mock because the scheme triggers real-AWS
+auth resolution. The `localstack://` scheme is the signal the
+workflow uses to switch credential providers. Always use it in demo
+runs.
+
+### `docker compose` v2 plugin, not `docker-compose` v1
+
+The Solr sandbox's `run.sh` and `docker-compose.yml` require compose
+v2 (`docker compose ...` as a docker CLI plugin). Hosts with only
+the legacy `docker-compose` Python tool fail with
+`docker: 'compose' is not a docker command`. Install to
+`~/.docker/cli-plugins/docker-compose` (pinning to a recent release;
+older binaries have a `lfstack.push invalid packing` Go-runtime
+panic on kernels with 48-bit virtual addresses). The demo script
+checks `docker compose version` and exits early if missing.
+
+### Translation-shim image needs a registry on :5001
+
+`TrafficCapture/transformationShim` is built with `./gradlew
+jibDockerBuild`, which tags the image `localhost:5001/migrations/
+transformation_shim`. The Solr sandbox's `docker-compose.yml`
+references that exact tag. If no registry is running on :5001,
+compose fails with `pull access denied`. Either start a local
+registry (`docker run -d -p 127.0.0.1:5001:5000 --name
+registry-5001 registry:2`) or re-tag the image locally
+(`docker tag localhost:5001/migrations/transformation_shim:latest
+migrations/transformation_shim:latest` — the sandbox's run.sh does
+this automatically as a fallback). The demo script starts the
+registry if it isn't already up.
+
+### Shim FileSystem-sink reports live in docker named volumes
+
+`shim-reports-os` and `shim-reports-solr` are docker named volumes,
+not bind mounts. You cannot `ls` or `cp` them from the host
+directly. Extraction from inside a one-shot container:
+
+```
+docker run --rm -v shim-reports-os:/src -v "$(pwd):/dst" \
+  alpine sh -c 'cp -r /src/. /dst/shim-reports-os/'
+```
+
+An agent that "doesn't see the reports" on the host has almost
+always forgotten this step, not run into a sink bug.

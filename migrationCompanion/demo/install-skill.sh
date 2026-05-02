@@ -33,6 +33,7 @@ RESOURCES=(
   "file://${SKILL_DIR}/steering/03-secrets-submit.md"
   "file://${SKILL_DIR}/steering/04-validate-parity-relevancy.md"
   "file://${SKILL_DIR}/steering/05-report.md"
+  "file://${SKILL_DIR}/steering/06-shim-analysis.md"
   "file://${SKILL_DIR}/steering/99-pitfalls.md"
   "file://${SKILL_DIR}/references/ma-workflow-cli.md"
   "file://${REPO_ROOT}/kiro-cli/kiro-cli-config/steering/workflow.md"

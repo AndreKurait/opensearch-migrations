@@ -61,6 +61,7 @@ examples; everything else you decide at runtime.
 3. Secrets & submit        (~15s)   steering/03-secrets-submit.md
 4. Watch & structural      (minutes) continues in 03; parity in 04
 5. Parity & relevancy      (~2min)  steering/04-validate-parity-relevancy.md
+5b. Shim analysis (Solr)   (~2min)  steering/06-shim-analysis.md
 6. Report                  (~20s)   steering/05-report.md
 ```
 
@@ -86,6 +87,10 @@ kubectl exec -i -n ma migration-console-0 -- <cmd>
 
 See `references/ma-workflow-cli.md` for the full CLI reference (it points
 to the authoritative file at `kiro-cli/kiro-cli-config/steering/workflow.md`).
+
+See `references/report-claim-trace.md` for the five-pass self-review
+checklist the agent runs before declaring `report.md` finished. Every
+numeric claim must trace to a file in `runs/<ts>/`.
 
 ## Output contract
 
