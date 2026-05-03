@@ -12,3 +12,15 @@
 target:
   image:
     tag: "3.5.0"
+
+# The solr-operator v0.9.1 subchart pins pravega/zookeeper-operator:0.2.15
+# (April 2023, Go 1.18). That binary panics on modern Linux kernels with
+# `runtime: lfstack.push invalid packing` (48-bit virtual address layout
+# incompatibility). Override to Adobe's maintained fork, which ships with
+# Go 1.25+ and no longer hits the packing bug. Only applied in the
+# companion demo overlay so the repo-wide Solr value file stays clean.
+solr-operator:
+  zookeeper-operator:
+    image:
+      repository: adobe/zookeeper-operator
+      tag: "0.2.15-adobe-20260423"

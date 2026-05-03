@@ -18,9 +18,12 @@ bash migrationCompanion/demo/install-skill.sh
 
 # End-to-end Elasticsearch 7.10 → OpenSearch 3.1 demo.
 bash migrationCompanion/demo/es-to-os.sh
+
+# End-to-end SolrCloud 9.7 → OpenSearch 3.5 demo (full workflow path).
+bash migrationCompanion/demo/solr-backfill.sh
 ```
 
-`es-to-os.sh` is idempotent — re-run it to iterate on the skill.
+Both scripts are idempotent — re-run to iterate on the skill.
 Artifacts land under `migrationCompanion/runs/<timestamp>/`.
 
 ## Scripts
@@ -29,14 +32,20 @@ Artifacts land under `migrationCompanion/runs/<timestamp>/`.
 |------------------------|--------------------------------------------------|
 | `00-reset.sh`          | Wipe kind cluster, port-forwards, runs, agent.   |
 | `install-skill.sh`     | Register companion dir as Kiro agent.            |
-| `es-to-os.sh`          | ES 7.10 → OS 3.1 end-to-end on kind.             |
+| `es-to-os.sh`          | ES 7.10 → OS 3.5 end-to-end on kind.             |
+| `solr-backfill.sh`     | SolrCloud 9.7 → OS 3.5 end-to-end on kind.       |
+| `solr-to-os.sh`        | SolrCloud → OS via the translation-shim sandbox  |
+|                        | (docker compose, not the full workflow path).    |
 
-A Solr → OpenSearch demo is not currently supported from this skill:
-the orchestrator's `CreateSnapshot` workflow step renders
-`--source-type=elasticsearch` unconditionally and the companion is
-forbidden from working around that with a manual pre-submit backup.
-Re-enabling Solr here is gated on the orchestrator growing a Solr
-branch (tracked separately).
+The two Solr demos exercise different slices:
+
+- `solr-backfill.sh` drives the **full orchestrator workflow**
+  (CreateSnapshot with `--source-type=solr` auto-detected, metadata
+  migration, RFS document backfill, validation) on kind.
+- `solr-to-os.sh` exercises the **translation-shim** in isolation —
+  the request-rewriting proxy that lets OpenSearch query engines
+  answer Solr-shaped traffic. It uses the docker-compose sandbox in
+  `solrMigrationDevSandbox/` and does not go through `workflow`.
 
 ## Modes
 

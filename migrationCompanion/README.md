@@ -54,7 +54,8 @@ migrationCompanion/
 └── demo/                        local kind-based end-to-end demos
     ├── 00-reset.sh              wipe everything
     ├── install-skill.sh         register companion as Kiro agent
-    └── es-to-os.sh              Elasticsearch 7.x → OpenSearch 3.x
+    ├── es-to-os.sh              Elasticsearch 7.x → OpenSearch 3.x
+    └── solr-backfill.sh         SolrCloud 9.x → OpenSearch 3.x
 ```
 
 ## Who uses this

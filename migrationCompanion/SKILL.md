@@ -33,9 +33,10 @@ examples; everything else you decide at runtime.
   `/root/migrateDocuments/bin/RfsMigrateDocuments`, or any other Java
   binary directly. Never create a source-side backup out-of-band (no
   `curl …/admin/collections?action=BACKUP`, no
-  `curl …/_snapshot/...`). If a flavor of source cannot currently be
-  driven by `workflow submit` end-to-end, say so and stop — do not
-  work around it manually.
+  `curl …/_snapshot/...`). If a source flavor is unsupported by
+  `workflow submit` end-to-end, say so and stop — do not work around
+  it manually. (Elasticsearch 5/6/7/8, self-managed OpenSearch 1/2/3,
+  and SolrCloud 8/9 are all supported end-to-end today.)
 - **Trust the live JSON Schema at `/root/schema/workflowMigration.schema.json`
   inside the migration-console pod** over anything else — including the
   sample YAML, your training data, and the steering files. Re-read it at

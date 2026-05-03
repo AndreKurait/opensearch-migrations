@@ -21,7 +21,7 @@ sourceClusters:
   source:
     endpoint: https://...
     allowInsecure: true          # only if self-signed
-    version: "ES 7.10.2"         # exact schema form
+    version: "ES 7.10.2"         # exact schema form ("ES x.y.z", "OS x.y.z", or "SOLR x.y.z")
     authConfig: { basic: { secretName: source-creds } }
     snapshotInfo:
       repos:
@@ -66,18 +66,40 @@ Snapshot-only means **omit** `kafkaClusterConfiguration` and `traffic`.
 - Replayer's `removeAuthHeader: true` conflicts with target having
   `basic` or `sigv4` auth.
 
-## Solr sources: currently not supported end-to-end
+## Solr sources
 
-If the interview in Phase 1 identified a Solr source (`version: "SOLR …"`),
-**stop and tell the user**: the companion cannot drive a Solr migration
-end-to-end right now. The orchestrator's `CreateSnapshot` workflow step
-renders `--source-type=elasticsearch` unconditionally, and the companion
-is not permitted to work around that by creating a Solr backup manually
-outside the workflow. That rule is non-negotiable (see SKILL.md).
+A Solr source uses the **same** top-level shape above — same
+`sourceClusters`, same `snapshotMigrationConfigs`, same workflow CLI.
+The orchestrator auto-detects `--source-type=solr` from the `version:
+"SOLR …"` string, and `CreateSnapshot` auto-discovers collections via
+the SolrCloud Collections API when the collection list is empty. No
+Solr-specific fields in `config.yaml` are required for the common case.
 
-Re-enabling Solr here is gated on the orchestrator learning to render
-`--source-type=solr` + `--solr-collections` for Solr-flavored source
-configs (tracked separately). Until then, the honest answer is "not yet".
+Differences to note when filling the YAML for a Solr source:
+
+- `version:` takes the literal `"SOLR 9.7.0"` form (uppercase `SOLR`,
+  Lucene spec version from `/solr/admin/info/system`).
+- `allowInsecure: true` only if the endpoint is HTTPS with a self-signed
+  cert. Plain-HTTP Solr needs `endpoint: http://...` and no
+  `allowInsecure`.
+- `snapshotInfo.repos.<name>.s3RepoPathUri` points at an S3 location
+  that the Solr pods can write to (backup repository must be
+  pre-registered in Solr's config, e.g. via
+  `solrSource.backupRepositories` in the test-clusters chart, or via
+  the Solr Operator's `backupRepositories` field in production).
+- `documentBackfillConfig: {}` is supported end-to-end for Solr — the
+  backfill path reads the Solr backup's Lucene segments directly and
+  reindexes into the OpenSearch target.
+- `metadataMigrationConfig: {}` performs best-effort schema translation
+  (Solr fields → OpenSearch mappings) through the migration-utilities
+  translation shim. Review the generated target mapping during Phase 4
+  — Solr-specific types (e.g. `pdate`, `text_general` with custom
+  tokenizers) map to reasonable OpenSearch equivalents but may need
+  per-index tweaking.
+
+Restrict to a subset of collections with an explicit index-allowlist
+transformation when the user asks for a partial migration; otherwise
+every collection on the source is migrated.
 
 ## Validate before submit
 

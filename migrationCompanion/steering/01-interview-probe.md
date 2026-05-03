@@ -45,11 +45,14 @@ schema form:
 - ES 7.10.2 → `"ES 7.10.2"`
 - OS 2.11.0 → `"OS 2.11.0"`
 - OS 3.0.0  → `"OS 3.0.0"`
+- Solr 9.7.0 → `"SOLR 9.7.0"` (see the Solr probe section for where
+  the version string comes from — this is a different endpoint)
 
 If the cluster is AWS-managed (endpoint matches
 `*.es.amazonaws.com` or `*.aos.*.on.aws`), flag it — the schema's
 `superRefine` requires SigV4 auth for snapshot creation on managed
-clusters.
+clusters. (AWS-managed only applies to ES/OS targets; Solr sources
+are never AWS-managed in this sense.)
 
 ## Probe — Solr
 
