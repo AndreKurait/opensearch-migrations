@@ -2,6 +2,7 @@ plugins {
     id 'org.opensearch.migrations.java-library-conventions'
     id 'io.freefair.lombok'
     id 'com.gradleup.shadow'
+    id 'me.champeau.jmh'
 }
 
 group = 'org.opensearch.migrations.snapshots'
@@ -118,6 +119,7 @@ dependencies {
 
     testImplementation libs.mockito.core
     testImplementation libs.mockito.junit.jupiter
+    testImplementation libs.jmh.core
 
     lucene5 libs.lucene.v5.core
     lucene5 libs.lucene.v5.backward.codecs
@@ -148,4 +150,34 @@ dependencies {
     implementation shadowLucene7.outputs.files
     implementation shadowLucene9.outputs.files
     implementation shadowLucene10.outputs.files
+}
+
+// JMH harness — benchmarks live under src/test (same module) and are discovered via includeTests=true.
+// Run with: ./gradlew :SearchSnapshotExtractor:jmh -Pjmh.include='SidecarBuildBenchmark'
+jmh {
+    includeTests = true
+    failOnError = true
+    fork = 1
+    warmupIterations = 1
+    iterations = 3
+    timeOnIteration = '5s'
+    warmup = '3s'
+    humanOutputFile = project.file("${project.buildDir}/reports/jmh/human.txt")
+    resultsFile = project.file("${project.buildDir}/reports/jmh/results.txt")
+    if (project.hasProperty('jmh.include')) {
+        includes = [project.property('jmh.include').toString()]
+    }
+}
+
+// JMH generator emits code that errorprone refuses to parse without its plugin jar on the
+// processor path. Since jmh-generated classes are trivial dispatchers, disable errorprone
+// for the jmh-only compile task.
+tasks.matching { it.name == 'jmhCompileGeneratedClasses' }.configureEach {
+    options.errorprone.enabled = false
+}
+
+// The jmhJar task bundles the uber-classpath (Lucene shadow jars × 5) and blows past the 64K
+// zip-entry limit. Enable zip64 to fit.
+tasks.matching { it.name == 'jmhJar' }.configureEach {
+    zip64 = true
 }
