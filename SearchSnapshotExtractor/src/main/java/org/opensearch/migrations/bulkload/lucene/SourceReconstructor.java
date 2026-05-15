@@ -480,7 +480,13 @@ public class SourceReconstructor {
             }
         }
 
-        // 3. Points / indexed terms fallback (recovers indexed-only numeric/boolean/keyword)
+        // 3 + 4. Points/indexed-terms fallback (recovers indexed-only numeric/boolean/keyword)
+        // merged with mapping-level constant values (constant_keyword stores its value in the
+        // mapping, not the segment). A single iteration over the mapping's field-name set:
+        // points/terms wins when present; otherwise the constant value is written. This halves
+        // the {@link #shouldSkipField}/{@link #hasNested} overhead on the mapping leaf set —
+        // significant on indices with thousands of leaves where the per-doc cost of two full
+        // walks dominated steady-state throughput.
         if (mappingContext != null) {
             for (String fieldName : mappingContext.getFieldNames()) {
                 if ((shouldSkipField(fieldName, mappingContext)
@@ -489,31 +495,21 @@ public class SourceReconstructor {
                     continue;
                 }
                 FieldMappingInfo mappingInfo = mappingContext.getFieldInfo(fieldName);
-                if (mappingInfo != null) {
-                    int gap = mappingInfo.positionIncrementGap();
-                    var fallbackValue = gap == LuceneLeafReader.DEFAULT_POSITION_INCREMENT_GAP
-                            ? reader.getValueFromPointsOrTerms(docId, fieldName, mappingInfo.type(), termIndex)
-                            : reader.getValueFromPointsOrTerms(docId, fieldName, mappingInfo.type(), termIndex, gap);
-                    if (fallbackValue.isPresent()) {
-                        Object converted = convertFallbackValue(fallbackValue.get(), mappingInfo);
-                        if (converted != null) {
-                            modified |= putNested(target, fieldName, converted);
-                        }
+                if (mappingInfo == null) {
+                    continue;
+                }
+                int gap = mappingInfo.positionIncrementGap();
+                var fallbackValue = gap == LuceneLeafReader.DEFAULT_POSITION_INCREMENT_GAP
+                        ? reader.getValueFromPointsOrTerms(docId, fieldName, mappingInfo.type(), termIndex)
+                        : reader.getValueFromPointsOrTerms(docId, fieldName, mappingInfo.type(), termIndex, gap);
+                if (fallbackValue.isPresent()) {
+                    Object converted = convertFallbackValue(fallbackValue.get(), mappingInfo);
+                    if (converted != null) {
+                        modified |= putNested(target, fieldName, converted);
+                        continue;
                     }
                 }
-            }
-        }
-
-        // 4. Mapping-level constant values (constant_keyword stores its value in the mapping, not the segment)
-        if (mappingContext != null) {
-            for (String fieldName : mappingContext.getFieldNames()) {
-                if ((shouldSkipField(fieldName, mappingContext)
-                        && !descendsIntoExistingObjectArray(target, fieldName))
-                        || hasNested(target, fieldName)) {
-                    continue;
-                }
-                FieldMappingInfo mappingInfo = mappingContext.getFieldInfo(fieldName);
-                if (mappingInfo != null && mappingInfo.constantValue() != null) {
+                if (mappingInfo.constantValue() != null) {
                     modified |= putNested(target, fieldName, mappingInfo.constantValue());
                 }
             }
