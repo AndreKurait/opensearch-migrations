@@ -207,6 +207,13 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
         );
     }
 
+    /** Argument provider for ES 7.17 → OS 2.19. */
+    static Stream<Arguments> es717ToOs2Pair() {
+        return Stream.of(
+            Arguments.of(SearchClusterContainer.ES_V7_17, SearchClusterContainer.OS_V2_19_4)
+        );
+    }
+
     @TempDir
     private File localDirectory;
 
@@ -2452,6 +2459,174 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
                 "doc2 subj must not contain doc1-only token 'buyout' (per-doc postings isolation). reconstructed=" + doc2SubjReconstructed);
             assertFalse(doc1SubjReconstructed.contains("quarterly"),
                 "doc1 subj must not contain doc2-only token 'quarterly' (per-doc postings isolation). reconstructed=" + doc1SubjReconstructed);
+        }
+    }
+
+    /**
+     * ES 7.17 → OS 2.19. Brand-new ES 7 index — no deprecated filters/tokenizers, default
+     * "standard" analyzer (built-in to both ES 7 and OS 2). _source disabled, two text
+     * fields with norms:false, plus a keyword sibling.
+     *
+     * Verifies that on a clean ES 7.17 source the sourceless pipeline reconstructs:
+     *   - subj  (text, norms:false, no store, no doc_values for text):
+     *           lossy term-walk recovery (lowercased, stopwords removed by analyzer).
+     *   - subj2 (text, norms:false): same recovery path — second field demonstrates
+     *           per-field independence.
+     *   - fsubj (keyword): byte-exact via DocValues.
+     *
+     * No analyzer-compatibility transform fires here (nothing in the analysis chain is
+     * deprecated on the ES 7 → OS 2 path), so this isolates the sourceless reconstruction
+     * path on a recent ES major.
+     */
+    @ParameterizedTest(name = "es717NormsFalseSourceDisabled: {0} -> {1}")
+    @MethodSource("es717ToOs2Pair")
+    public void testEs717NormsFalseSourceDisabledRecovery(
+        ContainerVersion sourceVersion, ContainerVersion targetVersion
+    ) throws Exception {
+        try (
+            var sourceCluster = new SearchClusterContainer(sourceVersion);
+            var targetCluster = new SearchClusterContainer(targetVersion)
+        ) {
+            sourceCluster.start();
+            targetCluster.start();
+
+            var sourceOps = new ClusterOperations(sourceCluster);
+            var targetOps = new ClusterOperations(targetCluster);
+
+            String indexName = "es717_norms_false_test";
+
+            // ES 7.17 — no per-type wrapper. _source disabled at the mappings root.
+            // text + norms:false fields cannot use store:true via _source-disabled
+            // reconstruction; we keep them as the customer scenario shape.
+            String indexBody = "{"
+                + "\"settings\":{\"number_of_shards\":1,\"number_of_replicas\":0},"
+                + "\"mappings\":{"
+                + "  \"_source\":{\"enabled\":false},"
+                + "  \"properties\":{"
+                + "    \"subj\":{\"type\":\"text\",\"norms\":false},"
+                + "    \"subj2\":{\"type\":\"text\",\"norms\":false},"
+                + "    \"fsubj\":{\"type\":\"keyword\"}"
+                + "  }"
+                + "}"
+                + "}";
+            sourceOps.createIndex(indexName, indexBody);
+
+            String doc1Subj = "Bishops corner ltd buyout";
+            String doc1Subj2 = "Pacific northwest review";
+            String doc1Fsubj = "BR-001";
+            sourceOps.createDocument(indexName, "1",
+                "{\"subj\":\"" + doc1Subj + "\","
+                + "\"subj2\":\"" + doc1Subj2 + "\","
+                + "\"fsubj\":\"" + doc1Fsubj + "\"}",
+                null, null);
+
+            String doc2Subj = "Quarterly review meeting tomorrow";
+            String doc2Subj2 = "Atlantic eastern memo";
+            String doc2Fsubj = "BR-002";
+            sourceOps.createDocument(indexName, "2",
+                "{\"subj\":\"" + doc2Subj + "\","
+                + "\"subj2\":\"" + doc2Subj2 + "\","
+                + "\"fsubj\":\"" + doc2Fsubj + "\"}",
+                null, null);
+
+            sourceOps.post("/_refresh", null);
+
+            // Snapshot.
+            var snapshotCtx = SnapshotTestContext.factory().noOtelTracking();
+            createSnapshot(sourceCluster, "es717_snap", snapshotCtx);
+            sourceCluster.copySnapshotData(localDirectory.toString());
+
+            // Step 1: metadata migrate. Nothing deprecated to strip; this should be a
+            // straight pass-through.
+            var metaArgs = new MigrateOrEvaluateArgs();
+            metaArgs.fileSystemRepoPath = localDirectory.getAbsolutePath();
+            metaArgs.snapshotName = "es717_snap";
+            metaArgs.sourceVersion = sourceCluster.getContainerVersion().getVersion();
+            metaArgs.targetArgs.host = targetCluster.getUrl();
+            metaArgs.enableSourcelessMigrations = true;
+            var metadataContext = MetadataMigrationTestContext.factory().noOtelTracking();
+            var metaResult = new MetadataMigration().migrate(metaArgs).execute(metadataContext);
+            log.info("Metadata migration result:\n{}", metaResult.asCliOutput());
+            assertEquals(0, metaResult.getExitCode(),
+                "Metadata migration must succeed. Exit=" + metaResult.getExitCode()
+                + " out=" + metaResult.asCliOutput());
+
+            // Re-create the target index with _source ENABLED so we can read back what
+            // the sourceless pipeline reconstructs (mirrors testNormsFalseSourceDisabledRecovery).
+            targetOps.delete("/" + indexName);
+            String targetIndexBody = "{"
+                + "\"settings\":{\"number_of_shards\":1,\"number_of_replicas\":0},"
+                + "\"mappings\":{\"properties\":{"
+                + "  \"subj\":{\"type\":\"text\",\"norms\":false},"
+                + "  \"subj2\":{\"type\":\"text\",\"norms\":false},"
+                + "  \"fsubj\":{\"type\":\"keyword\"}"
+                + "}}"
+                + "}";
+            targetOps.createIndex(indexName, targetIndexBody);
+
+            // Step 2: docs migration via the sourceless pipeline.
+            var fileFinder = SnapshotReaderRegistry.getSnapshotFileFinder(
+                sourceCluster.getContainerVersion().getVersion(), true);
+            var sourceRepo = new FileSystemRepo(localDirectory.toPath(), fileFinder);
+            var docCtx = DocumentMigrationTestContext.factory().noOtelTracking();
+
+            waitForRfsCompletion(() -> SourcelessMigrationTest.migrateDocumentsSequentiallyWithSourceless(
+                sourceRepo, "es717_snap", List.of(indexName), targetCluster,
+                new AtomicInteger(), new Random(1), docCtx,
+                sourceCluster.getContainerVersion().getVersion(),
+                targetCluster.getContainerVersion().getVersion()
+            ));
+
+            targetOps.post("/_refresh", null);
+
+            // Step 3: assertions.
+            String doc1Resp = targetOps.get("/" + indexName + "/_doc/1").getValue();
+            JsonNode doc1Source = MAPPER.readTree(doc1Resp).path("_source");
+            log.info("Reconstructed doc1: {}", doc1Source);
+
+            assertEquals(doc1Fsubj, doc1Source.path("fsubj").asText(),
+                "fsubj (keyword) must reconstruct byte-exact via DocValues. _source=" + doc1Source);
+
+            String d1Subj = doc1Source.path("subj").asText().toLowerCase();
+            assertFalse(d1Subj.isEmpty(),
+                "subj (text, norms:false, _source:false) must reconstruct from term postings. _source=" + doc1Source);
+            for (String tok : List.of("bishops", "corner", "ltd", "buyout")) {
+                assertTrue(d1Subj.contains(tok),
+                    "subj reconstruction missing analyzer token '" + tok + "'. reconstructed=" + d1Subj);
+            }
+
+            String d1Subj2 = doc1Source.path("subj2").asText().toLowerCase();
+            assertFalse(d1Subj2.isEmpty(),
+                "subj2 must reconstruct from term postings. _source=" + doc1Source);
+            for (String tok : List.of("pacific", "northwest", "review")) {
+                assertTrue(d1Subj2.contains(tok),
+                    "subj2 reconstruction missing token '" + tok + "'. reconstructed=" + d1Subj2);
+            }
+
+            String doc2Resp = targetOps.get("/" + indexName + "/_doc/2").getValue();
+            JsonNode doc2Source = MAPPER.readTree(doc2Resp).path("_source");
+            log.info("Reconstructed doc2: {}", doc2Source);
+            assertEquals(doc2Fsubj, doc2Source.path("fsubj").asText());
+            String d2Subj = doc2Source.path("subj").asText().toLowerCase();
+            for (String tok : List.of("quarterly", "review", "meeting", "tomorrow")) {
+                assertTrue(d2Subj.contains(tok),
+                    "doc2 subj reconstruction missing token '" + tok + "'. reconstructed=" + d2Subj);
+            }
+            String d2Subj2 = doc2Source.path("subj2").asText().toLowerCase();
+            for (String tok : List.of("atlantic", "eastern", "memo")) {
+                assertTrue(d2Subj2.contains(tok),
+                    "doc2 subj2 reconstruction missing token '" + tok + "'. reconstructed=" + d2Subj2);
+            }
+
+            // Per-doc isolation across both text fields.
+            assertFalse(d2Subj.contains("buyout"),
+                "doc2 subj must not contain doc1-only token. reconstructed=" + d2Subj);
+            assertFalse(d2Subj2.contains("pacific"),
+                "doc2 subj2 must not contain doc1-only token. reconstructed=" + d2Subj2);
+            assertFalse(d1Subj.contains("quarterly"),
+                "doc1 subj must not contain doc2-only token. reconstructed=" + d1Subj);
+            assertFalse(d1Subj2.contains("atlantic"),
+                "doc1 subj2 must not contain doc2-only token. reconstructed=" + d1Subj2);
         }
     }
 
