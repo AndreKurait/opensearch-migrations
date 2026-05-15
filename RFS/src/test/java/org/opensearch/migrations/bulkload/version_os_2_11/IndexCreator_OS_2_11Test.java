@@ -181,7 +181,7 @@ class IndexCreator_OS_2_11Test {
             "  \"settings\": {\r\n" +
             "    \"analysis\": {\r\n" +
             "      \"analyzer\": {\r\n" +
-            "        \"alcatraz_tokenized_string\": {\r\n" +
+            "        \"custom_tokenized_string\": {\r\n" +
             "          \"type\": \"custom\",\r\n" +
             "          \"tokenizer\": \"standard\",\r\n" +
             "          \"filter\": [\"standard\", \"lowercase\", \"asciifolding\"]\r\n" +
@@ -204,7 +204,7 @@ class IndexCreator_OS_2_11Test {
         var filters = finalBody.get("settings")
             .get("analysis")
             .get("analyzer")
-            .get("alcatraz_tokenized_string")
+            .get("custom_tokenized_string")
             .get("filter");
         assertThat("filter array should still exist", filters.isArray(), equalTo(true));
         assertThat("filter array size after removal", filters.size(), equalTo(2));
@@ -215,7 +215,7 @@ class IndexCreator_OS_2_11Test {
         assertThat("other filters preserved", remaining, org.hamcrest.Matchers.hasItems("lowercase", "asciifolding"));
         assertThat("tokenizer 'standard' is unrelated and should be preserved",
             finalBody.get("settings").get("analysis").get("analyzer")
-                .get("alcatraz_tokenized_string").get("tokenizer").asText(),
+                .get("custom_tokenized_string").get("tokenizer").asText(),
             equalTo("standard"));
     }
 

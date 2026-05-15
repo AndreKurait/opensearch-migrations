@@ -121,7 +121,7 @@ class EndToEndTest extends BaseMigrationTest {
      * must still migrate successfully. The metadata migration retries after stripping the offending filter
      * from analyzer filter arrays — see InvalidResponse#getRemovedTokenFilters and ObjectNodeUtils#removeAnalyzerFilters.
      * Mirrors the production failure where ES 6 templates declared analyzers like:
-     *   "filter": ["standard", "alcatraz_pattern_capture", "lowercase", "asciifolding", "my_stopwords"]
+     *   "filter": ["standard", "custom_pattern_capture", "lowercase", "asciifolding", "my_stopwords"]
      */
     @Test
     void deprecatedStandardTokenFilter_isStrippedAndIndexCreated() {
@@ -237,13 +237,13 @@ class EndToEndTest extends BaseMigrationTest {
      *   "The [standard] token filter has been removed."
      *
      * The exact analyzer shape from the customer report:
-     *   "alcatraz_tokenized_string": {
-     *     "filter": ["standard", "alcatraz_pattern_capture", "lowercase", "asciifolding", "my_stopwords"],
+     *   "custom_tokenized_string": {
+     *     "filter": ["standard", "custom_pattern_capture", "lowercase", "asciifolding", "my_stopwords"],
      *     "type": "custom",
      *     "tokenizer": "standard"
      *   }
      * with a field:
-     *   "subj": { "type": "text", "norms": false, "analyzer": "alcatraz_tokenized_string" }
+     *   "subj": { "type": "text", "norms": false, "analyzer": "custom_tokenized_string" }
      *
      * This test confirms metadata migrate succeeds (the preemptive analysis-component
      * compatibility transform strips the offending "standard" filter from the analyzer's
@@ -260,11 +260,11 @@ class EndToEndTest extends BaseMigrationTest {
             this.targetCluster = targetCluster;
             startClusters();
 
-            var indexName = "alcatraz-source-disabled-subj";
+            var indexName = "custom-source-disabled-subj";
 
             // Customer-shaped index: _source disabled, custom analyzer with the deprecated
             // "standard" token filter, field "subj" with norms:false referencing it.
-            // Define alcatraz_pattern_capture and my_stopwords inline so the analyzer is
+            // Define custom_pattern_capture and my_stopwords inline so the analyzer is
             // self-contained on the source side. (We omit stopwords_path — that points at
             // a config-dir file that wouldn't exist on the source container either.)
             var indexBody = "{" +
@@ -274,14 +274,14 @@ class EndToEndTest extends BaseMigrationTest {
                 "      \"number_of_replicas\": 0," +
                 "      \"analysis\": {" +
                 "        \"analyzer\": {" +
-                "          \"alcatraz_tokenized_string\": {" +
+                "          \"custom_tokenized_string\": {" +
                 "            \"type\": \"custom\"," +
                 "            \"tokenizer\": \"standard\"," +
-                "            \"filter\": [\"standard\", \"alcatraz_pattern_capture\", \"lowercase\", \"asciifolding\", \"my_stopwords\"]" +
+                "            \"filter\": [\"standard\", \"custom_pattern_capture\", \"lowercase\", \"asciifolding\", \"my_stopwords\"]" +
                 "          }" +
                 "        }," +
                 "        \"filter\": {" +
-                "          \"alcatraz_pattern_capture\": {" +
+                "          \"custom_pattern_capture\": {" +
                 "            \"type\": \"pattern_capture\"," +
                 "            \"preserve_original\": true," +
                 "            \"patterns\": [\"([A-Za-z0-9._%+-]+)@\"]" +
@@ -301,7 +301,7 @@ class EndToEndTest extends BaseMigrationTest {
                 "        \"subj\": {" +
                 "          \"type\": \"text\"," +
                 "          \"norms\": false," +
-                "          \"analyzer\": \"alcatraz_tokenized_string\"" +
+                "          \"analyzer\": \"custom_tokenized_string\"" +
                 "        }," +
                 "        \"from_addr\": {" +
                 "          \"type\": \"keyword\"," +
@@ -317,7 +317,7 @@ class EndToEndTest extends BaseMigrationTest {
             sourceOperations.createDocument(indexName, "2",
                 "{ \"subj\": \"Re: invoice attached\", \"from_addr\": \"bob@example.com\" }");
 
-            var snapshotName = "alcatraz_source_disabled_snap";
+            var snapshotName = "custom_source_disabled_snap";
             createSnapshot(sourceCluster, snapshotName, SnapshotTestContext.factory().noOtelTracking());
             sourceCluster.copySnapshotData(localDirectory.toString());
 
@@ -341,10 +341,10 @@ class EndToEndTest extends BaseMigrationTest {
             assertThat(settingsRes.getValue(), settingsRes.getKey(), equalTo(200));
             var settingsBody = settingsRes.getValue();
             // Must NOT contain the legacy "standard" filter token in the analyzer's filter array.
-            // We do a coarse-grained check that "alcatraz_tokenized_string" no longer references
+            // We do a coarse-grained check that "custom_tokenized_string" no longer references
             // "standard" as a filter — verifying the custom filters survive.
-            assertThat("Custom alcatraz_pattern_capture filter must survive",
-                settingsBody, containsString("alcatraz_pattern_capture"));
+            assertThat("Custom custom_pattern_capture filter must survive",
+                settingsBody, containsString("custom_pattern_capture"));
             assertThat("lowercase must survive", settingsBody, containsString("lowercase"));
             assertThat("asciifolding must survive", settingsBody, containsString("asciifolding"));
             assertThat("my_stopwords must survive", settingsBody, containsString("my_stopwords"));
@@ -365,7 +365,7 @@ class EndToEndTest extends BaseMigrationTest {
             // the analyzer end-to-end and would surface a [standard] filter error.
             var analyzeRes = targetOperations.post(
                 "/" + indexName + "/_analyze",
-                "{ \"analyzer\": \"alcatraz_tokenized_string\", \"text\": \"Hello World\" }"
+                "{ \"analyzer\": \"custom_tokenized_string\", \"text\": \"Hello World\" }"
             );
             assertThat("Analyzer must be usable on target. Response: " + analyzeRes.getValue(),
                 analyzeRes.getKey(), equalTo(200));

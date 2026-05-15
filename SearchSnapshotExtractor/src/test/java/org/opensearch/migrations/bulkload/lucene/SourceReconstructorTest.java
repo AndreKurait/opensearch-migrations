@@ -2009,7 +2009,7 @@ class SourceReconstructorTest {
     // ==========================================================================================
 
     /**
-     * Builds a FieldMappingContext matching the key structure from the enron/alcatraz mapping:
+     * Builds a FieldMappingContext matching the key structure from the test mapping:
      * - iusers.from.user (index:false, doc_values:false, copy_to: users.from.user)
      * - iusers.to.user   (index:false, doc_values:false, copy_to: users.to.user)
      * - users.from.user  (keyword, indexed, doc_values:true) — the copy_to TARGET

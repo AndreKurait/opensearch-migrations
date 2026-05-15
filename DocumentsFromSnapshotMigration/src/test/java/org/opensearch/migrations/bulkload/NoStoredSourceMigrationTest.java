@@ -2263,7 +2263,7 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
      *  4. "subj" (text + norms:false + _source disabled) reconstructs lossy from term
      *     postings — analyzer-normalised tokens preserved, exact bytes are not.
      */
-    @ParameterizedTest(name = "alcatrazSourceDisabledMigration: {0} -> {1}")
+    @ParameterizedTest(name = "customSourceDisabledMigration: {0} -> {1}")
     @MethodSource("es68ToOs2Pair")
     public void testAlcatrazSourceDisabledMigration_subjAndFsubj(
         ContainerVersion sourceVersion, ContainerVersion targetVersion
@@ -2278,7 +2278,7 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
             var sourceOps = new ClusterOperations(sourceCluster);
             var targetOps = new ClusterOperations(targetCluster);
 
-            String indexName = "alcatraz_archive";
+            String indexName = "custom_archive";
             String docType = sourceOps.defaultDocType();
 
             // Customer-shaped index: _source DISABLED, custom analyzer with deprecated
@@ -2290,14 +2290,14 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
                 + "    \"number_of_replicas\":0,"
                 + "    \"analysis\":{"
                 + "      \"analyzer\":{"
-                + "        \"alcatraz_tokenized_string\":{"
+                + "        \"custom_tokenized_string\":{"
                 + "          \"type\":\"custom\","
                 + "          \"tokenizer\":\"standard\","
-                + "          \"filter\":[\"standard\",\"alcatraz_pattern_capture\",\"lowercase\",\"asciifolding\",\"my_stopwords\"]"
+                + "          \"filter\":[\"standard\",\"custom_pattern_capture\",\"lowercase\",\"asciifolding\",\"my_stopwords\"]"
                 + "        }"
                 + "      },"
                 + "      \"filter\":{"
-                + "        \"alcatraz_pattern_capture\":{"
+                + "        \"custom_pattern_capture\":{"
                 + "          \"type\":\"pattern_capture\","
                 + "          \"preserve_original\":true,"
                 + "          \"patterns\":[\"([A-Za-z0-9._%+-]+)@\"]"
@@ -2314,7 +2314,7 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
                 + "  \"" + docType + "\":{"
                 + "    \"_source\":{\"enabled\":false},"
                 + "    \"properties\":{"
-                + "      \"subj\":{\"type\":\"text\",\"norms\":false,\"analyzer\":\"alcatraz_tokenized_string\"},"
+                + "      \"subj\":{\"type\":\"text\",\"norms\":false,\"analyzer\":\"custom_tokenized_string\"},"
                 + "      \"fsubj\":{\"type\":\"keyword\"}"
                 + "    }"
                 + "  }"
@@ -2340,14 +2340,14 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
 
             // Snapshot the source.
             var snapshotCtx = SnapshotTestContext.factory().noOtelTracking();
-            createSnapshot(sourceCluster, "alcatraz_snap", snapshotCtx);
+            createSnapshot(sourceCluster, "custom_snap", snapshotCtx);
             sourceCluster.copySnapshotData(localDirectory.toString());
 
             // Step 1: METADATA MIGRATION. This is where the analysis-component-removal
             // transform strips the deprecated "standard" filter so OS 2 accepts the index.
             var metaArgs = new MigrateOrEvaluateArgs();
             metaArgs.fileSystemRepoPath = localDirectory.getAbsolutePath();
-            metaArgs.snapshotName = "alcatraz_snap";
+            metaArgs.snapshotName = "custom_snap";
             metaArgs.sourceVersion = sourceCluster.getContainerVersion().getVersion();
             metaArgs.targetArgs.host = targetCluster.getUrl();
             metaArgs.enableSourcelessMigrations = true; // _source disabled on the source
@@ -2362,8 +2362,8 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
             // (other filters preserved).
             String settingsResp = targetOps.get("/" + indexName + "/_settings").getValue();
             log.info("Target settings: {}", settingsResp);
-            assertTrue(settingsResp.contains("alcatraz_pattern_capture"),
-                "Custom alcatraz_pattern_capture filter must survive: " + settingsResp);
+            assertTrue(settingsResp.contains("custom_pattern_capture"),
+                "Custom custom_pattern_capture filter must survive: " + settingsResp);
             assertTrue(settingsResp.contains("my_stopwords"),
                 "my_stopwords filter must survive: " + settingsResp);
 
@@ -2377,18 +2377,18 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
             String targetIndexBody = "{"
                 + "\"settings\":{\"number_of_shards\":1,\"number_of_replicas\":0,"
                 + "  \"analysis\":{"
-                + "    \"analyzer\":{\"alcatraz_tokenized_string\":{"
+                + "    \"analyzer\":{\"custom_tokenized_string\":{"
                 + "      \"type\":\"custom\",\"tokenizer\":\"standard\","
-                + "      \"filter\":[\"alcatraz_pattern_capture\",\"lowercase\",\"asciifolding\",\"my_stopwords\"]"
+                + "      \"filter\":[\"custom_pattern_capture\",\"lowercase\",\"asciifolding\",\"my_stopwords\"]"
                 + "    }},"
                 + "    \"filter\":{"
-                + "      \"alcatraz_pattern_capture\":{\"type\":\"pattern_capture\",\"preserve_original\":true,\"patterns\":[\"([A-Za-z0-9._%+-]+)@\"]},"
+                + "      \"custom_pattern_capture\":{\"type\":\"pattern_capture\",\"preserve_original\":true,\"patterns\":[\"([A-Za-z0-9._%+-]+)@\"]},"
                 + "      \"my_stopwords\":{\"type\":\"stop\",\"stopwords\":[\"the\",\"a\",\"an\"]}"
                 + "    }"
                 + "  }"
                 + "},"
                 + "\"mappings\":{\"properties\":{"
-                + "  \"subj\":{\"type\":\"text\",\"norms\":false,\"analyzer\":\"alcatraz_tokenized_string\"},"
+                + "  \"subj\":{\"type\":\"text\",\"norms\":false,\"analyzer\":\"custom_tokenized_string\"},"
                 + "  \"fsubj\":{\"type\":\"keyword\"}"
                 + "}}}";
             targetOps.createIndex(indexName, targetIndexBody);
@@ -2400,7 +2400,7 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
             var docCtx = DocumentMigrationTestContext.factory().noOtelTracking();
 
             waitForRfsCompletion(() -> SourcelessMigrationTest.migrateDocumentsSequentiallyWithSourceless(
-                sourceRepo, "alcatraz_snap", List.of(indexName), targetCluster,
+                sourceRepo, "custom_snap", List.of(indexName), targetCluster,
                 new AtomicInteger(), new Random(1), docCtx,
                 sourceCluster.getContainerVersion().getVersion(),
                 targetCluster.getContainerVersion().getVersion()
