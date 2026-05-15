@@ -1728,6 +1728,45 @@ class SourceReconstructorTest {
     }
 
     @Test
+    void mergeWithDocValues_overSplitPerElementList_coalescesTailingBucketsIntoLastElement() throws IOException {
+        // Simulates a small position_increment_gap (e.g. 5) that over-splits: the splitter
+        // produced 4 buckets but the seed only has 3 elements. The first 2 buckets map to
+        // elements [0] and [1]; the remaining 2 buckets are coalesced into element [2] with
+        // a single space between them.
+        var reader = mock(LuceneLeafReader.class);
+        when(reader.getDocValueFields()).thenReturn(Collections.emptyList());
+        // files.content: text field, 4 position-gap buckets for a 3-element array
+        when(reader.getValueFromPointsOrTerms(
+                org.mockito.ArgumentMatchers.eq(0),
+                org.mockito.ArgumentMatchers.eq("files.content"),
+                org.mockito.ArgumentMatchers.eq(EsFieldType.STRING),
+                org.mockito.ArgumentMatchers.any()))
+            .thenReturn(Optional.of(new RecoveredValue.TextTermList(
+                List.of("hello world", "foo bar", "baz qux", "trailing stuff"))));
+        when(reader.getValueFromPointsOrTerms(
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.argThat(s -> !"files.content".equals(s)),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()))
+            .thenReturn(Optional.empty());
+
+        var ctx = contextOfMany(java.util.Map.of(
+            "files.content", mapping(EsFieldType.STRING, "text"),
+            "files.name", mapping(EsFieldType.STRING, "keyword")
+        ));
+
+        // 3-element seed; files.content has 4 buckets (over-split) → last 2 merge into element[2]
+        String seed = "{\"files\":[{\"name\":\"a.txt\"},{\"name\":\"b.pdf\"},{\"name\":\"c.bin\"}]}";
+        String merged = SourceReconstructor.mergeWithDocValues(seed, reader, 0, document(), ctx);
+        JsonNode files = MAPPER.readTree(merged).path("files");
+        assertEquals(3, files.size(), "array size preserved: " + merged);
+        assertEquals("hello world", files.get(0).path("content").asText(), "element 0: " + merged);
+        assertEquals("foo bar", files.get(1).path("content").asText(), "element 1: " + merged);
+        assertEquals("baz qux trailing stuff", files.get(2).path("content").asText(),
+            "element 2 gets coalesced tail (last 2 buckets joined with space): " + merged);
+    }
+
+    @Test
     void mergeWithDocValues_scalarBroadcast_appliesToEveryElement() throws IOException {
         // A single-valued doc_value (NUMERIC, not SORTED_NUMERIC) against a multi-element
         // object-array seed broadcasts to every element. Real-world case: every file in the
