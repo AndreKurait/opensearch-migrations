@@ -1316,9 +1316,9 @@ class SourceReconstructorTest {
         // Jugal review: pass-5 reverse-derivation should iterate only fields that declare
         // copy_to, not the whole mapping. Verify the new accessor returns exactly that set.
         var ctx = contextFromJson(
-            "{\"from\":{\"type\":\"keyword\",\"copy_to\":\"users.from\"},"
-            + "\"sender\":{\"type\":\"text\",\"copy_to\":[\"users.sender\",\"users.all\"]},"
-            + "\"subject\":{\"type\":\"keyword\"}," // NO copy_to
+            "{\"from\":{\"type\":\"keyword\",\"copy_to\":\"search_targets.from\"},"
+            + "\"sender\":{\"type\":\"text\",\"copy_to\":[\"search_targets.sender\",\"search_targets.all\"]},"
+            + "\"titleect\":{\"type\":\"keyword\"}," // NO copy_to
             + "\"body\":{\"type\":\"text\"}," // NO copy_to
             + "\"users\":{\"properties\":{"
             + "\"from\":{\"type\":\"keyword\"},"
@@ -1350,17 +1350,17 @@ class SourceReconstructorTest {
     @Test
     void fieldMappingContext_parsesCopyToArray() {
         var ctx = contextFromJson(
-            "{\"from\":{\"type\":\"keyword\",\"copy_to\":[\"users.from\",\"users.all\"]},"
+            "{\"from\":{\"type\":\"keyword\",\"copy_to\":[\"search_targets.from\",\"search_targets.all\"]},"
             + "\"users\":{\"properties\":{"
             + "\"from\":{\"type\":\"keyword\"},"
             + "\"all\":{\"type\":\"text\"}"
             + "}}}"
         );
-        assertTrue(ctx.isCopyToTarget("users.from"));
-        assertTrue(ctx.isCopyToTarget("users.all"));
+        assertTrue(ctx.isCopyToTarget("search_targets.from"));
+        assertTrue(ctx.isCopyToTarget("search_targets.all"));
         // Ranking: keyword target should come BEFORE text target (lossiness).
         List<String> ranked = ctx.getCopyToTargets("from");
-        assertEquals(List.of("users.from", "users.all"), ranked,
+        assertEquals(List.of("search_targets.from", "search_targets.all"), ranked,
             "keyword target must rank before text target: " + ranked);
     }
 
@@ -1368,28 +1368,28 @@ class SourceReconstructorTest {
     void fieldMappingContext_copyToRankingPrefersKeywordOverText() {
         // Mapping declares targets in text-first order; ranking must still place keyword first.
         var ctx = contextFromJson(
-            "{\"from\":{\"type\":\"keyword\",\"copy_to\":[\"users.all\",\"users.from\"]},"
+            "{\"from\":{\"type\":\"keyword\",\"copy_to\":[\"search_targets.all\",\"search_targets.from\"]},"
             + "\"users\":{\"properties\":{"
             + "\"all\":{\"type\":\"text\"},"
             + "\"from\":{\"type\":\"keyword\"}"
             + "}}}"
         );
         List<String> ranked = ctx.getCopyToTargets("from");
-        assertEquals(List.of("users.from", "users.all"), ranked,
+        assertEquals(List.of("search_targets.from", "search_targets.all"), ranked,
             "keyword target must outrank text target regardless of declaration order: " + ranked);
     }
 
     @Test
     void shouldSkipField_copyToTargets_strippedFromOutput() {
-        // Source field `from` has copy_to ["users.all"]. Both are present in the segment as
+        // Source field `from` has copy_to ["search_targets.all"]. Both are present in the segment as
         // stored fields. The reconstruction must emit `from` but NOT `users.all`.
         var reader = storedOnlyReader();
         var doc = document(
             storedString("from", "joe@example.com"),
-            storedString("users.all", "joe@example.com")
+            storedString("search_targets.all", "joe@example.com")
         );
         var ctx = contextFromJson(
-            "{\"from\":{\"type\":\"keyword\",\"copy_to\":\"users.all\"},"
+            "{\"from\":{\"type\":\"keyword\",\"copy_to\":\"search_targets.all\"},"
             + "\"users\":{\"properties\":{\"all\":{\"type\":\"text\"}}}}"
         );
         String json = SourceReconstructor.reconstructSource(reader, 0, doc, ctx);
@@ -1409,11 +1409,11 @@ class SourceReconstructorTest {
         // Reconstruction must pull the value from the target and emit it under the source's path.
         var reader = storedOnlyReader();
         var doc = document(
-            storedString("users.from", "joe@example.com")
+            storedString("search_targets.from", "joe@example.com")
             // NOTE: no stored field for `from`.
         );
         var ctx = contextFromJson(
-            "{\"from\":{\"type\":\"keyword\",\"copy_to\":\"users.from\"},"
+            "{\"from\":{\"type\":\"keyword\",\"copy_to\":\"search_targets.from\"},"
             + "\"users\":{\"properties\":{\"from\":{\"type\":\"keyword\"}}}}"
         );
         String json = SourceReconstructor.reconstructSource(reader, 0, doc, ctx);
@@ -1433,11 +1433,11 @@ class SourceReconstructorTest {
         // Both carry data for this doc. Reconstruction must pick the keyword target.
         var reader = storedOnlyReader();
         var doc = document(
-            storedString("users.from", "joe@example.com"),
-            storedString("users.all", "joe@example.com mary@example.com")
+            storedString("search_targets.from", "joe@example.com"),
+            storedString("search_targets.all", "joe@example.com mary@example.com")
         );
         var ctx = contextFromJson(
-            "{\"from\":{\"type\":\"keyword\",\"copy_to\":[\"users.all\",\"users.from\"]},"
+            "{\"from\":{\"type\":\"keyword\",\"copy_to\":[\"search_targets.all\",\"search_targets.from\"]},"
             + "\"users\":{\"properties\":{"
             + "\"from\":{\"type\":\"keyword\"},"
             + "\"all\":{\"type\":\"text\"}"
@@ -1455,10 +1455,10 @@ class SourceReconstructorTest {
         // (Per Andre: "Probe anything including text, accept tokenized-garbage".)
         var reader = storedOnlyReader();
         var doc = document(
-            storedString("users.all", "joe@example.com mary@example.com")
+            storedString("search_targets.all", "joe@example.com mary@example.com")
         );
         var ctx = contextFromJson(
-            "{\"from\":{\"type\":\"keyword\",\"copy_to\":[\"users.from\",\"users.all\"]},"
+            "{\"from\":{\"type\":\"keyword\",\"copy_to\":[\"search_targets.from\",\"search_targets.all\"]},"
             + "\"users\":{\"properties\":{"
             + "\"from\":{\"type\":\"keyword\"},"
             + "\"all\":{\"type\":\"text\"}"
@@ -1478,10 +1478,10 @@ class SourceReconstructorTest {
         var reader = storedOnlyReader();
         var doc = document(
             storedString("from", "original@source.com"),
-            storedString("users.from", "wrong@target.com")
+            storedString("search_targets.from", "wrong@target.com")
         );
         var ctx = contextFromJson(
-            "{\"from\":{\"type\":\"keyword\",\"copy_to\":\"users.from\"},"
+            "{\"from\":{\"type\":\"keyword\",\"copy_to\":\"search_targets.from\"},"
             + "\"users\":{\"properties\":{\"from\":{\"type\":\"keyword\"}}}}"
         );
         String json = SourceReconstructor.reconstructSource(reader, 0, doc, ctx);
@@ -1503,7 +1503,7 @@ class SourceReconstructorTest {
         // and no exception is thrown.
         var reader = mock(LuceneLeafReader.class);
         var info = new DocValueFieldInfo.Simple(
-                "users.from", DocValueFieldInfo.DocValueType.SORTED_SET, false);
+                "search_targets.from", DocValueFieldInfo.DocValueType.SORTED_SET, false);
         when(reader.getDocValueFields()).thenReturn(List.of(info));
         when(reader.getDocValue(org.mockito.ArgumentMatchers.anyInt(),
                 org.mockito.ArgumentMatchers.eq(info)))
@@ -1515,7 +1515,7 @@ class SourceReconstructorTest {
             .thenReturn(Optional.empty());
 
         var ctx = contextFromJson(
-            "{\"from\":{\"type\":\"keyword\",\"copy_to\":\"users.from\"},"
+            "{\"from\":{\"type\":\"keyword\",\"copy_to\":\"search_targets.from\"},"
             + "\"users\":{\"properties\":{\"from\":{\"type\":\"keyword\"}}}}"
         );
 
@@ -1578,7 +1578,7 @@ class SourceReconstructorTest {
 
     @Test
     void mergeWithDocValues_distributesSubfield_intoSeededObjectArray() throws IOException {
-        // Reproduces the enron2_archive.av5 case: seed _source carries `files` as List<Map> with
+        // Reproduces the case where seed _source carries `files` as List<Map> with
         // the non-excluded subfield `cksum`, and `files.size` arrives via multi-valued doc_values.
         // Expected: `size` distributes positionally into each array element.
         var reader = multiDocValueReader(java.util.Map.of(
@@ -2010,59 +2010,59 @@ class SourceReconstructorTest {
 
     /**
      * Builds a FieldMappingContext matching the key structure from the test mapping:
-     * - iusers.from.user (index:false, doc_values:false, copy_to: users.from.user)
-     * - iusers.to.user   (index:false, doc_values:false, copy_to: users.to.user)
+     * - internal.from.user (index:false, doc_values:false, copy_to: users.from.user)
+     * - internal.to.user   (index:false, doc_values:false, copy_to: users.to.user)
      * - users.from.user  (keyword, indexed, doc_values:true) — the copy_to TARGET
      * - users.to.user    (keyword, indexed, doc_values:true) — the copy_to TARGET
-     * - texts.user.content   (text, analyzed) — excluded from _source
-     * - texts.user.attrvals  (text, index:false, copy_to: texts.user.content) — excluded from _source
-     * - subj (text, analyzed) — excluded from _source
+     * - body.main.content   (text, analyzed) — excluded from _source
+     * - body.main.raw  (text, index:false, copy_to: body.main.content) — excluded from _source
+     * - title (text, analyzed) — excluded from _source
      */
-    private static FieldMappingContext enronLikeContext() {
+    private static FieldMappingContext copyToWithSourceExcludesContext() {
         return contextFromJsonWithSourceFilter(
             "{"
-            // iusers source fields — index:false, doc_values:false, copy_to targets
-            + "\"iusers\":{\"properties\":{"
-            + "  \"from\":{\"properties\":{\"user\":{\"type\":\"keyword\",\"index\":false,\"doc_values\":false,\"copy_to\":\"users.from.user\"}}},"
-            + "  \"to\":{\"properties\":{\"user\":{\"type\":\"keyword\",\"index\":false,\"doc_values\":false,\"copy_to\":\"users.to.user\"}}}"
+            // internal source fields — index:false, doc_values:false, copy_to targets
+            + "\"internal\":{\"properties\":{"
+            + "  \"from\":{\"properties\":{\"user\":{\"type\":\"keyword\",\"index\":false,\"doc_values\":false,\"copy_to\":\"search_targets.from.user\"}}},"
+            + "  \"to\":{\"properties\":{\"user\":{\"type\":\"keyword\",\"index\":false,\"doc_values\":false,\"copy_to\":\"search_targets.to.user\"}}}"
             + "}},"
-            // eusers source fields — same pattern
-            + "\"eusers\":{\"properties\":{"
-            + "  \"from\":{\"properties\":{\"user\":{\"type\":\"keyword\",\"index\":false,\"doc_values\":false,\"copy_to\":\"users.from.user\"}}}"
+            // external source fields — same pattern
+            + "\"external\":{\"properties\":{"
+            + "  \"from\":{\"properties\":{\"user\":{\"type\":\"keyword\",\"index\":false,\"doc_values\":false,\"copy_to\":\"search_targets.from.user\"}}}"
             + "}},"
             // users — the copy_to TARGETS (indexed, doc_values)
             + "\"users\":{\"properties\":{"
             + "  \"from\":{\"properties\":{\"user\":{\"type\":\"keyword\"}}},"
             + "  \"to\":{\"properties\":{\"user\":{\"type\":\"keyword\"}}}"
             + "}},"
-            // texts — excluded from source; content is indexed text, attrvals copies to content
-            + "\"texts\":{\"properties\":{"
+            // body — excluded from source; content is indexed text, attrvals copies to content
+            + "\"body\":{\"properties\":{"
             + "  \"user\":{\"properties\":{"
             + "    \"content\":{\"type\":\"text\",\"norms\":false},"
-            + "    \"attrvals\":{\"type\":\"text\",\"index\":false,\"copy_to\":\"texts.user.content\"}"
+            + "    \"attrvals\":{\"type\":\"text\",\"index\":false,\"copy_to\":\"body.main.content\"}"
             + "  }}"
             + "}},"
-            // subj — excluded text field
-            + "\"subj\":{\"type\":\"text\",\"norms\":false}"
+            // title — excluded text field
+            + "\"title\":{\"type\":\"text\",\"norms\":false}"
             + "}",
             // _source.excludes
-            "{\"excludes\":[\"subj\",\"texts\"]}"
+            "{\"excludes\":[\"title\",\"body\"]}"
         );
     }
 
     @Test
-    void enronMapping_copyToTargets_neverLeakIntoSource() throws IOException {
-        // Bug: the reconstructor emits `iusers.to`, `iusers.cc`, `eusers.from` etc. in the
+    void copyToTargets_neverLeakIntoSource() throws IOException {
+        // Bug: the reconstructor emits `internal.to`, `internal.cc`, `external.from` etc. in the
         // output — these are index:false/doc_values:false fields whose values exist ONLY in
         // _source. The copy_to targets (users.to.user etc.) have doc_values data, but reverse-
-        // derivation should NOT write into iusers/eusers when those source fields are already
+        // derivation should NOT write into internal/external when those source fields are already
         // present in the partial _source seed (they're NOT in _source.excludes).
         var reader = mock(LuceneLeafReader.class);
         // users.from.user has doc_values (it's the copy_to target)
         var usersFromInfo = new DocValueFieldInfo.Simple(
-                "users.from.user", DocValueFieldInfo.DocValueType.SORTED_SET, false);
+                "search_targets.from.user", DocValueFieldInfo.DocValueType.SORTED_SET, false);
         var usersToInfo = new DocValueFieldInfo.Simple(
-                "users.to.user", DocValueFieldInfo.DocValueType.SORTED_SET, false);
+                "search_targets.to.user", DocValueFieldInfo.DocValueType.SORTED_SET, false);
         when(reader.getDocValueFields()).thenReturn(List.of(usersFromInfo, usersToInfo));
         when(reader.getDocValue(org.mockito.ArgumentMatchers.eq(0),
                 org.mockito.ArgumentMatchers.eq(usersFromInfo)))
@@ -2076,49 +2076,49 @@ class SourceReconstructorTest {
                 org.mockito.ArgumentMatchers.any()))
             .thenReturn(Optional.empty());
 
-        var ctx = enronLikeContext();
+        var ctx = copyToWithSourceExcludesContext();
 
-        // Partial _source seed: iusers.from and eusers.to are in _source (NOT excluded)
-        String seed = "{\"iusers\":{\"from\":[{\"user\":\"alice@example.com\"}]}"
-                + ",\"eusers\":{\"from\":[{\"user\":\"alice@example.com\"}]}}";
+        // Partial _source seed: internal.from and external.to are in _source (NOT excluded)
+        String seed = "{\"internal\":{\"from\":[{\"user\":\"alice@example.com\"}]}"
+                + ",\"external\":{\"from\":[{\"user\":\"alice@example.com\"}]}}";
         String merged = SourceReconstructor.mergeWithDocValues(seed, reader, 0, document(), ctx);
         JsonNode tree = MAPPER.readTree(merged);
 
-        // iusers.to must NOT appear — it wasn't in the seed, and it's index:false/dv:false
+        // internal.to must NOT appear — it wasn't in the seed, and it's index:false/dv:false
         // so there's no Lucene data to recover it from. Reverse-derivation from users.to.user
-        // should NOT write into iusers.to.
-        assertTrue(tree.path("iusers").path("to").isMissingNode(),
-            "iusers.to must not be reverse-derived from copy_to target: " + merged);
+        // should NOT write into internal.to.
+        assertTrue(tree.path("internal").path("to").isMissingNode(),
+            "internal.to must not be reverse-derived from copy_to target: " + merged);
 
         // users.from and users.to are copy_to TARGETS — must NOT appear in _source
         assertTrue(tree.path("users").isMissingNode(),
-            "users.* copy_to targets must never appear in reconstructed _source: " + merged);
+            "search_targets.* copy_to targets must never appear in reconstructed _source: " + merged);
 
         // The seed values must be preserved
         assertEquals("alice@example.com",
-            tree.path("iusers").path("from").get(0).path("user").asText(),
-            "seed iusers.from preserved: " + merged);
+            tree.path("internal").path("from").get(0).path("user").asText(),
+            "seed internal.from preserved: " + merged);
     }
 
     @Test
-    void enronMapping_sourceExcludedTextField_reverseDerivesIntoAttrvals() throws IOException {
-        // texts.user.attrvals (index:false, copy_to: texts.user.content) is the source field
-        // that appeared in the original _source. texts.user.content is the copy_to TARGET
+    void sourceExcludedCopyToSource_reverseDerivesFromTarget() throws IOException {
+        // body.main.raw (index:false, copy_to: body.main.content) is the source field
+        // that appeared in the original _source. body.main.content is the copy_to TARGET
         // (indexed, searchable). Reverse-derivation reads from the target and writes into the
         // source — so attrvals appears in the output, not content.
         var reader = mock(LuceneLeafReader.class);
         when(reader.getDocValueFields()).thenReturn(Collections.emptyList());
-        // texts.user.content is indexed — tier-3 fallback recovers analyzed tokens from it
+        // body.main.content is indexed — tier-3 fallback recovers analyzed tokens from it
         when(reader.getValueFromPointsOrTerms(
                 org.mockito.ArgumentMatchers.eq(0),
-                org.mockito.ArgumentMatchers.eq("texts.user.content"),
+                org.mockito.ArgumentMatchers.eq("body.main.content"),
                 org.mockito.ArgumentMatchers.eq(EsFieldType.STRING),
                 org.mockito.ArgumentMatchers.any()))
             .thenReturn(Optional.of(new RecoveredValue.TextTerm("lucy here few questions")));
-        // subj is a directly indexed text field (not a copy_to target) — recovers directly
+        // title is a directly indexed text field (not a copy_to target) — recovers directly
         when(reader.getValueFromPointsOrTerms(
                 org.mockito.ArgumentMatchers.eq(0),
-                org.mockito.ArgumentMatchers.eq("subj"),
+                org.mockito.ArgumentMatchers.eq("title"),
                 org.mockito.ArgumentMatchers.eq(EsFieldType.STRING),
                 org.mockito.ArgumentMatchers.any()))
             .thenReturn(Optional.of(new RecoveredValue.TextTerm("bishops corner ltd buyout")));
@@ -2126,31 +2126,31 @@ class SourceReconstructorTest {
         when(reader.getValueFromPointsOrTerms(
                 org.mockito.ArgumentMatchers.anyInt(),
                 org.mockito.ArgumentMatchers.argThat(s ->
-                    !"texts.user.content".equals(s) && !"subj".equals(s)),
+                    !"body.main.content".equals(s) && !"title".equals(s)),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any()))
             .thenReturn(Optional.empty());
 
-        var ctx = enronLikeContext();
+        var ctx = copyToWithSourceExcludesContext();
 
         // Partial seed: only non-excluded fields present (e.g. gcid)
         String seed = "{\"gcid\":\"abc123\"}";
         String merged = SourceReconstructor.mergeWithDocValues(seed, reader, 0, document(), ctx);
         JsonNode tree = MAPPER.readTree(merged);
 
-        // texts.user.attrvals gets the value via reverse-derivation from texts.user.content
+        // body.main.raw gets the value via reverse-derivation from body.main.content
         assertEquals("lucy here few questions",
-            tree.path("texts").path("user").path("attrvals").asText(),
-            "texts.user.attrvals must be reverse-derived from copy_to target: " + merged);
+            tree.path("body").path("user").path("attrvals").asText(),
+            "body.main.raw must be reverse-derived from copy_to target: " + merged);
 
-        // texts.user.content must NOT appear — it's a copy_to target, never in original _source
-        assertTrue(tree.path("texts").path("user").path("content").isMissingNode(),
-            "texts.user.content (copy_to target) must not appear in output: " + merged);
+        // body.main.content must NOT appear — it's a copy_to target, never in original _source
+        assertTrue(tree.path("body").path("user").path("content").isMissingNode(),
+            "body.main.content (copy_to target) must not appear in output: " + merged);
 
-        // subj is directly recoverable (not a copy_to target, just source-excluded)
+        // title is directly recoverable (not a copy_to target, just source-excluded)
         assertEquals("bishops corner ltd buyout",
-            tree.path("subj").asText(),
-            "subj must be reconstructed directly from inverted index: " + merged);
+            tree.path("title").asText(),
+            "title must be reconstructed directly from inverted index: " + merged);
 
         // Seed fields preserved
         assertEquals("abc123", tree.path("gcid").asText());

@@ -2265,7 +2265,7 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
      */
     @ParameterizedTest(name = "customSourceDisabledMigration: {0} -> {1}")
     @MethodSource("es68ToOs2Pair")
-    public void testAlcatrazSourceDisabledMigration_subjAndFsubj(
+    public void testSourceDisabledWithAnalyzerMigration_subjAndFsubj(
         ContainerVersion sourceVersion, ContainerVersion targetVersion
     ) throws Exception {
         try (
