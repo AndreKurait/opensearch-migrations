@@ -293,17 +293,31 @@ function processBody(body, removed, renames) {
     }
 }
 
-function readContext(context) {
-    if (context == null) return { removed: {}, renames: {} };
-    if (context instanceof Map) {
-        return {
-            removed: context.get('removed') || {},
-            renames: context.get('renames') || {},
-        };
+/** Recursively flatten a Map (or nested Map) into a plain JS object so callers can use
+ *  property-style access. Arrays are preserved; primitives pass through. */
+function mapsToPlainObject(value) {
+    if (value == null) return value;
+    if (value instanceof Map) {
+        const out = {};
+        for (const [k, v] of value.entries()) out[k] = mapsToPlainObject(v);
+        return out;
     }
+    if (Array.isArray(value)) {
+        return value.map(mapsToPlainObject);
+    }
+    if (typeof value === 'object') {
+        const out = {};
+        for (const k of Object.keys(value)) out[k] = mapsToPlainObject(value[k]);
+        return out;
+    }
+    return value;
+}
+
+function readContext(context) {
+    const plain = mapsToPlainObject(context) || {};
     return {
-        removed: context.removed || {},
-        renames: context.renames || {},
+        removed: plain.removed || {},
+        renames: plain.renames || {},
     };
 }
 
