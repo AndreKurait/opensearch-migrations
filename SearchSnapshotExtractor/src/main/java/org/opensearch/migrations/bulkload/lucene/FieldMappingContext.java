@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +53,8 @@ public class FieldMappingContext {
     // drop matching paths.
     private final List<String> sourceIncludes = new ArrayList<>();
     private final List<String> sourceExcludes = new ArrayList<>();
+    private final List<Predicate<String>> compiledIncludes = new ArrayList<>();
+    private final List<Predicate<String>> compiledExcludes = new ArrayList<>();
 
     public FieldMappingContext(JsonNode mappingsNode) {
         if (mappingsNode == null) {
@@ -134,6 +137,32 @@ public class FieldMappingContext {
         }
         collectStrings(sourceNode.path("includes"), sourceIncludes::add);
         collectStrings(sourceNode.path("excludes"), sourceExcludes::add);
+        for (String glob : sourceIncludes) compiledIncludes.add(compileGlob(glob));
+        for (String glob : sourceExcludes) compiledExcludes.add(compileGlob(glob));
+    }
+
+    private static Predicate<String> compileGlob(String glob) {
+        if ("*".equals(glob)) return path -> true;
+        if (glob.endsWith(".**")) {
+            String prefix = glob.substring(0, glob.length() - 2);
+            return path -> path.startsWith(prefix);
+        }
+        if (glob.endsWith(".*")) {
+            String prefix = glob.substring(0, glob.length() - 1);
+            return path -> path.startsWith(prefix);
+        }
+        if (glob.indexOf('*') < 0 && glob.indexOf('?') < 0) {
+            String dotPrefix = glob + ".";
+            return path -> path.equals(glob) || path.startsWith(dotPrefix);
+        }
+        int firstStar = glob.indexOf('*');
+        if (firstStar >= 0 && glob.indexOf('*', firstStar + 1) < 0 && glob.indexOf('?') < 0) {
+            String prefix = glob.substring(0, firstStar);
+            String suffix = glob.substring(firstStar + 1);
+            int minLen = prefix.length() + suffix.length();
+            return path -> path.length() >= minLen && path.startsWith(prefix) && path.endsWith(suffix);
+        }
+        return path -> path.equals(glob);
     }
 
     private static void collectStrings(JsonNode node, Consumer<String> sink) {
@@ -328,61 +357,25 @@ public class FieldMappingContext {
      * need to know which rule fired.
      */
     public boolean isSourceExcluded(String fieldPath) {
-        if (sourcesByTarget.isEmpty() && sourceIncludes.isEmpty() && sourceExcludes.isEmpty()) {
+        if (sourcesByTarget.isEmpty() && compiledIncludes.isEmpty() && compiledExcludes.isEmpty()) {
             return false;
         }
-        // Copy_to targets that are also source-excluded are real indexed fields needing
-        // reconstruction (e.g. texts.user.content receives copy_to data AND has its own
-        // indexed content). Don't suppress those — let them be recovered from Lucene.
         if (isCopyToTarget(fieldPath)) {
-            return !matchesAnyGlob(sourceExcludes, fieldPath);
+            return !matchesAny(compiledExcludes, fieldPath);
         }
-        if (matchesAnyGlob(sourceExcludes, fieldPath)) {
+        if (matchesAny(compiledExcludes, fieldPath)) {
             return true;
         }
-        if (!sourceIncludes.isEmpty()) {
-            return !matchesAnyGlob(sourceIncludes, fieldPath);
+        if (!compiledIncludes.isEmpty()) {
+            return !matchesAny(compiledIncludes, fieldPath);
         }
         return false;
     }
 
-    private static boolean matchesAnyGlob(List<String> globs, String path) {
-        for (String glob : globs) {
-            if (matchesGlob(glob, path)) {
-                return true;
-            }
+    private static boolean matchesAny(List<Predicate<String>> predicates, String path) {
+        for (Predicate<String> p : predicates) {
+            if (p.test(path)) return true;
         }
         return false;
-    }
-
-    private static boolean matchesGlob(String glob, String path) {
-        if ("*".equals(glob)) {
-            return true;
-        }
-        if (glob.endsWith(".**")) {
-            return path.startsWith(glob.substring(0, glob.length() - 2));
-        }
-        if (glob.endsWith(".*")) {
-            return path.startsWith(glob.substring(0, glob.length() - 1));
-        }
-        // ES semantics: a plain name like "texts" in _source.excludes matches the field
-        // itself AND all dotted sub-paths (texts.user.content, texts.sys.attrs, etc.)
-        if (glob.indexOf('*') < 0 && glob.indexOf('?') < 0) {
-            return path.equals(glob) || path.startsWith(glob + ".");
-        }
-        // Bare `*` wildcards (no dot delimiter): support common single-`*` patterns
-        // matching ES _source.includes/excludes semantics — `prefix*`, `*suffix`,
-        // `prefix*suffix`. Multi-`*` patterns (or `?`) fall through to literal match.
-        int firstStar = glob.indexOf('*');
-        if (firstStar >= 0 && glob.indexOf('*', firstStar + 1) < 0 && glob.indexOf('?') < 0) {
-            String prefix = glob.substring(0, firstStar);
-            String suffix = glob.substring(firstStar + 1);
-            return path.length() >= prefix.length() + suffix.length()
-                && path.startsWith(prefix) && path.endsWith(suffix);
-        }
-        if (glob.indexOf('*') >= 0 || glob.indexOf('?') >= 0) {
-            log.debug("Unsupported source-filter glob '{}', treating as literal", glob);
-        }
-        return path.equals(glob);
     }
 }
