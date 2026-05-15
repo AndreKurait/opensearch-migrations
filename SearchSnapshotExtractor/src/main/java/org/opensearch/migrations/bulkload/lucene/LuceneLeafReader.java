@@ -34,6 +34,22 @@ public interface LuceneLeafReader {
     public String getSegmentInfoString();
 
     /**
+     * Creates an independent reader view backed by the same underlying segment data.
+     * <p>
+     * The new view shares the on-disk segment files but maintains its own per-instance
+     * mutable caches — most importantly, its own DocValues iterators populated by
+     * {@link #initDocValueIterators(Iterable)}. This is the primitive that lets
+     * {@link LuceneReader#readDocsFromSegment} run N parallel workers against a single
+     * segment, each with its own forward-only iterator cursors, while keeping the
+     * per-segment open cost paid only once.
+     * <p>
+     * Two views over the same underlying reader must be safe to advance concurrently
+     * provided each view sees a strictly-ascending docId subsequence (round-robin
+     * partitioning satisfies this).
+     */
+    LuceneLeafReader newView();
+
+    /**
      * Returns field information for all fields with doc_values.
      * Default implementation returns empty iterable for backward compatibility.
      */

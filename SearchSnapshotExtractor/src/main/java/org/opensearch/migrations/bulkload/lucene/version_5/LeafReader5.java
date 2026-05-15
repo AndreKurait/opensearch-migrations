@@ -45,6 +45,11 @@ public class LeafReader5 implements LuceneLeafReader {
         this.liveDocs = convertLiveDocs(wrapped.getLiveDocs());
     }
 
+    @Override
+    public LuceneLeafReader newView() {
+        return new LeafReader5(wrapped);
+    }
+
     private static BitSetConverter.FixedLengthBitSet convertLiveDocs(Bits bits) {
         return BitSetConverter.convert(
             bits,

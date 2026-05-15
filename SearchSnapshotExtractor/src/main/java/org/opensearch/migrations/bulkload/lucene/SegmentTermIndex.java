@@ -48,7 +48,7 @@ import shadow.lucene10.org.apache.lucene.util.IOUtils;
  * <p>Thread-safety: Lucene TermsEnum / PostingsEnum instances are not safe for
  * concurrent access. Access to the underlying maps and build phase is serialized
  * via {@code synchronized} to protect against the per-document concurrent reads
- * within a segment's Flux (see {@link LuceneReader#SEGMENT_READ_CONCURRENCY}).
+ * within a segment's Flux (see {@link LuceneReader#READER_PARALLELISM}).
  * Once a field's {@link SidecarReader} has been built, its {@link SidecarReader#get(int)}
  * is lock-free and safe for concurrent readers — the {@code synchronized} is
  * only needed to protect the build.
