@@ -100,19 +100,23 @@ public class LeafReader6 implements LuceneLeafReader {
             .toString();
     }
 
+    private volatile List<DocValueFieldInfo> cachedDocValueFields;
+
     @Override
     public Iterable<DocValueFieldInfo> getDocValueFields() {
+        List<DocValueFieldInfo> cached = cachedDocValueFields;
+        if (cached != null) return cached;
         List<DocValueFieldInfo> fields = new ArrayList<>();
         for (FieldInfo fieldInfo : wrapped.getFieldInfos()) {
             DocValueFieldInfo.DocValueType dvType = convertDocValuesType(fieldInfo.getDocValuesType());
-            log.atDebug().setMessage("Field {} has docValuesType {} -> {}").addArgument(fieldInfo.name).addArgument(fieldInfo.getDocValuesType()).addArgument(dvType).log();
             if (dvType != DocValueFieldInfo.DocValueType.NONE) {
-                boolean isBoolean = dvType == DocValueFieldInfo.DocValueType.SORTED_NUMERIC 
+                boolean isBoolean = dvType == DocValueFieldInfo.DocValueType.SORTED_NUMERIC
                     && DocValueFieldInfo.hasOnlyBooleanTerms(getFieldTermsInternal(fieldInfo.name));
                 fields.add(new DocValueFieldInfo.Simple(fieldInfo.name, dvType, isBoolean));
             }
         }
-        return fields;
+        cachedDocValueFields = Collections.unmodifiableList(fields);
+        return cachedDocValueFields;
     }
 
     private List<String> getFieldTermsInternal(String fieldName) {
