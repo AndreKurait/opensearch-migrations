@@ -276,13 +276,32 @@ public class SourceReconstructor {
                                                         Object value, String fieldName) {
         if (value instanceof java.util.List<?> valueList) {
             if (valueList.size() > list.size()) {
-                log.atWarn()
-                    .setMessage("Cannot distribute '{}' across object array: got {} values for {} elements; dropping recovered value")
-                    .addArgument(fieldName)
-                    .addArgument(valueList.size())
-                    .addArgument(list.size())
-                    .log();
-                return false;
+                if (valueList instanceof PerElementList) {
+                    // Over-split from position-gap detection (e.g. small position_increment_gap
+                    // caused false splits within a single array element). Keep first N-1 splits
+                    // as separate elements, merge all remaining into the last slot with a single
+                    // space between each (the inter-token spacing within each bucket was already
+                    // handled by joinWithOffsets).
+                    java.util.List<Object> coalesced = new java.util.ArrayList<>(list.size());
+                    for (int i = 0; i < list.size() - 1; i++) {
+                        coalesced.add(valueList.get(i));
+                    }
+                    StringBuilder last = new StringBuilder();
+                    for (int i = list.size() - 1; i < valueList.size(); i++) {
+                        if (!last.isEmpty()) last.append(' ');
+                        last.append(valueList.get(i));
+                    }
+                    coalesced.add(last.toString());
+                    valueList = coalesced;
+                } else {
+                    log.atWarn()
+                        .setMessage("Cannot distribute '{}' across object array: got {} values for {} elements; dropping recovered value")
+                        .addArgument(fieldName)
+                        .addArgument(valueList.size())
+                        .addArgument(list.size())
+                        .log();
+                    return false;
+                }
             }
             log.atDebug()
                 .setMessage("Distributing {} values for '{}' across {}-element object array")
@@ -471,7 +490,10 @@ public class SourceReconstructor {
                 }
                 FieldMappingInfo mappingInfo = mappingContext.getFieldInfo(fieldName);
                 if (mappingInfo != null) {
-                    var fallbackValue = reader.getValueFromPointsOrTerms(docId, fieldName, mappingInfo.type(), termIndex);
+                    int gap = mappingInfo.positionIncrementGap();
+                    var fallbackValue = gap == LuceneLeafReader.DEFAULT_POSITION_INCREMENT_GAP
+                            ? reader.getValueFromPointsOrTerms(docId, fieldName, mappingInfo.type(), termIndex)
+                            : reader.getValueFromPointsOrTerms(docId, fieldName, mappingInfo.type(), termIndex, gap);
                     if (fallbackValue.isPresent()) {
                         Object converted = convertFallbackValue(fallbackValue.get(), mappingInfo);
                         if (converted != null) {
@@ -615,7 +637,10 @@ public class SourceReconstructor {
         // LuceneLeafReader.getValueFromPointsOrTerms STRING branch) — that's what delivers the
         // "joe smith joe x com" best-effort text recovery.
         if (targetMapping != null) {
-            var fallback = reader.getValueFromPointsOrTerms(docId, fieldName, targetMapping.type(), termIndex);
+            int gap = targetMapping.positionIncrementGap();
+            var fallback = gap == LuceneLeafReader.DEFAULT_POSITION_INCREMENT_GAP
+                    ? reader.getValueFromPointsOrTerms(docId, fieldName, targetMapping.type(), termIndex)
+                    : reader.getValueFromPointsOrTerms(docId, fieldName, targetMapping.type(), termIndex, gap);
             if (fallback.isPresent()) {
                 return new ProbeResult.Raw(fallback.get());
             }
