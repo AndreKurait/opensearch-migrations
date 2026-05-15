@@ -71,29 +71,23 @@ public class SourceReconstructor {
      */
     @SuppressWarnings("unchecked")
     private static boolean descendsIntoExistingObjectArray(Map<String, Object> target, String fieldName) {
-        if (!fieldName.contains(".")) {
+        int dot = fieldName.indexOf('.');
+        if (dot < 0) {
             return false;
         }
-        String[] parts = fieldName.split("\\.");
         Map<String, Object> cursor = target;
-        for (int i = 0; i < parts.length - 1; i++) {
-            Object next = cursor.get(parts[i]);
-            // Existing seed is a non-empty list of maps: classic object-array carve-out.
-            if (next instanceof java.util.List<?> list && isListOfMaps(list)) {
-                // Only treat as an object-array carve-out when the remainder is a SINGLE leaf
-                // segment — distributeSubfieldAcrossList only handles single-leaf distribution.
-                return i == parts.length - 2;
-            }
-            // Existing seed is an empty list: ES preserved the parent key as `[]` (e.g.
-            // _source.excludes stripped object-array subfields but kept the empty array shell).
-            // Treat this as a structural seed we may grow when subfields arrive — putNested's
-            // empty-list lazy-grow arm handles the actual sizing once the per-element value
-            // shows up.
-            if (next instanceof java.util.List<?> emptyList && emptyList.isEmpty()) {
-                return i == parts.length - 2;
+        int start = 0;
+        while (dot >= 0) {
+            String segment = fieldName.substring(start, dot);
+            int nextDot = fieldName.indexOf('.', dot + 1);
+            Object next = cursor.get(segment);
+            if (next instanceof java.util.List<?> list && (isListOfMaps(list) || list.isEmpty())) {
+                return nextDot < 0;
             }
             if (next instanceof Map<?, ?>) {
                 cursor = (Map<String, Object>) next;
+                start = dot + 1;
+                dot = nextDot;
                 continue;
             }
             return false;
@@ -143,87 +137,71 @@ public class SourceReconstructor {
         if (target.containsKey(fieldName)) {
             return false;
         }
-        String[] parts = fieldName.split("\\.");
         Map<String, Object> cursor = target;
-        for (int i = 0; i < parts.length - 1; i++) {
-            Object next = cursor.get(parts[i]);
+        int start = 0;
+        int dot = fieldName.indexOf('.');
+        while (dot >= 0) {
+            String segment = fieldName.substring(start, dot);
+            int nextDot = fieldName.indexOf('.', dot + 1);
+            boolean isLastParent = nextDot < 0;
+            Object next = cursor.get(segment);
             if (next instanceof Map<?, ?> map) {
                 cursor = (Map<String, Object>) map;
+                start = dot + 1;
+                dot = nextDot;
             } else if (next == null) {
-                // Lazy-grow: when value is a List<?> recovered from per-element analyzed text
-                // (TextTermList) AND the suffix is a single leaf, seed the parent as a List<Map>
-                // sized to the value list so distribute logic below picks it up. Without this
-                // seed, the next iteration would create an empty Map and the value list would
-                // be assigned to leaf as-is, collapsing per-element identity.
-                if (i == parts.length - 2 && value instanceof java.util.List<?> valueList
+                if (isLastParent && value instanceof java.util.List<?> valueList
                         && shouldSeedObjectArray(valueList)) {
                     java.util.List<Object> seeded = new java.util.ArrayList<>(valueList.size());
                     for (int k = 0; k < valueList.size(); k++) {
                         seeded.add(new LinkedHashMap<String, Object>());
                     }
-                    cursor.put(parts[i], seeded);
-                    String leafForList = parts[parts.length - 1];
-                    return distributeSubfieldAcrossList(seeded, leafForList, value, fieldName);
+                    cursor.put(segment, seeded);
+                    return distributeSubfieldAcrossList(seeded, fieldName.substring(dot + 1), value, fieldName);
                 }
                 Map<String, Object> child = new LinkedHashMap<>();
-                cursor.put(parts[i], child);
+                cursor.put(segment, child);
                 cursor = child;
+                start = dot + 1;
+                dot = nextDot;
             } else if (next instanceof java.util.List<?> emptyList && emptyList.isEmpty()
-                    && i == parts.length - 2
+                    && isLastParent
                     && value instanceof java.util.List<?> valueList
                     && shouldSeedObjectArray(valueList)) {
-                // Lazy-grow over an EXISTING empty list seed. Some partial _source flows
-                // pre-seed object-array parents as []; without this branch, the per-element
-                // attribution arriving for the first sibling column would hit the scalar-
-                // collision warn branch and be dropped, leaving `arr` permanently empty.
                 java.util.List<Object> seeded = new java.util.ArrayList<>(valueList.size());
                 for (int k = 0; k < valueList.size(); k++) {
                     seeded.add(new LinkedHashMap<String, Object>());
                 }
-                cursor.put(parts[i], seeded);
-                String leafForList = parts[parts.length - 1];
-                return distributeSubfieldAcrossList(seeded, leafForList, value, fieldName);
+                cursor.put(segment, seeded);
+                return distributeSubfieldAcrossList(seeded, fieldName.substring(dot + 1), value, fieldName);
             } else if (next instanceof java.util.List<?> list && isListOfMaps(list)) {
-                // Array-of-objects at this path (e.g. seeded _source has `files`: [{cksum:h1}, {cksum:h2}]).
-                // The remaining suffix names the subfield to distribute across the list elements.
-                // Only the LAST path segment is handled here; deeper nesting under a List<Map> parent
-                // (e.g. `files.meta.size` where `files[i].meta` would itself be an object) falls through
-                // to the warn branch below since per-element object construction from doc_values is
-                // outside the guarantees doc_values can provide.
-                if (i != parts.length - 2) {
-                    // Distribution supports only immediate-leaf subfields (one segment past the
-                    // List<Map> parent, e.g. `files.size`). Deeper paths like `files.meta.size`
-                    // would require synthesising per-element `meta` objects from columnar
-                    // doc_values, which has no positional guarantee. Warn once per JVM so the
-                    // class of problem is visible without flooding logs.
+                if (!isLastParent) {
                     if (DEEP_NEST_UNDER_LIST_WARNED.compareAndSet(false, true)) {
                         log.atWarn()
                             .setMessage("Cannot distribute deeply-nested field '{}' under List<Map> at '{}'; "
                                 + "only immediate-leaf subfields (parent.leaf) are supported. "
                                 + "Dropping recovered value (further occurrences silenced)")
                             .addArgument(fieldName)
-                            .addArgument(parts[i])
+                            .addArgument(segment)
                             .log();
                     }
                     return false;
                 }
-                String leafForList = parts[parts.length - 1];
-                return distributeSubfieldAcrossList((java.util.List<Object>) list, leafForList, value, fieldName);
+                return distributeSubfieldAcrossList((java.util.List<Object>) list, fieldName.substring(dot + 1), value, fieldName);
             } else {
-                // Non-map already sits at this path — cannot nest under a scalar. Warn once
-                // per JVM so operators notice the class of problem without log floods.
                 if (NEST_COLLISION_WARNED.compareAndSet(false, true)) {
                     log.atWarn()
                         .setMessage("Cannot write nested field '{}' under scalar at '{}' (type {}); dropping recovered value (further occurrences silenced)")
                         .addArgument(fieldName)
-                        .addArgument(parts[i])
+                        .addArgument(segment)
                         .addArgument(next.getClass().getSimpleName())
                         .log();
                 }
                 return false;
             }
         }
-        String leaf = parts[parts.length - 1];
+        // Reached the leaf (no more dots)
+        String leaf = fieldName.substring(start);
         if (cursor.containsKey(leaf)) {
             return false;
         }
@@ -347,26 +325,26 @@ public class SourceReconstructor {
         if (target.containsKey(fieldName)) {
             return true;
         }
-        if (!fieldName.contains(".")) {
+        int dot = fieldName.indexOf('.');
+        if (dot < 0) {
             return false;
         }
-        String[] parts = fieldName.split("\\.");
         Map<String, Object> cursor = target;
-        for (int i = 0; i < parts.length - 1; i++) {
-            Object next = cursor.get(parts[i]);
+        int start = 0;
+        while (dot >= 0) {
+            String segment = fieldName.substring(start, dot);
+            int nextDot = fieldName.indexOf('.', dot + 1);
+            Object next = cursor.get(segment);
             if (next instanceof Map<?, ?>) {
                 cursor = (Map<String, Object>) next;
+                start = dot + 1;
+                dot = nextDot;
                 continue;
             }
-            // Array-of-objects ancestor (e.g. `files` is List<Map>): the leaf is considered present
-            // iff the suffix is the immediate leaf AND every element already carries it. This keeps
-            // mergeWithDocValues idempotent — a second pass over the same doc won't re-distribute,
-            // and it correctly reports "not present" when only some elements have the subfield so
-            // the distribute path can fill the gaps.
-            if (next instanceof java.util.List<?> list && i == parts.length - 2 && !list.isEmpty()) {
-                String leafForList = parts[parts.length - 1];
+            if (next instanceof java.util.List<?> list && nextDot < 0 && !list.isEmpty()) {
+                String leaf = fieldName.substring(dot + 1);
                 for (Object element : list) {
-                    if (!(element instanceof Map<?, ?> m) || !m.containsKey(leafForList)) {
+                    if (!(element instanceof Map<?, ?> m) || !m.containsKey(leaf)) {
                         return false;
                     }
                 }
@@ -374,7 +352,7 @@ public class SourceReconstructor {
             }
             return false;
         }
-        return cursor.containsKey(parts[parts.length - 1]);
+        return cursor.containsKey(fieldName.substring(start));
     }
 
     /**
