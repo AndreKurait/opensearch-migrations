@@ -2,83 +2,110 @@
  * Strip and/or rename analyzer, tokenizer, char_filter, and token-filter components
  * that are incompatible with the target cluster.
  *
- * This is the *preemptive* counterpart to the Java InvalidResponse-based retry path:
+ * This is the preemptive counterpart to the Java InvalidResponse-based retry path:
  * it runs at metadata-transform time so the create-index/template request never carries
  * the offending name to begin with.
  *
  * The list of components to strip/rename is computed in Java by
  * MetadataTransformationRegistry, based on the (sourceVersion, targetVersion) pair, and
- * passed in via the bindings context. The JS transform itself is engine-agnostic — it
- * just applies the rules.
+ * passed in via the bindings context.
  *
  * Expected context shape:
  *   {
  *     "removed": {
- *       "filter":      ["standard", ...],
- *       "tokenizer":   [],
+ *       "filter": ["standard", ...],
+ *       "tokenizer": [],
  *       "char_filter": [],
- *       "analyzer":    []
+ *       "analyzer": []
  *     },
  *     "renames": {
- *       "filter":      { "delimited_payload_filter": "delimited_payload" },
- *       "tokenizer":   {},
+ *       "filter": { "delimited_payload_filter": "delimited_payload" },
+ *       "tokenizer": {},
  *       "char_filter": {},
- *       "analyzer":    {}
+ *       "analyzer": {}
  *     }
  *   }
  *
- * Targets in the body, both nested and dotted "index.*" forms:
+ * Targets:
  *   body.settings.analysis.{analyzer,tokenizer,filter,char_filter}.<name>
  *   body.settings.index.analysis.{analyzer,tokenizer,filter,char_filter}.<name>
- *   (also under body.template.settings.* for component/index templates)
+ *   body.template.settings.* (component/index templates)
+ * Plus the flat-dotted form (snapshot upstream of CanonicalTransformer.normalize):
+ *   body.settings["index.analysis.analyzer.<name>.filter"]
+ *   body.settings["index.analysis.<kind>.<name>.<...>"]
  *
- * Analyzer references that point at a removed component are also rewritten:
- *   - analyzer's "filter" array entries
- *   - analyzer's "char_filter" array entries
- *   - analyzer's "tokenizer" string
- *
- * The transform is safe to apply when the body has no analysis section: it is a no-op.
+ * Implementation note: containers may be JS native Maps, polyglot Java Map proxies, or
+ * plain JS objects. The map(...) helpers below duck-type Map-like containers so the
+ * rule logic mutates them in-place regardless of which shape the host gave us.
  */
 
-function getEntry(obj, key) {
-    if (obj instanceof Map) return obj.get(key);
-    if (obj && typeof obj === 'object') return obj[key];
+const ANALYSIS_KIND_KEYS = ['analyzer', 'tokenizer', 'filter', 'char_filter'];
+
+/** True for native JS Map AND polyglot Java Map (which exposes .get/.set/.has/.keys). */
+function isMapLike(obj) {
+    if (obj instanceof Map) return true;
+    return obj != null && typeof obj === 'object'
+        && typeof obj.get === 'function'
+        && typeof obj.set === 'function'
+        && typeof obj.has === 'function'
+        && typeof obj.delete === 'function';
+}
+
+function mapHas(obj, key) {
+    if (isMapLike(obj)) return obj.has(key);
+    return obj != null && typeof obj === 'object'
+        && Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function mapGet(obj, key) {
+    if (obj == null) return undefined;
+    if (isMapLike(obj)) return obj.get(key);
+    if (typeof obj === 'object') return obj[key];
     return undefined;
 }
 
-function deleteEntry(obj, key) {
-    if (obj instanceof Map) { obj.delete(key); return; }
-    if (obj && typeof obj === 'object') { delete obj[key]; }
+function mapSet(obj, key, val) {
+    if (isMapLike(obj)) { obj.set(key, val); return; }
+    if (obj != null && typeof obj === 'object') { obj[key] = val; }
 }
 
-function renameEntry(obj, fromKey, toKey) {
-    if (obj instanceof Map) {
-        if (!obj.has(fromKey)) return;
-        const val = obj.get(fromKey);
-        obj.delete(fromKey);
-        if (!obj.has(toKey)) obj.set(toKey, val);
-        return;
-    }
-    if (obj && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, fromKey)) {
-        const val = obj[fromKey];
-        delete obj[fromKey];
-        if (!Object.prototype.hasOwnProperty.call(obj, toKey)) obj[toKey] = val;
-    }
+function mapDelete(obj, key) {
+    if (isMapLike(obj)) { obj.delete(key); return; }
+    if (obj != null && typeof obj === 'object') { delete obj[key]; }
 }
 
-function entries(obj) {
-    if (obj instanceof Map) return Array.from(obj.entries());
-    if (obj && typeof obj === 'object') return Object.entries(obj);
+/** Yield the keys of a Map-like or object. For polyglot Java Maps .keys() is a Java Set,
+ *  which is iterable. We materialise into an array so callers can mutate during iteration. */
+function mapKeys(obj) {
+    if (obj == null) return [];
+    if (obj instanceof Map) return Array.from(obj.keys());
+    if (isMapLike(obj)) {
+        // Polyglot Java Map: .keys() returns an iterable view.
+        const ks = [];
+        for (const k of obj.keys()) ks.push(k);
+        return ks;
+    }
+    if (typeof obj === 'object') return Object.keys(obj);
     return [];
 }
 
-function setEntry(obj, key, val) {
-    if (obj instanceof Map) { obj.set(key, val); return; }
-    if (obj && typeof obj === 'object') { obj[key] = val; }
+function mapEntries(obj) {
+    return mapKeys(obj).map((k) => [k, mapGet(obj, k)]);
 }
 
-function rewriteArrayInPlace(node, key, removedSet, renameMap) {
-    const arr = getEntry(node, key);
+/** Treat the value as a "container we can index" (Map-like or plain object). */
+function isContainer(obj) {
+    if (obj == null) return false;
+    if (Array.isArray(obj)) return false;
+    if (isMapLike(obj)) return true;
+    return typeof obj === 'object';
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Rule application — mutates input containers in-place.
+// ──────────────────────────────────────────────────────────────────────
+
+function rewriteArrayInPlace(arr, removedSet, renameMap) {
     if (!Array.isArray(arr)) return;
     for (let i = arr.length - 1; i >= 0; i--) {
         const v = arr[i];
@@ -91,34 +118,38 @@ function rewriteArrayInPlace(node, key, removedSet, renameMap) {
     }
 }
 
-function rewriteStringInPlace(node, key, removedSet, renameMap) {
-    const v = getEntry(node, key);
+function rewriteStringRef(container, key, removedSet, renameMap) {
+    if (!mapHas(container, key)) return;
+    const v = mapGet(container, key);
     if (typeof v !== 'string') return;
     if (removedSet.has(v)) {
-        deleteEntry(node, key);
+        mapDelete(container, key);
     } else if (renameMap[v]) {
-        setEntry(node, key, renameMap[v]);
+        mapSet(container, key, renameMap[v]);
     }
 }
 
-function processNamedSection(section, removedNames, renameMap) {
-    if (!section) return;
-    for (const [name, _def] of entries(section)) {
-        if (removedNames.has(name)) {
-            deleteEntry(section, name);
-        }
+function dropOrRenameSection(section, removedNames, renameMap) {
+    if (!isContainer(section)) return;
+    for (const name of mapKeys(section)) {
+        if (removedNames.has(name)) mapDelete(section, name);
     }
     for (const [from, to] of Object.entries(renameMap || {})) {
-        renameEntry(section, from, to);
+        if (!mapHas(section, from)) continue;
+        const v = mapGet(section, from);
+        mapDelete(section, from);
+        if (!mapHas(section, to)) mapSet(section, to, v);
     }
 }
 
-function processAnalyzers(analyzerSection, removed, renames) {
-    if (!analyzerSection) return;
-    // First, drop or rename analyzer keys themselves
-    processNamedSection(analyzerSection, new Set(removed.analyzer || []), renames.analyzer || {});
+function processAnalyzersSection(analyzerSection, removed, renames) {
+    if (!isContainer(analyzerSection)) return;
+    dropOrRenameSection(
+        analyzerSection,
+        new Set(removed.analyzer || []),
+        renames.analyzer || {}
+    );
 
-    // Then walk each remaining analyzer definition and rewrite filter/char_filter/tokenizer refs
     const removedFilters = new Set(removed.filter || []);
     const filterRenames = renames.filter || {};
     const removedCharFilters = new Set(removed.char_filter || []);
@@ -126,49 +157,57 @@ function processAnalyzers(analyzerSection, removed, renames) {
     const removedTokenizers = new Set(removed.tokenizer || []);
     const tokenizerRenames = renames.tokenizer || {};
 
-    for (const [_name, def] of entries(analyzerSection)) {
-        if (def == null) continue;
-        rewriteArrayInPlace(def, 'filter', removedFilters, filterRenames);
-        rewriteArrayInPlace(def, 'char_filter', removedCharFilters, charFilterRenames);
-        rewriteStringInPlace(def, 'tokenizer', removedTokenizers, tokenizerRenames);
+    for (const [_name, def] of mapEntries(analyzerSection)) {
+        if (!isContainer(def)) continue;
+        const filterArr = mapGet(def, 'filter');
+        if (Array.isArray(filterArr)) rewriteArrayInPlace(filterArr, removedFilters, filterRenames);
+        const charFilterArr = mapGet(def, 'char_filter');
+        if (Array.isArray(charFilterArr)) rewriteArrayInPlace(charFilterArr, removedCharFilters, charFilterRenames);
+        rewriteStringRef(def, 'tokenizer', removedTokenizers, tokenizerRenames);
     }
 }
 
-function processSettingsRoot(settings, removed, renames) {
-    if (!settings) return;
-
-    // Both "settings.analysis" and "settings.index.analysis" are valid layouts.
-    let analysis = getEntry(settings, 'analysis');
-    if (!analysis) {
-        const idx = getEntry(settings, 'index');
-        if (idx) analysis = getEntry(idx, 'analysis');
+function processNestedAnalysis(settings, removed, renames) {
+    if (!isContainer(settings)) return;
+    let analysis = mapGet(settings, 'analysis');
+    if (!isContainer(analysis)) {
+        const idx = mapGet(settings, 'index');
+        if (isContainer(idx)) analysis = mapGet(idx, 'analysis');
     }
-    if (analysis) {
-        processAnalyzers(getEntry(analysis, 'analyzer'), removed, renames);
-        processNamedSection(getEntry(analysis, 'tokenizer'),
-            new Set(removed.tokenizer || []), renames.tokenizer || {});
-        processNamedSection(getEntry(analysis, 'filter'),
-            new Set(removed.filter || []), renames.filter || {});
-        processNamedSection(getEntry(analysis, 'char_filter'),
-            new Set(removed.char_filter || []), renames.char_filter || {});
-    }
+    if (!isContainer(analysis)) return;
 
-    // Snapshot settings come in flat-dotted form upstream of the CanonicalTransformer
-    // normalize step, e.g.:
-    //   "index.analysis.analyzer.alcatraz_tokenized_string.filter": [...]
-    //   "index.analysis.analyzer.alcatraz_tokenized_string.tokenizer": "standard"
-    //   "index.analysis.filter.<name>.type": "stop"
-    // Handle that shape directly so the transform fires before flat→tree conversion.
-    processFlatDottedSettings(settings, removed, renames);
+    processAnalyzersSection(mapGet(analysis, 'analyzer'), removed, renames);
+    dropOrRenameSection(mapGet(analysis, 'tokenizer'),
+        new Set(removed.tokenizer || []), renames.tokenizer || {});
+    dropOrRenameSection(mapGet(analysis, 'filter'),
+        new Set(removed.filter || []), renames.filter || {});
+    dropOrRenameSection(mapGet(analysis, 'char_filter'),
+        new Set(removed.char_filter || []), renames.char_filter || {});
 }
 
-const ANALYSIS_KIND_KEYS = ['analyzer', 'tokenizer', 'filter', 'char_filter'];
-
-function isFlatDottedKey(key) {
-    return typeof key === 'string' && key.indexOf('.') >= 0;
+function parseAnalysisKey(key) {
+    if (typeof key !== 'string' || key.indexOf('.') < 0) return null;
+    const parts = key.split('.');
+    let i = 0;
+    if (parts[i] === 'index') i++;
+    if (parts[i] !== 'analysis') return null;
+    i++;
+    const kind = parts[i];
+    if (ANALYSIS_KIND_KEYS.indexOf(kind) < 0) return null;
+    i++;
+    if (i >= parts.length) return null;
+    const name = parts[i];
+    i++;
+    const suffix = parts.slice(i).join('.');
+    const prefixLen = key.length - (suffix.length === 0
+        ? name.length
+        : (name.length + 1 + suffix.length));
+    return { kind, name, suffix, prefix: key.substring(0, prefixLen) };
 }
 
 function processFlatDottedSettings(settings, removed, renames) {
+    if (!isContainer(settings)) return;
+
     const removedByKind = {
         filter: new Set(removed.filter || []),
         tokenizer: new Set(removed.tokenizer || []),
@@ -182,162 +221,113 @@ function processFlatDottedSettings(settings, removed, renames) {
         analyzer: renames.analyzer || {},
     };
 
-    // Collect all flat-dotted keys first (avoid iterator invalidation on delete/rename).
-    const flatKeys = [];
-    for (const [k, _v] of entries(settings)) {
-        if (isFlatDottedKey(k)) flatKeys.push(k);
-    }
-
-    // Helper: returns {kind, name, suffix} if the dotted key starts with a recognized
-    // analysis section path, else null. Accepts both "analysis.<kind>.<name>(.<rest>)?"
-    // and "index.analysis.<kind>.<name>(.<rest>)?" prefixes.
-    function parseAnalysisKey(key) {
-        const parts = key.split('.');
-        let i = 0;
-        if (parts[i] === 'index') i++;
-        if (parts[i] !== 'analysis') return null;
-        i++;
-        const kind = parts[i];
-        if (ANALYSIS_KIND_KEYS.indexOf(kind) < 0) return null;
-        i++;
-        if (i >= parts.length) return null;
-        const name = parts[i];
-        i++;
-        const suffix = parts.slice(i).join('.');
-        const prefixLen = key.length - (suffix.length === 0 ? name.length : (name.length + 1 + suffix.length));
-        const prefix = key.substring(0, prefixLen);
-        return { kind, name, suffix, prefix };
-    }
-
-    // First pass: drop entries whose component name is in the removed set, or rename
-    // by rewriting the key.
-    for (const key of flatKeys) {
+    // First pass: drop or rename keys whose component name is in the removed/renames set.
+    for (const key of mapKeys(settings)) {
         const parsed = parseAnalysisKey(key);
         if (!parsed) continue;
         const { kind, name, suffix, prefix } = parsed;
         if (removedByKind[kind].has(name)) {
-            deleteEntry(settings, key);
+            mapDelete(settings, key);
             continue;
         }
         const renameTo = renamesByKind[kind][name];
         if (renameTo) {
             const newKey = prefix + renameTo + (suffix ? '.' + suffix : '');
-            const value = getEntry(settings, key);
-            deleteEntry(settings, key);
-            // If a key with the new name already exists, leave it; otherwise install ours.
-            if (getEntry(settings, newKey) === undefined) {
-                setEntry(settings, newKey, value);
-            }
+            const value = mapGet(settings, key);
+            mapDelete(settings, key);
+            if (!mapHas(settings, newKey)) mapSet(settings, newKey, value);
         }
     }
 
-    // Second pass: rewrite analyzer .filter array entries, .char_filter array entries,
-    // and .tokenizer string references (these point at filter/char_filter/tokenizer NAMES,
-    // which may also be in the removed/renames sets).
-    const filterRemoved = removedByKind.filter;
-    const filterRenames = renamesByKind.filter;
-    const charFilterRemoved = removedByKind.char_filter;
-    const charFilterRenames = renamesByKind.char_filter;
-    const tokenizerRemoved = removedByKind.tokenizer;
-    const tokenizerRenames = renamesByKind.tokenizer;
-
-    // We need a fresh key list because the first pass may have changed the set.
-    const second = [];
-    for (const [k, _v] of entries(settings)) {
-        if (isFlatDottedKey(k)) second.push(k);
-    }
-    for (const key of second) {
+    // Second pass: rewrite the contents of analyzer.filter / .char_filter / .tokenizer.
+    for (const key of mapKeys(settings)) {
         const parsed = parseAnalysisKey(key);
         if (!parsed || parsed.kind !== 'analyzer') continue;
-        const value = getEntry(settings, key);
+        const value = mapGet(settings, key);
         if (parsed.suffix === 'filter' && Array.isArray(value)) {
-            // Modify in place — same Array object reference.
-            for (let i = value.length - 1; i >= 0; i--) {
-                const v = value[i];
-                if (typeof v !== 'string') continue;
-                if (filterRemoved.has(v)) {
-                    value.splice(i, 1);
-                } else if (filterRenames[v]) {
-                    value[i] = filterRenames[v];
-                }
-            }
+            rewriteArrayInPlace(value, removedByKind.filter, renamesByKind.filter);
         } else if (parsed.suffix === 'char_filter' && Array.isArray(value)) {
-            for (let i = value.length - 1; i >= 0; i--) {
-                const v = value[i];
-                if (typeof v !== 'string') continue;
-                if (charFilterRemoved.has(v)) {
-                    value.splice(i, 1);
-                } else if (charFilterRenames[v]) {
-                    value[i] = charFilterRenames[v];
-                }
-            }
+            rewriteArrayInPlace(value, removedByKind.char_filter, renamesByKind.char_filter);
         } else if (parsed.suffix === 'tokenizer' && typeof value === 'string') {
-            if (tokenizerRemoved.has(value)) {
-                deleteEntry(settings, key);
-            } else if (tokenizerRenames[value]) {
-                setEntry(settings, key, tokenizerRenames[value]);
+            if (removedByKind.tokenizer.has(value)) {
+                mapDelete(settings, key);
+            } else if (renamesByKind.tokenizer[value]) {
+                mapSet(settings, key, renamesByKind.tokenizer[value]);
             }
         }
     }
+}
+
+function processSettingsRoot(settings, removed, renames) {
+    processNestedAnalysis(settings, removed, renames);
+    processFlatDottedSettings(settings, removed, renames);
 }
 
 function processBody(body, removed, renames) {
-    if (!body) return;
-    const settings = getEntry(body, 'settings');
-    if (settings) processSettingsRoot(settings, removed, renames);
-    // Templates (index/component): "template.settings"
-    const template = getEntry(body, 'template');
-    if (template) {
-        const tmplSettings = getEntry(template, 'settings');
-        if (tmplSettings) processSettingsRoot(tmplSettings, removed, renames);
+    if (!isContainer(body)) return;
+    const settings = mapGet(body, 'settings');
+    if (isContainer(settings)) processSettingsRoot(settings, removed, renames);
+    const template = mapGet(body, 'template');
+    if (isContainer(template)) {
+        const tmplSettings = mapGet(template, 'settings');
+        if (isContainer(tmplSettings)) processSettingsRoot(tmplSettings, removed, renames);
     }
 }
 
-/** Recursively flatten a Map (or nested Map) into a plain JS object so callers can use
- *  property-style access. Arrays are preserved; primitives pass through. */
-function mapsToPlainObject(value) {
+function readBody(doc) {
+    if (doc == null) return undefined;
+    return mapGet(doc, 'body');
+}
+
+function readContext(context) {
+    if (context == null) return { removed: {}, renames: {} };
+    // Use mapGet so Map-shaped contexts work the same as plain objects. The values
+    // (`removed`, `renames`) themselves may be plain objects or Maps; downstream callers
+    // use `Object.entries`/`set.has` on plain objects for the by-kind lookup. To keep
+    // that simple we coerce the Map nests to plain by reading via mapGet.
+    return {
+        removed: shallowMapToObject(mapGet(context, 'removed')) || {},
+        renames: shallowMapToObject(mapGet(context, 'renames')) || {},
+    };
+}
+
+/** Shallow-coerce a Map (or polyglot Java Map) to a plain object so the rule code
+ *  can use property-style access on it. Values pass through (which may be arrays or
+ *  inner Maps; for our context shape, removed/renames second-level values are
+ *  string-arrays / string-keyed maps respectively, both of which we handle). */
+function shallowMapToObject(value) {
     if (value == null) return value;
-    if (value instanceof Map) {
+    if (Array.isArray(value)) return value;
+    if (isMapLike(value)) {
         const out = {};
-        for (const [k, v] of value.entries()) out[k] = mapsToPlainObject(v);
-        return out;
-    }
-    if (Array.isArray(value)) {
-        return value.map(mapsToPlainObject);
-    }
-    if (typeof value === 'object') {
-        const out = {};
-        for (const k of Object.keys(value)) out[k] = mapsToPlainObject(value[k]);
+        for (const k of mapKeys(value)) {
+            const v = mapGet(value, k);
+            // Recursively coerce nested map for the rename map ({oldName: newName}).
+            if (isMapLike(v)) {
+                const inner = {};
+                for (const ik of mapKeys(v)) inner[ik] = mapGet(v, ik);
+                out[k] = inner;
+            } else {
+                out[k] = v;
+            }
+        }
         return out;
     }
     return value;
 }
 
-function readContext(context) {
-    const plain = mapsToPlainObject(context) || {};
-    return {
-        removed: plain.removed || {},
-        renames: plain.renames || {},
-    };
-}
-
-function readBody(doc) {
-    if (doc == null) return undefined;
-    if (doc instanceof Map) return doc.get('body');
-    return doc.body;
-}
-
 function main(context) {
     const { removed, renames } = readContext(context);
 
-    // Empty config: cheap no-op transformer
     const noWork =
         (!removed || Object.keys(removed).length === 0) &&
         (!renames || Object.keys(renames).length === 0);
     if (noWork) return (doc) => doc;
 
     return (doc) => {
-        if (Array.isArray(doc)) return doc.map((d) => { processBody(readBody(d), removed, renames); return d; });
+        if (Array.isArray(doc)) {
+            return doc.map((d) => { processBody(readBody(d), removed, renames); return d; });
+        }
         processBody(readBody(doc), removed, renames);
         return doc;
     };
