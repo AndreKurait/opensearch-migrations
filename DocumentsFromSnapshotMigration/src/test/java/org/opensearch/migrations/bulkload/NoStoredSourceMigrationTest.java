@@ -13,6 +13,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
+import org.opensearch.migrations.MetadataMigration;
+import org.opensearch.migrations.MigrateOrEvaluateArgs;
 import org.opensearch.migrations.UnboundVersionMatchers;
 import org.opensearch.migrations.VersionMatchers;
 import org.opensearch.migrations.bulkload.common.FileSystemRepo;
@@ -20,6 +22,7 @@ import org.opensearch.migrations.bulkload.framework.SearchClusterContainer;
 import org.opensearch.migrations.bulkload.framework.SearchClusterContainer.ContainerVersion;
 import org.opensearch.migrations.bulkload.http.ClusterOperations;
 import org.opensearch.migrations.cluster.SnapshotReaderRegistry;
+import org.opensearch.migrations.metadata.tracing.MetadataMigrationTestContext;
 import org.opensearch.migrations.reindexer.tracing.DocumentMigrationTestContext;
 import org.opensearch.migrations.snapshot.creation.tracing.SnapshotTestContext;
 
@@ -190,6 +193,17 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
     static Stream<Arguments> es710OnlyPair() {
         return Stream.of(
             Arguments.of(SearchClusterContainer.ES_V7_10_2, SearchClusterContainer.OS_V3_5_0)
+        );
+    }
+
+    /**
+     * Argument provider for ES 6.8 → OS 2.19 — the cell where the deprecated "standard"
+     * token filter is still accepted on the source (ES 6) but rejected on the target
+     * (ES 7+/OS). Used by the customer-shaped sourceless test below.
+     */
+    static Stream<Arguments> es68ToOs2Pair() {
+        return Stream.of(
+            Arguments.of(SearchClusterContainer.ES_V6_8_23, SearchClusterContainer.OS_V2_19_4)
         );
     }
 
@@ -2231,6 +2245,213 @@ public class NoStoredSourceMigrationTest extends SourceTestBase {
                 "element 1 foo must reconstruct strictly. _source=" + source);
             assertEquals("four five six", e1Bar,
                 "element 1 bar must reconstruct strictly (no token bleed across elements). _source=" + source);
+        }
+    }
+
+    /**
+     * Customer regression test (ES 6 → OS 2). Source index has _source disabled and a
+     * custom analyzer using the deprecated "standard" token filter (removed in ES 7+/OS).
+     * A "subj" text field with norms:false references that analyzer; "fsubj" is a
+     * keyword sibling.
+     *
+     * Verifies the full preemptive-fix-plus-reconstruction path end-to-end:
+     *  1. Metadata migration succeeds — the analysis-component-removal transform strips
+     *     the deprecated "standard" filter from the analyzer's filter array before the
+     *     create-index call hits the OS 2 target.
+     *  2. Documents migrate through the sourceless pipeline.
+     *  3. "fsubj" (keyword) reconstructs byte-exact via DocValues.
+     *  4. "subj" (text + norms:false + _source disabled) reconstructs lossy from term
+     *     postings — analyzer-normalised tokens preserved, exact bytes are not.
+     */
+    @ParameterizedTest(name = "alcatrazSourceDisabledMigration: {0} -> {1}")
+    @MethodSource("es68ToOs2Pair")
+    public void testAlcatrazSourceDisabledMigration_subjAndFsubj(
+        ContainerVersion sourceVersion, ContainerVersion targetVersion
+    ) throws Exception {
+        try (
+            var sourceCluster = new SearchClusterContainer(sourceVersion);
+            var targetCluster = new SearchClusterContainer(targetVersion)
+        ) {
+            sourceCluster.start();
+            targetCluster.start();
+
+            var sourceOps = new ClusterOperations(sourceCluster);
+            var targetOps = new ClusterOperations(targetCluster);
+
+            String indexName = "alcatraz_archive";
+            String docType = sourceOps.defaultDocType();
+
+            // Customer-shaped index: _source DISABLED, custom analyzer with deprecated
+            // "standard" filter, "subj" text norms:false referencing it, "fsubj" keyword.
+            String indexBody = "{"
+                + "\"settings\":{"
+                + "  \"index\":{"
+                + "    \"number_of_shards\":1,"
+                + "    \"number_of_replicas\":0,"
+                + "    \"analysis\":{"
+                + "      \"analyzer\":{"
+                + "        \"alcatraz_tokenized_string\":{"
+                + "          \"type\":\"custom\","
+                + "          \"tokenizer\":\"standard\","
+                + "          \"filter\":[\"standard\",\"alcatraz_pattern_capture\",\"lowercase\",\"asciifolding\",\"my_stopwords\"]"
+                + "        }"
+                + "      },"
+                + "      \"filter\":{"
+                + "        \"alcatraz_pattern_capture\":{"
+                + "          \"type\":\"pattern_capture\","
+                + "          \"preserve_original\":true,"
+                + "          \"patterns\":[\"([A-Za-z0-9._%+-]+)@\"]"
+                + "        },"
+                + "        \"my_stopwords\":{"
+                + "          \"type\":\"stop\","
+                + "          \"stopwords\":[\"the\",\"a\",\"an\"]"
+                + "        }"
+                + "      }"
+                + "    }"
+                + "  }"
+                + "},"
+                + "\"mappings\":{"
+                + "  \"" + docType + "\":{"
+                + "    \"_source\":{\"enabled\":false},"
+                + "    \"properties\":{"
+                + "      \"subj\":{\"type\":\"text\",\"norms\":false,\"analyzer\":\"alcatraz_tokenized_string\"},"
+                + "      \"fsubj\":{\"type\":\"keyword\"}"
+                + "    }"
+                + "  }"
+                + "}}";
+
+            sourceOps.createIndex(indexName, indexBody);
+
+            // Two documents — distinct subj/fsubj values so we can identify them in the
+            // reconstructed result and assert per-doc fidelity.
+            String doc1Subj = "Bishops corner ltd buyout";
+            String doc1Fsubj = "BR-001";
+            sourceOps.createDocument(indexName, "1",
+                "{\"subj\":\"" + doc1Subj + "\",\"fsubj\":\"" + doc1Fsubj + "\"}",
+                null, docType);
+
+            String doc2Subj = "Quarterly review meeting tomorrow";
+            String doc2Fsubj = "BR-002";
+            sourceOps.createDocument(indexName, "2",
+                "{\"subj\":\"" + doc2Subj + "\",\"fsubj\":\"" + doc2Fsubj + "\"}",
+                null, docType);
+
+            sourceOps.post("/_refresh", null);
+
+            // Snapshot the source.
+            var snapshotCtx = SnapshotTestContext.factory().noOtelTracking();
+            createSnapshot(sourceCluster, "alcatraz_snap", snapshotCtx);
+            sourceCluster.copySnapshotData(localDirectory.toString());
+
+            // Step 1: METADATA MIGRATION. This is where the analysis-component-removal
+            // transform strips the deprecated "standard" filter so OS 2 accepts the index.
+            var metaArgs = new MigrateOrEvaluateArgs();
+            metaArgs.fileSystemRepoPath = localDirectory.getAbsolutePath();
+            metaArgs.snapshotName = "alcatraz_snap";
+            metaArgs.sourceVersion = sourceCluster.getContainerVersion().getVersion();
+            metaArgs.targetArgs.host = targetCluster.getUrl();
+            metaArgs.enableSourcelessMigrations = true; // _source disabled on the source
+            var metadataContext = MetadataMigrationTestContext.factory().noOtelTracking();
+            var metaResult = new MetadataMigration().migrate(metaArgs).execute(metadataContext);
+            log.info("Metadata migration result:\n{}", metaResult.asCliOutput());
+            assertEquals(0, metaResult.getExitCode(),
+                "Metadata migration must succeed despite removed 'standard' filter on source. " +
+                "Exit=" + metaResult.getExitCode() + " out=" + metaResult.asCliOutput());
+
+            // Verify the offending filter was actually stripped from the target's analyzer
+            // (other filters preserved).
+            String settingsResp = targetOps.get("/" + indexName + "/_settings").getValue();
+            log.info("Target settings: {}", settingsResp);
+            assertTrue(settingsResp.contains("alcatraz_pattern_capture"),
+                "Custom alcatraz_pattern_capture filter must survive: " + settingsResp);
+            assertTrue(settingsResp.contains("my_stopwords"),
+                "my_stopwords filter must survive: " + settingsResp);
+
+            // The metadata-migrated index carries forward _source.enabled=false from the
+            // source mapping. To read back what the sourceless pipeline reconstructs we
+            // delete and re-create the target index with _source enabled and the same
+            // analysis settings (minus the deprecated "standard" filter the preemptive
+            // transform already removed). Mirrors the approach in
+            // testNormsFalseSourceDisabledRecovery.
+            targetOps.delete("/" + indexName);
+            String targetIndexBody = "{"
+                + "\"settings\":{\"number_of_shards\":1,\"number_of_replicas\":0,"
+                + "  \"analysis\":{"
+                + "    \"analyzer\":{\"alcatraz_tokenized_string\":{"
+                + "      \"type\":\"custom\",\"tokenizer\":\"standard\","
+                + "      \"filter\":[\"alcatraz_pattern_capture\",\"lowercase\",\"asciifolding\",\"my_stopwords\"]"
+                + "    }},"
+                + "    \"filter\":{"
+                + "      \"alcatraz_pattern_capture\":{\"type\":\"pattern_capture\",\"preserve_original\":true,\"patterns\":[\"([A-Za-z0-9._%+-]+)@\"]},"
+                + "      \"my_stopwords\":{\"type\":\"stop\",\"stopwords\":[\"the\",\"a\",\"an\"]}"
+                + "    }"
+                + "  }"
+                + "},"
+                + "\"mappings\":{\"properties\":{"
+                + "  \"subj\":{\"type\":\"text\",\"norms\":false,\"analyzer\":\"alcatraz_tokenized_string\"},"
+                + "  \"fsubj\":{\"type\":\"keyword\"}"
+                + "}}}";
+            targetOps.createIndex(indexName, targetIndexBody);
+
+            // Step 2: DOCUMENT MIGRATION via the sourceless pipeline.
+            var fileFinder = SnapshotReaderRegistry.getSnapshotFileFinder(
+                sourceCluster.getContainerVersion().getVersion(), true);
+            var sourceRepo = new FileSystemRepo(localDirectory.toPath(), fileFinder);
+            var docCtx = DocumentMigrationTestContext.factory().noOtelTracking();
+
+            waitForRfsCompletion(() -> SourcelessMigrationTest.migrateDocumentsSequentiallyWithSourceless(
+                sourceRepo, "alcatraz_snap", List.of(indexName), targetCluster,
+                new AtomicInteger(), new Random(1), docCtx,
+                sourceCluster.getContainerVersion().getVersion(),
+                targetCluster.getContainerVersion().getVersion()
+            ));
+
+            targetOps.post("/_refresh", null);
+
+            // Step 3: assert reconstructed _source for each document.
+            // fsubj (keyword) → DocValues → byte-exact.
+            // subj  (text norms:false, _source:false) → term-walk → lossy (analyzer
+            //   tokens, lowercased, stopwords stripped, punctuation lost).
+            String doc1Resp = targetOps.get("/" + indexName + "/_doc/1").getValue();
+            JsonNode doc1Source = MAPPER.readTree(doc1Resp).path("_source");
+            log.info("Reconstructed doc1: {}", doc1Source);
+
+            assertEquals(doc1Fsubj, doc1Source.path("fsubj").asText(),
+                "fsubj (keyword) must reconstruct byte-exact via DocValues. _source=" + doc1Source);
+
+            String doc1SubjReconstructed = doc1Source.path("subj").asText().toLowerCase();
+            assertFalse(doc1SubjReconstructed.isEmpty(),
+                "subj (text, norms:false, _source disabled) must reconstruct from term postings (non-empty). _source=" + doc1Source);
+            // The customer-shaped analyzer lowercases everything and runs pattern_capture +
+            // stop. "Bishops corner ltd buyout" has no '@' (so pattern_capture is a no-op
+            // for these tokens) and no stopword from {the,a,an}, so the standard tokenizer
+            // emits all four words lowercased.
+            for (String tok : List.of("bishops", "corner", "ltd", "buyout")) {
+                assertTrue(doc1SubjReconstructed.contains(tok),
+                    "subj reconstruction missing analyzer token '" + tok
+                        + "'. reconstructed=" + doc1SubjReconstructed);
+            }
+
+            String doc2Resp = targetOps.get("/" + indexName + "/_doc/2").getValue();
+            JsonNode doc2Source = MAPPER.readTree(doc2Resp).path("_source");
+            log.info("Reconstructed doc2: {}", doc2Source);
+
+            assertEquals(doc2Fsubj, doc2Source.path("fsubj").asText(),
+                "fsubj (keyword) must reconstruct byte-exact via DocValues. _source=" + doc2Source);
+            String doc2SubjReconstructed = doc2Source.path("subj").asText().toLowerCase();
+            // "Quarterly review meeting tomorrow" → all four lowercased; none stopworded.
+            for (String tok : List.of("quarterly", "review", "meeting", "tomorrow")) {
+                assertTrue(doc2SubjReconstructed.contains(tok),
+                    "doc2 subj reconstruction missing token '" + tok
+                        + "'. reconstructed=" + doc2SubjReconstructed);
+            }
+
+            // Cross-doc isolation: doc1's subj tokens must NOT bleed into doc2's subj.
+            // Pinning by routing a token uniquely present in doc1 ("buyout") through doc2.
+            assertFalse(doc2SubjReconstructed.contains("buyout"),
+                "doc2 subj must not contain doc1-only token 'buyout' (per-doc postings isolation). reconstructed=" + doc2SubjReconstructed);
+            assertFalse(doc1SubjReconstructed.contains("quarterly"),
+                "doc1 subj must not contain doc2-only token 'quarterly' (per-doc postings isolation). reconstructed=" + doc1SubjReconstructed);
         }
     }
 

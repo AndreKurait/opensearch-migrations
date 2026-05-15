@@ -199,4 +199,92 @@ describe("analysis-component-removal transformer", () => {
         expect(result[0].body.settings.analysis.analyzer.z.filter).toEqual([]);
         expect(result[1].body.settings.analysis.analyzer.z.filter).toEqual(["lowercase"]);
     });
+
+    test("strips standard filter from flat-dotted analyzer.filter array (snapshot upstream form)", () => {
+        const transformer = main({ removed: { filter: ["standard"] } });
+        const doc = {
+            type: "index",
+            name: "x",
+            body: {
+                settings: {
+                    "index.analysis.analyzer.alcatraz_tokenized_string.filter":
+                        ["standard", "alcatraz_pattern_capture", "lowercase", "asciifolding"],
+                    "index.analysis.analyzer.alcatraz_tokenized_string.tokenizer": "standard",
+                    "index.analysis.analyzer.alcatraz_tokenized_string.type": "custom",
+                    "index.number_of_shards": "1",
+                },
+            },
+        };
+        const result = transformer(doc);
+        const filter = result.body.settings[
+            "index.analysis.analyzer.alcatraz_tokenized_string.filter"
+        ];
+        expect(filter).toEqual([
+            "alcatraz_pattern_capture",
+            "lowercase",
+            "asciifolding",
+        ]);
+        // Tokenizer reference (string "standard") is a different namespace and must remain.
+        expect(
+            result.body.settings[
+                "index.analysis.analyzer.alcatraz_tokenized_string.tokenizer"
+            ]
+        ).toBe("standard");
+    });
+
+    test("renames flat-dotted analyzer.filter entries", () => {
+        const transformer = main({ renames: { filter: { delimited_payload_filter: "delimited_payload" } } });
+        const doc = {
+            type: "index",
+            name: "x",
+            body: {
+                settings: {
+                    "index.analysis.analyzer.a.filter": ["delimited_payload_filter", "lowercase"],
+                },
+            },
+        };
+        const result = transformer(doc);
+        expect(result.body.settings["index.analysis.analyzer.a.filter"]).toEqual([
+            "delimited_payload",
+            "lowercase",
+        ]);
+    });
+
+    test("removes flat-dotted top-level filter entries by name", () => {
+        const transformer = main({ removed: { filter: ["bad"] } });
+        const doc = {
+            type: "index",
+            name: "x",
+            body: {
+                settings: {
+                    "index.analysis.filter.bad.type": "stop",
+                    "index.analysis.filter.bad.stopwords": ["a", "b"],
+                    "index.analysis.filter.good.type": "stop",
+                    "index.analysis.filter.good.stopwords": ["c"],
+                },
+            },
+        };
+        const result = transformer(doc);
+        expect(result.body.settings["index.analysis.filter.bad.type"]).toBeUndefined();
+        expect(result.body.settings["index.analysis.filter.bad.stopwords"]).toBeUndefined();
+        expect(result.body.settings["index.analysis.filter.good.type"]).toBe("stop");
+    });
+
+    test("renames flat-dotted top-level analyzer entries by rewriting keys", () => {
+        const transformer = main({ renames: { analyzer: { OldAnalyzer: "new_analyzer" } } });
+        const doc = {
+            type: "index",
+            name: "x",
+            body: {
+                settings: {
+                    "index.analysis.analyzer.OldAnalyzer.type": "custom",
+                    "index.analysis.analyzer.OldAnalyzer.tokenizer": "standard",
+                },
+            },
+        };
+        const result = transformer(doc);
+        expect(result.body.settings["index.analysis.analyzer.OldAnalyzer.type"]).toBeUndefined();
+        expect(result.body.settings["index.analysis.analyzer.new_analyzer.type"]).toBe("custom");
+        expect(result.body.settings["index.analysis.analyzer.new_analyzer.tokenizer"]).toBe("standard");
+    });
 });

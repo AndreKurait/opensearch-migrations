@@ -57,6 +57,10 @@ public class AnalysisCompatibility {
     private static final Predicate<Version> TARGET_ES_7_OR_OS =
             UnboundVersionMatchers.isGreaterOrEqualES_7_X.or(UnboundVersionMatchers.anyOS);
     private static final Predicate<Version> TARGET_OS = UnboundVersionMatchers.anyOS;
+    // Solr is a possible source. Rules that target Solr add it to the source matcher.
+    private static final Predicate<Version> SOLR_OR_BELOW_ES7 =
+            UnboundVersionMatchers.anySolr.or(UnboundVersionMatchers.isBelowES_7_X);
+    private static final Predicate<Version> SOLR_ANY = UnboundVersionMatchers.anySolr;
     // Only ES 8+ removes some legacy aliases for new indices; OS still tolerates them
     // (with a warning), but we still strip them defensively for OS targets.
 
@@ -86,30 +90,100 @@ public class AnalysisCompatibility {
 
             // camelCase aliases for ngram/edge_ngram filters: deprecated ES 6.4; rejected on new
             // indices since ES 7.0 (alias still registered for read-compat through 7.x). OS rejects
-            // them on new-index creation everywhere.
-            new Rule(FILTER, "nGram", "ngram",
-                    UnboundVersionMatchers.isBelowES_7_X, TARGET_ES_7_OR_OS),
-            new Rule(FILTER, "edgeNGram", "edge_ngram",
-                    UnboundVersionMatchers.isBelowES_7_X, TARGET_ES_7_OR_OS),
+            // them on new-index creation everywhere. Solr also emits the camelCase form.
+            new Rule(FILTER, "nGram", "ngram", SOLR_OR_BELOW_ES7, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "edgeNGram", "edge_ngram", SOLR_OR_BELOW_ES7, TARGET_ES_7_OR_OS),
 
             // ─────────────────────── Tokenizers ─────────────────────
             // camelCase aliases for ngram/edge_ngram tokenizers: deprecated ES 7.6; rejected on new
             // indices in ES 8.0. OS treats them as deprecated and rejects on new indices everywhere.
-            new Rule(TOKENIZER, "nGram", "ngram",
-                    UnboundVersionMatchers.isBelowES_7_X, TARGET_ES_7_OR_OS),
-            new Rule(TOKENIZER, "edgeNGram", "edge_ngram",
-                    UnboundVersionMatchers.isBelowES_7_X, TARGET_ES_7_OR_OS),
+            new Rule(TOKENIZER, "nGram", "ngram", SOLR_OR_BELOW_ES7, TARGET_ES_7_OR_OS),
+            new Rule(TOKENIZER, "edgeNGram", "edge_ngram", SOLR_OR_BELOW_ES7, TARGET_ES_7_OR_OS),
 
             // PathHierarchy (camelCase tokenizer): deprecated by OS in 2.12, slated for removal in
-            // 4.0, but harmless to rewrite preemptively. Targets: any OS.
-            new Rule(TOKENIZER, "PathHierarchy", "path_hierarchy",
-                    v -> true, TARGET_OS),
+            // 4.0, but harmless to rewrite preemptively. Targets: any OS. Solr's
+            // pathHierarchy short-name lower-cases the same way.
+            new Rule(TOKENIZER, "PathHierarchy", "path_hierarchy", v -> true, TARGET_OS),
+            new Rule(TOKENIZER, "pathHierarchy", "path_hierarchy", SOLR_ANY, TARGET_OS),
 
             // ───────────────────── Char filters ─────────────────────
             // htmlStrip (camelCase) was a pre-configured alias deprecated in ES 6.3; rejected on new
-            // ES 7.x indices and gone in 8.0.
-            new Rule(CHAR_FILTER, "htmlStrip", "html_strip",
-                    UnboundVersionMatchers.isBelowES_7_X, TARGET_ES_7_OR_OS),
+            // ES 7.x indices and gone in 8.0. Solr emits the same camelCase form.
+            new Rule(CHAR_FILTER, "htmlStrip", "html_strip", SOLR_OR_BELOW_ES7, TARGET_ES_7_OR_OS),
+            new Rule(CHAR_FILTER, "patternReplace", "pattern_replace", SOLR_ANY, TARGET_ES_7_OR_OS),
+
+            // ─────────────────────── Solr camelCase → OS snake_case ───────────────────────
+            // Only includes filters/char_filters/tokenizers we have confirmed exist (with the
+            // same semantics) under the snake_case short name in OpenSearch. Components that
+            // would require a parameter rewrite (e.g. solr.GermanStemFilterFactory →
+            // stemmer + language=german) are intentionally left alone — if a user has a
+            // truly custom or non-equivalent component, the create-index call will fail with
+            // an "unknown tokenizer/filter" error and the existing reactive InvalidResponse
+            // retry will surface that to the user instead of silently misconfiguring.
+            //
+            // Sourced from the Solr 6-9 ↔ ES/OS analysis-component compatibility audit
+            // (Solr indexing-guide + opensearch-project/OpenSearch analysis-common module).
+
+            // Token filters with direct OS short-name equivalents.
+            new Rule(FILTER, "synonymGraph", "synonym_graph", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "flattenGraph", "flatten_graph", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "wordDelimiter", "word_delimiter", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "wordDelimiterGraph", "word_delimiter_graph", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "removeDuplicates", "remove_duplicates", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "delimitedPayload", "delimited_payload", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "commonGrams", "common_grams", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "decimalDigit", "decimal_digit", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "patternReplace", "pattern_replace", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "patternCaptureGroup", "pattern_capture", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "keepWord", "keep", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "keepTypes", "keep_types", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "keywordMarker", "keyword_marker", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "keywordRepeat", "keyword_repeat", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "porterStem", "porter_stem", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "kStem", "kstem", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "stemmerOverride", "stemmer_override", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "snowballPorter", "snowball", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "hunspellStem", "hunspell", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "minHash", "min_hash", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "limitTokenCount", "limit", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "asciiFolding", "asciifolding", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "dictionaryCompoundWord", "dictionary_decompounder", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "hyphenationCompoundWord", "hyphenation_decompounder", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "cjkBigram", "cjk_bigram", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "cjkWidth", "cjk_width", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "reverseString", "reverse", SOLR_ANY, TARGET_ES_7_OR_OS),
+
+            // Per-language NORMALIZATION filters: confirmed direct OS short-name equivalents.
+            // These do NOT require parameter rewrites — they map name-for-name.
+            new Rule(FILTER, "arabicNormalization", "arabic_normalization", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "germanNormalization", "german_normalization", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "hindiNormalization", "hindi_normalization", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "indicNormalization", "indic_normalization", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "persianNormalization", "persian_normalization", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "scandinavianFolding", "scandinavian_folding", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "scandinavianNormalization", "scandinavian_normalization", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "serbianNormalization", "serbian_normalization", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "soraniNormalization", "sorani_normalization", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "bengaliNormalization", "bengali_normalization", SOLR_ANY, TARGET_ES_7_OR_OS),
+
+            // Per-language STEMMERS that have a direct OS short-name (only these — others
+            // need stemmer+language= parameter rewrites which are out of scope for this
+            // pass). Confirmed in opensearch-project/OpenSearch analysis-common.
+            new Rule(FILTER, "germanStem", "german_stem", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "frenchStem", "french_stem", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "russianStem", "russian_stem", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "brazilianStem", "brazilian_stem", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "arabicStem", "arabic_stem", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "czechStem", "czech_stem", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(FILTER, "dutchStem", "dutch_stem", SOLR_ANY, TARGET_ES_7_OR_OS),
+
+            // Tokenizers with direct OS short-name equivalents (Solr-only camelCase).
+            new Rule(TOKENIZER, "uax29URLEmail", "uax_url_email", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(TOKENIZER, "simplePattern", "simple_pattern", SOLR_ANY, TARGET_ES_7_OR_OS),
+            new Rule(TOKENIZER, "simplePatternSplit", "simple_pattern_split", SOLR_ANY, TARGET_ES_7_OR_OS),
+
+            // Char filters with direct OS short-name equivalents (Solr-only).
+            new Rule(CHAR_FILTER, "mapping", "mapping", SOLR_ANY, TARGET_ES_7_OR_OS), // identity, harmless
 
             // ─────────────────────── Analyzers ──────────────────────
             // standard_html_strip: deprecated ES 6.5; rejected on ES 8+ new indices; removed in OS 2.0.

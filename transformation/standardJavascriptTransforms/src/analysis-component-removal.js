@@ -143,15 +143,142 @@ function processSettingsRoot(settings, removed, renames) {
         const idx = getEntry(settings, 'index');
         if (idx) analysis = getEntry(idx, 'analysis');
     }
-    if (!analysis) return;
+    if (analysis) {
+        processAnalyzers(getEntry(analysis, 'analyzer'), removed, renames);
+        processNamedSection(getEntry(analysis, 'tokenizer'),
+            new Set(removed.tokenizer || []), renames.tokenizer || {});
+        processNamedSection(getEntry(analysis, 'filter'),
+            new Set(removed.filter || []), renames.filter || {});
+        processNamedSection(getEntry(analysis, 'char_filter'),
+            new Set(removed.char_filter || []), renames.char_filter || {});
+    }
 
-    processAnalyzers(getEntry(analysis, 'analyzer'), removed, renames);
-    processNamedSection(getEntry(analysis, 'tokenizer'),
-        new Set(removed.tokenizer || []), renames.tokenizer || {});
-    processNamedSection(getEntry(analysis, 'filter'),
-        new Set(removed.filter || []), renames.filter || {});
-    processNamedSection(getEntry(analysis, 'char_filter'),
-        new Set(removed.char_filter || []), renames.char_filter || {});
+    // Snapshot settings come in flat-dotted form upstream of the CanonicalTransformer
+    // normalize step, e.g.:
+    //   "index.analysis.analyzer.alcatraz_tokenized_string.filter": [...]
+    //   "index.analysis.analyzer.alcatraz_tokenized_string.tokenizer": "standard"
+    //   "index.analysis.filter.<name>.type": "stop"
+    // Handle that shape directly so the transform fires before flat→tree conversion.
+    processFlatDottedSettings(settings, removed, renames);
+}
+
+const ANALYSIS_KIND_KEYS = ['analyzer', 'tokenizer', 'filter', 'char_filter'];
+
+function isFlatDottedKey(key) {
+    return typeof key === 'string' && key.indexOf('.') >= 0;
+}
+
+function processFlatDottedSettings(settings, removed, renames) {
+    const removedByKind = {
+        filter: new Set(removed.filter || []),
+        tokenizer: new Set(removed.tokenizer || []),
+        char_filter: new Set(removed.char_filter || []),
+        analyzer: new Set(removed.analyzer || []),
+    };
+    const renamesByKind = {
+        filter: renames.filter || {},
+        tokenizer: renames.tokenizer || {},
+        char_filter: renames.char_filter || {},
+        analyzer: renames.analyzer || {},
+    };
+
+    // Collect all flat-dotted keys first (avoid iterator invalidation on delete/rename).
+    const flatKeys = [];
+    for (const [k, _v] of entries(settings)) {
+        if (isFlatDottedKey(k)) flatKeys.push(k);
+    }
+
+    // Helper: returns {kind, name, suffix} if the dotted key starts with a recognized
+    // analysis section path, else null. Accepts both "analysis.<kind>.<name>(.<rest>)?"
+    // and "index.analysis.<kind>.<name>(.<rest>)?" prefixes.
+    function parseAnalysisKey(key) {
+        const parts = key.split('.');
+        let i = 0;
+        if (parts[i] === 'index') i++;
+        if (parts[i] !== 'analysis') return null;
+        i++;
+        const kind = parts[i];
+        if (ANALYSIS_KIND_KEYS.indexOf(kind) < 0) return null;
+        i++;
+        if (i >= parts.length) return null;
+        const name = parts[i];
+        i++;
+        const suffix = parts.slice(i).join('.');
+        const prefixLen = key.length - (suffix.length === 0 ? name.length : (name.length + 1 + suffix.length));
+        const prefix = key.substring(0, prefixLen);
+        return { kind, name, suffix, prefix };
+    }
+
+    // First pass: drop entries whose component name is in the removed set, or rename
+    // by rewriting the key.
+    for (const key of flatKeys) {
+        const parsed = parseAnalysisKey(key);
+        if (!parsed) continue;
+        const { kind, name, suffix, prefix } = parsed;
+        if (removedByKind[kind].has(name)) {
+            deleteEntry(settings, key);
+            continue;
+        }
+        const renameTo = renamesByKind[kind][name];
+        if (renameTo) {
+            const newKey = prefix + renameTo + (suffix ? '.' + suffix : '');
+            const value = getEntry(settings, key);
+            deleteEntry(settings, key);
+            // If a key with the new name already exists, leave it; otherwise install ours.
+            if (getEntry(settings, newKey) === undefined) {
+                setEntry(settings, newKey, value);
+            }
+        }
+    }
+
+    // Second pass: rewrite analyzer .filter array entries, .char_filter array entries,
+    // and .tokenizer string references (these point at filter/char_filter/tokenizer NAMES,
+    // which may also be in the removed/renames sets).
+    const filterRemoved = removedByKind.filter;
+    const filterRenames = renamesByKind.filter;
+    const charFilterRemoved = removedByKind.char_filter;
+    const charFilterRenames = renamesByKind.char_filter;
+    const tokenizerRemoved = removedByKind.tokenizer;
+    const tokenizerRenames = renamesByKind.tokenizer;
+
+    // We need a fresh key list because the first pass may have changed the set.
+    const second = [];
+    for (const [k, _v] of entries(settings)) {
+        if (isFlatDottedKey(k)) second.push(k);
+    }
+    for (const key of second) {
+        const parsed = parseAnalysisKey(key);
+        if (!parsed || parsed.kind !== 'analyzer') continue;
+        const value = getEntry(settings, key);
+        if (parsed.suffix === 'filter' && Array.isArray(value)) {
+            // Modify in place — same Array object reference.
+            for (let i = value.length - 1; i >= 0; i--) {
+                const v = value[i];
+                if (typeof v !== 'string') continue;
+                if (filterRemoved.has(v)) {
+                    value.splice(i, 1);
+                } else if (filterRenames[v]) {
+                    value[i] = filterRenames[v];
+                }
+            }
+        } else if (parsed.suffix === 'char_filter' && Array.isArray(value)) {
+            for (let i = value.length - 1; i >= 0; i--) {
+                const v = value[i];
+                if (typeof v !== 'string') continue;
+                if (charFilterRemoved.has(v)) {
+                    value.splice(i, 1);
+                } else if (charFilterRenames[v]) {
+                    value[i] = charFilterRenames[v];
+                }
+            }
+        } else if (parsed.suffix === 'tokenizer' && typeof value === 'string') {
+            if (tokenizerRemoved.has(value)) {
+                deleteEntry(settings, key);
+            } else if (tokenizerRenames[value]) {
+                setEntry(settings, key, tokenizerRenames[value]);
+            }
+        }
+    }
 }
 
 function processBody(body, removed, renames) {
