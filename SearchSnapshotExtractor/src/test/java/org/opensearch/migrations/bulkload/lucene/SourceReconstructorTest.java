@@ -2101,30 +2101,27 @@ class SourceReconstructorTest {
     }
 
     @Test
-    void enronMapping_sourceExcludedTextField_recoveredFromIndex() throws IOException {
-        // Bug: texts.user.content (a text field in _source.excludes) should be reconstructed
-        // from the inverted index. Instead, the reconstructor either:
-        // (a) suppresses it because it's a copy_to target (of attrvals), OR
-        // (b) reverse-derives into attrvals (which has index:false, so no Lucene data)
-        //
-        // Expected: texts.user.content IS emitted with analyzed tokens from the index.
-        // texts.user.attrvals must NOT appear (it's index:false/dv:false, unrecoverable).
+    void enronMapping_sourceExcludedTextField_reverseDerivesIntoAttrvals() throws IOException {
+        // texts.user.attrvals (index:false, copy_to: texts.user.content) is the source field
+        // that appeared in the original _source. texts.user.content is the copy_to TARGET
+        // (indexed, searchable). Reverse-derivation reads from the target and writes into the
+        // source — so attrvals appears in the output, not content.
         var reader = mock(LuceneLeafReader.class);
         when(reader.getDocValueFields()).thenReturn(Collections.emptyList());
-        // texts.user.content is a text field — tier-3 fallback recovers analyzed tokens
+        // texts.user.content is indexed — tier-3 fallback recovers analyzed tokens from it
         when(reader.getValueFromPointsOrTerms(
                 org.mockito.ArgumentMatchers.eq(0),
                 org.mockito.ArgumentMatchers.eq("texts.user.content"),
                 org.mockito.ArgumentMatchers.eq(EsFieldType.STRING),
                 org.mockito.ArgumentMatchers.any()))
             .thenReturn(Optional.of(new RecoveredValue.TextTerm("lucy here few questions")));
-        // subj is a text field — tier-3 fallback returns empty (it was "")
+        // subj is a directly indexed text field (not a copy_to target) — recovers directly
         when(reader.getValueFromPointsOrTerms(
                 org.mockito.ArgumentMatchers.eq(0),
                 org.mockito.ArgumentMatchers.eq("subj"),
                 org.mockito.ArgumentMatchers.eq(EsFieldType.STRING),
                 org.mockito.ArgumentMatchers.any()))
-            .thenReturn(Optional.empty());
+            .thenReturn(Optional.of(new RecoveredValue.TextTerm("bishops corner ltd buyout")));
         // Default: nothing else recoverable
         when(reader.getValueFromPointsOrTerms(
                 org.mockito.ArgumentMatchers.anyInt(),
@@ -2141,15 +2138,19 @@ class SourceReconstructorTest {
         String merged = SourceReconstructor.mergeWithDocValues(seed, reader, 0, document(), ctx);
         JsonNode tree = MAPPER.readTree(merged);
 
-        // texts.user.content MUST be emitted — it's excluded from _source but recoverable
+        // texts.user.attrvals gets the value via reverse-derivation from texts.user.content
         assertEquals("lucy here few questions",
-            tree.path("texts").path("user").path("content").asText(),
-            "texts.user.content must be reconstructed from inverted index: " + merged);
+            tree.path("texts").path("user").path("attrvals").asText(),
+            "texts.user.attrvals must be reverse-derived from copy_to target: " + merged);
 
-        // texts.user.attrvals must NOT appear — index:false, doc_values not specified (defaults
-        // to false for text), no stored field. It's completely unrecoverable.
-        assertTrue(tree.path("texts").path("user").path("attrvals").isMissingNode(),
-            "texts.user.attrvals (index:false) must not appear in output: " + merged);
+        // texts.user.content must NOT appear — it's a copy_to target, never in original _source
+        assertTrue(tree.path("texts").path("user").path("content").isMissingNode(),
+            "texts.user.content (copy_to target) must not appear in output: " + merged);
+
+        // subj is directly recoverable (not a copy_to target, just source-excluded)
+        assertEquals("bishops corner ltd buyout",
+            tree.path("subj").asText(),
+            "subj must be reconstructed directly from inverted index: " + merged);
 
         // Seed fields preserved
         assertEquals("abc123", tree.path("gcid").asText());

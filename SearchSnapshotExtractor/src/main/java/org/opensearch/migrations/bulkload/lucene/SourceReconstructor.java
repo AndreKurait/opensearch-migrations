@@ -45,10 +45,9 @@ public class SourceReconstructor {
         if (fieldName.startsWith("_")) {
             return true;
         }
-        // Unified source-exclusion gate: strips copy_to targets (index-time-only, never in
-        // _source) AND honours index-level _source.includes / _source.excludes. Cheap no-op
-        // when the mapping declared neither directive.
-        if (mappingContext != null && mappingContext.isSourceExcluded(fieldName)) {
+        // Only skip copy_to targets (index-time duplicates that never appear in original _source).
+        // Do NOT skip source-excluded fields — those need reconstruction (that's the whole point).
+        if (mappingContext != null && mappingContext.isCopyToTarget(fieldName)) {
             return true;
         }
         if (!fieldName.contains(".")) {
@@ -540,18 +539,19 @@ public class SourceReconstructor {
                 if (hasNested(target, sourceField)) {
                     continue;
                 }
-                // Respect _source.excludes / .includes for the SOURCE field itself. If the
-                // user told ES not to store "secret" in _source, we must not resurrect it
-                // via its copy_to target. shouldSkipField covers the leading-underscore and
-                // copy_to-target cases too, so the same gate is reusable here.
-                if (shouldSkipField(sourceField, mappingContext)) {
+                // Skip internal fields (_id, etc.) but NOT source-excluded fields —
+                // source-excluded copy_to sources are the primary reverse-derivation use case.
+                if (sourceField.startsWith("_")) {
                     continue;
                 }
                 // Skip reverse-derivation for source fields that have no Lucene footprint
-                // (index:false AND doc_values:false). Such fields exist only in _source — if
-                // they're absent from the seed, the doc genuinely didn't have that field.
+                // (index:false AND doc_values:false) AND are not source-excluded. Such fields
+                // exist only in _source — if absent from the seed, the doc genuinely didn't
+                // have that field. But source-excluded fields need reconstruction via their
+                // copy_to targets even if they themselves have no index/dv.
                 FieldMappingInfo sourceMapping = mappingContext.getFieldInfo(sourceField);
-                if (sourceMapping != null && !sourceMapping.indexed() && !sourceMapping.docValues()) {
+                if (sourceMapping != null && !sourceMapping.indexed() && !sourceMapping.docValues()
+                        && !mappingContext.isSourceExcluded(sourceField)) {
                     continue;
                 }
                 List<String> rankedTargets = mappingContext.getCopyToTargets(sourceField);

@@ -360,8 +360,10 @@ public class FieldMappingContext {
         if (sourcesByTarget.isEmpty() && compiledIncludes.isEmpty() && compiledExcludes.isEmpty()) {
             return false;
         }
+        // Copy_to targets never appear in original _source — always suppress from direct output.
+        // Their value is recovered via reverse-derivation (pass 5) into the source field.
         if (isCopyToTarget(fieldPath)) {
-            return !matchesAny(compiledExcludes, fieldPath);
+            return true;
         }
         if (matchesAny(compiledExcludes, fieldPath)) {
             return true;
