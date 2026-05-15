@@ -229,6 +229,151 @@ class EndToEndTest extends BaseMigrationTest {
         }
     }
 
+    /**
+     * Customer-reported scenario: ES 6 index with _source DISABLED and a custom analyzer
+     * that uses the deprecated "standard" token filter (removed in ES 7+/OS), referenced
+     * by a "text" field with norms:false. Without the preemptive transform, document
+     * indexing on the OS 2 target fails with:
+     *   "The [standard] token filter has been removed."
+     *
+     * The exact analyzer shape from the customer report:
+     *   "alcatraz_tokenized_string": {
+     *     "filter": ["standard", "alcatraz_pattern_capture", "lowercase", "asciifolding", "my_stopwords"],
+     *     "type": "custom",
+     *     "tokenizer": "standard"
+     *   }
+     * with a field:
+     *   "subj": { "type": "text", "norms": false, "analyzer": "alcatraz_tokenized_string" }
+     *
+     * This test confirms metadata migrate succeeds (the preemptive analysis-component
+     * compatibility transform strips the offending "standard" filter from the analyzer's
+     * filter array) AND that the resulting target index actually accepts indexing the
+     * "subj" field — which is what failed for the customer.
+     */
+    @Test
+    void deprecatedStandardTokenFilter_withSourceDisabledAndSubjField_migratesAndIndexes() {
+        try (
+            final var sourceCluster = new SearchClusterContainer(SearchClusterContainer.ES_V6_8_23);
+            final var targetCluster = new SearchClusterContainer(SearchClusterContainer.OS_V2_19_4)
+        ) {
+            this.sourceCluster = sourceCluster;
+            this.targetCluster = targetCluster;
+            startClusters();
+
+            var indexName = "alcatraz-source-disabled-subj";
+
+            // Customer-shaped index: _source disabled, custom analyzer with the deprecated
+            // "standard" token filter, field "subj" with norms:false referencing it.
+            // Define alcatraz_pattern_capture and my_stopwords inline so the analyzer is
+            // self-contained on the source side. (We omit stopwords_path — that points at
+            // a config-dir file that wouldn't exist on the source container either.)
+            var indexBody = "{" +
+                "  \"settings\": {" +
+                "    \"index\": {" +
+                "      \"number_of_shards\": 1," +
+                "      \"number_of_replicas\": 0," +
+                "      \"analysis\": {" +
+                "        \"analyzer\": {" +
+                "          \"alcatraz_tokenized_string\": {" +
+                "            \"type\": \"custom\"," +
+                "            \"tokenizer\": \"standard\"," +
+                "            \"filter\": [\"standard\", \"alcatraz_pattern_capture\", \"lowercase\", \"asciifolding\", \"my_stopwords\"]" +
+                "          }" +
+                "        }," +
+                "        \"filter\": {" +
+                "          \"alcatraz_pattern_capture\": {" +
+                "            \"type\": \"pattern_capture\"," +
+                "            \"preserve_original\": true," +
+                "            \"patterns\": [\"([A-Za-z0-9._%+-]+)@\"]" +
+                "          }," +
+                "          \"my_stopwords\": {" +
+                "            \"type\": \"stop\"," +
+                "            \"stopwords\": [\"the\", \"a\", \"an\"]" +
+                "          }" +
+                "        }" +
+                "      }" +
+                "    }" +
+                "  }," +
+                "  \"mappings\": {" +
+                "    \"" + sourceOperations.defaultDocType() + "\": {" +
+                "      \"_source\": { \"enabled\": false }," +
+                "      \"properties\": {" +
+                "        \"subj\": {" +
+                "          \"type\": \"text\"," +
+                "          \"norms\": false," +
+                "          \"analyzer\": \"alcatraz_tokenized_string\"" +
+                "        }," +
+                "        \"from_addr\": {" +
+                "          \"type\": \"keyword\"," +
+                "          \"store\": true" +
+                "        }" +
+                "      }" +
+                "    }" +
+                "  }" +
+                "}";
+            sourceOperations.createIndex(indexName, indexBody);
+            sourceOperations.createDocument(indexName, "1",
+                "{ \"subj\": \"Quarterly review meeting tomorrow\", \"from_addr\": \"alice@example.com\" }");
+            sourceOperations.createDocument(indexName, "2",
+                "{ \"subj\": \"Re: invoice attached\", \"from_addr\": \"bob@example.com\" }");
+
+            var snapshotName = "alcatraz_source_disabled_snap";
+            createSnapshot(sourceCluster, snapshotName, SnapshotTestContext.factory().noOtelTracking());
+            sourceCluster.copySnapshotData(localDirectory.toString());
+
+            var arguments = prepareSnapshotMigrationArgs(snapshotName, localDirectory.toString());
+            arguments.metadataTransformationParams.multiTypeResolutionBehavior = MultiTypeResolutionBehavior.UNION;
+            // The customer's index has _source disabled, so we need this flag.
+            arguments.enableSourcelessMigrations = true;
+
+            // ── Step 1: metadata migrate (this is where the analyzer setup gets pushed) ──
+            MigrationItemResult metaResult = executeMigration(arguments, MetadataCommands.MIGRATE);
+            log.info(metaResult.asCliOutput());
+            assertThat("Metadata migration should succeed despite removed 'standard' token filter on source",
+                metaResult.getExitCode(), equalTo(0));
+            assertThat(getNames(getSuccessfulResults(metaResult.getItems().getIndexes())), hasItems(indexName));
+
+            // ── Step 2: target index should be present with analyzer fixed ──
+            var indexRes = targetOperations.get("/" + indexName);
+            assertThat(indexRes.getValue(), indexRes.getKey(), equalTo(200));
+
+            var settingsRes = targetOperations.get("/" + indexName + "/_settings");
+            assertThat(settingsRes.getValue(), settingsRes.getKey(), equalTo(200));
+            var settingsBody = settingsRes.getValue();
+            // Must NOT contain the legacy "standard" filter token in the analyzer's filter array.
+            // We do a coarse-grained check that "alcatraz_tokenized_string" no longer references
+            // "standard" as a filter — verifying the custom filters survive.
+            assertThat("Custom alcatraz_pattern_capture filter must survive",
+                settingsBody, containsString("alcatraz_pattern_capture"));
+            assertThat("lowercase must survive", settingsBody, containsString("lowercase"));
+            assertThat("asciifolding must survive", settingsBody, containsString("asciifolding"));
+            assertThat("my_stopwords must survive", settingsBody, containsString("my_stopwords"));
+
+            // ── Step 3: actually use the analyzer to index a document on the target. This
+            //    is what failed for the customer with "The [standard] token filter has been removed."
+            //    On OS 2 with _source disabled, we still write the doc; if the analyzer is broken
+            //    the index write will return 4xx with the standard-token-filter error.
+            var indexDocRes = targetOperations.put(
+                "/" + indexName + "/_doc/test-after-migrate?refresh=true",
+                "{ \"subj\": \"Post-migration ingest test\", \"from_addr\": \"new@example.com\" }"
+            );
+            assertThat("Indexing into the migrated target index must succeed (analyzer chain valid). " +
+                    "Response was: " + indexDocRes.getValue(),
+                indexDocRes.getKey(), equalTo(201));
+
+            // Confirm we can analyze the field via the cluster's _analyze API — this also uses
+            // the analyzer end-to-end and would surface a [standard] filter error.
+            var analyzeRes = targetOperations.post(
+                "/" + indexName + "/_analyze",
+                "{ \"analyzer\": \"alcatraz_tokenized_string\", \"text\": \"Hello World\" }"
+            );
+            assertThat("Analyzer must be usable on target. Response: " + analyzeRes.getValue(),
+                analyzeRes.getKey(), equalTo(200));
+            assertThat("_analyze response must NOT mention the removed standard filter",
+                analyzeRes.getValue(), not(containsString("standard] token filter has been removed")));
+        }
+    }
+
     @ParameterizedTest(name = "Legacy template no mappings from {0} to OS 2.19")
     @MethodSource(value = "es6xScenarios")
     void legacyTemplateNoMappings(SearchClusterContainer.ContainerVersion sourceVersion) {
