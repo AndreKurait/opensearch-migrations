@@ -19,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.hamcrest.Matcher;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -112,6 +113,119 @@ class EndToEndTest extends BaseMigrationTest {
                     TransferMedium.SnapshotImage,
                     MetadataCommands.MIGRATE,
                     List.of(TemplateType.Legacy));
+        }
+    }
+
+    /**
+     * E2E regression test: an ES 6 index that uses the legacy "standard" token filter (removed in ES 7+/OpenSearch)
+     * must still migrate successfully. The metadata migration retries after stripping the offending filter
+     * from analyzer filter arrays — see InvalidResponse#getRemovedTokenFilters and ObjectNodeUtils#removeAnalyzerFilters.
+     * Mirrors the production failure where ES 6 templates declared analyzers like:
+     *   "filter": ["standard", "alcatraz_pattern_capture", "lowercase", "asciifolding", "my_stopwords"]
+     */
+    @Test
+    void deprecatedStandardTokenFilter_isStrippedAndIndexCreated() {
+        try (
+            final var sourceCluster = new SearchClusterContainer(SearchClusterContainer.ES_V6_8_23);
+            final var targetCluster = new SearchClusterContainer(SearchClusterContainer.OS_V2_19_4)
+        ) {
+            this.sourceCluster = sourceCluster;
+            this.targetCluster = targetCluster;
+            startClusters();
+
+            var indexName = "deprecated-standard-filter-index";
+            var templateName = "deprecated-standard-filter-template";
+            var templatePattern = "deprecated-standard-filter-tmpl-*";
+            var templatedIndexName = "deprecated-standard-filter-tmpl-2023";
+
+            // Index with an analyzer that includes the deprecated "standard" token filter.
+            var indexBody = "{" +
+                "  \"settings\": {" +
+                "    \"index\": {" +
+                "      \"number_of_shards\": 1," +
+                "      \"number_of_replicas\": 0," +
+                "      \"analysis\": {" +
+                "        \"analyzer\": {" +
+                "          \"legacy_with_standard_filter\": {" +
+                "            \"type\": \"custom\"," +
+                "            \"tokenizer\": \"standard\"," +
+                "            \"filter\": [\"standard\", \"lowercase\", \"asciifolding\"]" +
+                "          }" +
+                "        }" +
+                "      }" +
+                "    }" +
+                "  }," +
+                "  \"mappings\": {" +
+                "    \"" + sourceOperations.defaultDocType() + "\": {" +
+                "      \"properties\": {" +
+                "        \"body\": {" +
+                "          \"type\": \"text\"," +
+                "          \"analyzer\": \"legacy_with_standard_filter\"" +
+                "        }" +
+                "      }" +
+                "    }" +
+                "  }" +
+                "}";
+            sourceOperations.createIndex(indexName, indexBody);
+            sourceOperations.createDocument(indexName, "1", "{ \"body\": \"hello world\" }");
+
+            // Legacy template using the same deprecated filter — exercises the template retry path.
+            var templateBody = "{" +
+                "  \"index_patterns\": [\"" + templatePattern + "\"]," +
+                "  \"order\": 0," +
+                "  \"settings\": {" +
+                "    \"index\": {" +
+                "      \"number_of_shards\": 1," +
+                "      \"analysis\": {" +
+                "        \"analyzer\": {" +
+                "          \"legacy_with_standard_filter\": {" +
+                "            \"type\": \"custom\"," +
+                "            \"tokenizer\": \"standard\"," +
+                "            \"filter\": [\"standard\", \"lowercase\"]" +
+                "          }" +
+                "        }" +
+                "      }" +
+                "    }" +
+                "  }," +
+                "  \"mappings\": {}" +
+                "}";
+            var tmplResp = sourceOperations.put("/_template/" + templateName + "?include_type_name=true", templateBody);
+            assertThat(tmplResp.getValue(), tmplResp.getKey(), equalTo(200));
+            sourceOperations.createDocument(templatedIndexName, "1", "{ \"f\": \"v\" }");
+
+            var snapshotName = "deprecated_standard_filter_snap";
+            var testSnapshotContext = SnapshotTestContext.factory().noOtelTracking();
+            createSnapshot(sourceCluster, snapshotName, testSnapshotContext);
+            sourceCluster.copySnapshotData(localDirectory.toString());
+
+            var arguments = prepareSnapshotMigrationArgs(snapshotName, localDirectory.toString());
+            arguments.metadataTransformationParams.multiTypeResolutionBehavior = MultiTypeResolutionBehavior.UNION;
+
+            MigrationItemResult result = executeMigration(arguments, MetadataCommands.MIGRATE);
+            log.info(result.asCliOutput());
+            assertThat("Migration should succeed despite removed 'standard' token filter on source",
+                result.getExitCode(), equalTo(0));
+
+            // Both items should be in successful results
+            assertThat(getNames(getSuccessfulResults(result.getItems().getIndexes())), hasItems(indexName));
+            assertThat(getNames(getSuccessfulResults(result.getItems().getIndexTemplates())), hasItems(templateName));
+
+            // Verify the index made it to the target with the offending filter stripped
+            var indexRes = targetOperations.get("/" + indexName);
+            assertThat(indexRes.getValue(), indexRes.getKey(), equalTo(200));
+            assertThat("Removed token filter should not be present on target index",
+                indexRes.getValue(), not(containsString("\"standard\",\"lowercase\"")));
+            assertThat("Other filters should still be present", indexRes.getValue(), containsString("lowercase"));
+            assertThat("Other filters should still be present", indexRes.getValue(), containsString("asciifolding"));
+            assertThat("'standard' tokenizer (separate from filter) should still be present",
+                indexRes.getValue(), containsString("\"tokenizer\":\"standard\""));
+
+            // Verify the legacy template made it to the target with the offending filter stripped
+            var tmpl = targetOperations.get("/_template/" + templateName);
+            assertThat(tmpl.getValue(), tmpl.getKey(), equalTo(200));
+            assertThat("Template should have 'standard' filter removed",
+                tmpl.getValue(), not(containsString("\"standard\",\"lowercase\"")));
+            assertThat("Template should retain other filters", tmpl.getValue(), containsString("lowercase"));
         }
     }
 
