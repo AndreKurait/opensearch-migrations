@@ -1,0 +1,152 @@
+# golangci-lint configuration — PLAN §12.1/§12.2.
+#
+# Every linter listed below mechanically enforces a rule from PLAN.MD;
+# disabled linters are documented inline.
+
+run:
+  timeout: 3m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    # Correctness — table stakes
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - typecheck
+    - unused
+
+    # Concurrency & context (§9 contract)
+    - contextcheck
+    - containedctx
+    - noctx
+    - bodyclose
+
+    # Error hygiene (§7)
+    - errorlint
+    - nilerr
+
+    # Imports & modules (§3 — UI does no I/O; §1 — no v1↔v2 drift)
+    - depguard
+    - importas
+
+    # Forbidden patterns (§6 — no fmt.Print*; §5 — no os.Getenv in ui)
+    - forbidigo
+
+    # Format
+    - gofumpt
+    - goimports
+    - misspell
+    - unconvert
+    - whitespace
+
+    # Test quality (§11)
+    - thelper
+    - tparallel
+    - paralleltest
+    - testifylint
+
+    # Style hygiene
+    - revive
+    - nolintlint
+    - predeclared
+    - unparam
+    - wastedassign
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/opensearch-project/opensearch-migrations/tui
+
+  importas:
+    no-unaliased: true
+    alias:
+      - pkg: charm.land/bubbletea/v2
+        alias: tea
+      - pkg: charm.land/bubbles/v2/key
+        alias: key
+      - pkg: charm.land/bubbles/v2/help
+        alias: help
+      - pkg: charm.land/lipgloss/v2
+        alias: lipgloss
+      - pkg: github.com/charmbracelet/x/ansi
+        alias: ansi
+      - pkg: github.com/charmbracelet/x/exp/teatest/v2
+        alias: teatest
+      - pkg: github.com/charmbracelet/x/exp/golden
+        alias: golden
+
+  depguard:
+    rules:
+      # Hard ban on v1 charm imports — mechanically enforces PLAN §1 goal.
+      no-charm-v1:
+        deny:
+          - pkg: github.com/charmbracelet/bubbletea
+            desc: "Use charm.land/bubbletea/v2 (PLAN §2)."
+          - pkg: github.com/charmbracelet/bubbles
+            desc: "Use charm.land/bubbles/v2 (PLAN §2)."
+          - pkg: github.com/charmbracelet/lipgloss
+            desc: "Use charm.land/lipgloss/v2 (PLAN §2)."
+
+      # internal/ui does no I/O — enforces PLAN §3 rule 1.
+      tui-no-io:
+        files:
+          - "**/internal/ui/**"
+        deny:
+          - pkg: database/sql
+            desc: "internal/ui does no I/O; go through Workspace (PLAN §3)."
+          - pkg: net/http
+            desc: "internal/ui does no I/O; go through Workspace (PLAN §3)."
+          - pkg: os/exec
+            desc: "internal/ui does no I/O; go through Workspace (PLAN §3)."
+
+  forbidigo:
+    analyze-types: true
+    forbid:
+      # PLAN §6 — fmt.Print* corrupts the alt-screen.
+      - p: '^fmt\.(Print|Println|Printf)$'
+        msg: "Use slog; fmt.Print* corrupts the TUI screen (PLAN §6.3)."
+      - p: '^print$'
+        msg: "Use slog; print() corrupts the TUI screen."
+      - p: '^println$'
+        msg: "Use slog; println() corrupts the TUI screen."
+
+  testifylint:
+    enable-all: true
+
+  revive:
+    severity: warning
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-naming
+      - name: error-return
+      - name: error-strings
+      - name: indent-error-flow
+      - name: receiver-naming
+      - name: time-naming
+      - name: var-naming
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    # cmd/tui/main.go is the one place pre-Run stdout writes are legitimate
+    # (--help, --version, fatal startup errors before the alt-screen exists).
+    - path: ^cmd/tui/main\.go$
+      linters: [forbidigo]
+    - path: ^cmd/tui/lookpath\.go$
+      linters: [forbidigo]
+    # log package writes to stderr in --no-tui mode (§6.2)
+    - path: ^internal/log/
+      linters: [forbidigo]
+    # Tests relax a handful of rules.
+    - path: _test\.go$
+      linters: [unparam, contextcheck, noctx, forbidigo, containedctx]
+    # Generated AWS SDK call sites need pointer-deref idioms; importas
+    # alias is overkill for that subtree.
+    - path: ^internal/feature/aws/
+      linters: [importas]

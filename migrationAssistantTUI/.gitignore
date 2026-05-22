@@ -1,0 +1,30 @@
+# Build artifacts
+build/
+dist/
+*.test
+*.out
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Local dev
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go test
+coverage.out
+coverage.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# secrets
+.aws-bootstrap.local
+
+# Workspaces created by `make run` / tests in repo cwd.
+opensearch-migration-*/
