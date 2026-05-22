@@ -11,6 +11,10 @@
     Existing MA    none found in us-east-1                                          
     AI agents      claude-code   2.1.140  (latest 2.1.147 — patch behind) ⚠         
                    kiro-cli      0.4.1  (online version unknown)                    
+    CLI tools      38;2;232;232;240m✓ helm     v3.15.0m                                               
+                   38;2;232;232;240m✓ kubectl  v1.31.0m                                               
+                   38;2;232;232;240m✓ aws      2.17.0m                                                
+                   38;2;232;232;240m✓ docker   27.1.0m                                                
   38;2;232;232;240m  MA version     resolving latest…m                                                
   1;38;2;232;232;240mHow do you want to drive the migration?m                                           
                                                                                     

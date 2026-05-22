@@ -51,7 +51,7 @@ func TestInstallKiroPlacesUpstreamLayout(t *testing.T) {
 func TestInstallClaudeCodeBuildsSkillsTree(t *testing.T) {
 	t.Parallel()
 	tar := makeBundle(t, map[string]string{
-		"skills/start.md":   "# @start",
+		"skills/start.md":    "# @start",
 		"skills/snapshot.md": "# snapshot",
 	})
 	wd := t.TempDir()

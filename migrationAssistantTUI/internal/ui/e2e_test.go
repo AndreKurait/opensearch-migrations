@@ -171,7 +171,7 @@ func TestE2E_HandoffManualSetsExecTarget(t *testing.T) {
 
 	// Welcome → Intent → Wizard → Review → Deploy → Handoff. Wizard is
 	// 8 enters with default create-vpc scope.
-	d.Send(tea.KeyPressMsg{Code: tea.KeyEnter})  // welcome → intent
+	d.Send(tea.KeyPressMsg{Code: tea.KeyEnter})   // welcome → intent
 	d.Send(tea.KeyPressMsg{Code: 'k', Text: "k"}) // intent skip
 	for i := 0; i < 8; i++ {
 		d.Send(tea.KeyPressMsg{Code: tea.KeyEnter})

@@ -43,6 +43,18 @@ type Workspace interface {
 	// Agents returns the agent-CLI detector. Always non-nil.
 	Agents() feature.AgentDetector
 
+	// Tools returns the host-CLI tool detector (helm/kubectl/aws/git/
+	// docker/kiro-cli/claude-code). Always non-nil. Mirrors the role
+	// bootstrap-kiro-agent.sh's prerequisite-check phase used to play.
+	Tools() feature.ToolDetector
+
+	// ToolInstaller returns the host-CLI installer for the subset of
+	// tools the TUI auto-installs (helm, kiro-cli — anything with
+	// Tool.Installable == true). Always non-nil. The welcome page calls
+	// this only after the user explicitly picks "install missing tools";
+	// detection (Tools().Detect) is read-only.
+	ToolInstaller() feature.ToolInstaller
+
 	// Artifacts returns the release-asset / raw-repo fetcher. Always non-nil.
 	Artifacts() feature.ArtifactSource
 

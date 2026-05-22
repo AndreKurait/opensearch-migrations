@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/feature"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/common"
@@ -38,10 +38,10 @@ type State struct {
 	Version string
 	TLSMode string // "none" | "self-signed" | "pca-import" | "pca-create"
 
-	EKSAccessARN string // legacy single principal (kept for review.BuildArgv compat)
+	EKSAccessARN         string   // legacy single principal (kept for review.BuildArgv compat)
 	AdditionalAccessARNs []string // extra principals beyond the caller
-	Namespace    string
-	StackName    string
+	Namespace            string
+	StackName            string
 
 	// Advanced overrides — flat map per UX.md §0.1.
 	Advanced map[string]string
@@ -94,8 +94,8 @@ var stepDefs = []struct {
 
 // Model is the wizard page state.
 type Model struct {
-	c   *common.Common
-	cur int
+	c        *common.Common
+	cur      int
 	showInfo bool
 
 	// Step inputs

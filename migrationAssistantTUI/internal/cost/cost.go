@@ -60,10 +60,10 @@ func EstimateDailyUSD(in Inputs) Estimate {
 	// Two m5.large for the rest of the services (Argo workflows, capture
 	// proxy, replayer, traffic generator, dashboards — 0.096/h on-demand).
 	lines = append(lines, Line{"EC2 m5.large × 2 (services)", 24 * 2 * 0.096}) // $4.61/day
-	lines = append(lines, Line{"NLB (Argo workflows)", 24 * 0.0225})            // $0.54/day
-	lines = append(lines, Line{"ECR storage (~150 GB)", 0.50})                  // $0.50/day
-	lines = append(lines, Line{"CloudWatch Logs (idle)", 0.30})                 // $0.30/day
-	lines = append(lines, Line{"S3 (snapshots, free tier)", 0.10})              // ~free at idle
+	lines = append(lines, Line{"NLB (Argo workflows)", 24 * 0.0225})           // $0.54/day
+	lines = append(lines, Line{"ECR storage (~150 GB)", 0.50})                 // $0.50/day
+	lines = append(lines, Line{"CloudWatch Logs (idle)", 0.30})                // $0.30/day
+	lines = append(lines, Line{"S3 (snapshots, free tier)", 0.10})             // ~free at idle
 
 	// Scope-dependent.
 	if in.Scope == "create-vpc" {

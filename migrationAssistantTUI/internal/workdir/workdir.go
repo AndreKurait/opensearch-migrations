@@ -151,10 +151,10 @@ func SaveState(workdir string, st State) error {
 type Guard int
 
 const (
-	GuardOK             Guard = iota // same account+region+version
-	GuardOverwrite                   // different account/region/version — prompt user
-	GuardCorrupt                     // marker exists but unparseable — safe-mode
-	GuardFresh                       // no marker — first install
+	GuardOK        Guard = iota // same account+region+version
+	GuardOverwrite              // different account/region/version — prompt user
+	GuardCorrupt                // marker exists but unparseable — safe-mode
+	GuardFresh                  // no marker — first install
 )
 
 // Inspect resolves the guard verdict for the workdir vs. expected (acct, region, ver).

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
 
 	deployfeat "github.com/opensearch-project/opensearch-migrations/tui/internal/feature/deploy"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/common"

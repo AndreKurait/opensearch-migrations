@@ -10,9 +10,9 @@ import lipgloss "charm.land/lipgloss/v2"
 // against — every visual token lands in one file.
 type Styles struct {
 	Header struct {
-		Title    lipgloss.Style
-		Subtle   lipgloss.Style
-		Tab      lipgloss.Style
+		Title     lipgloss.Style
+		Subtle    lipgloss.Style
+		Tab       lipgloss.Style
 		ActiveTab lipgloss.Style
 	}
 	Footer struct {

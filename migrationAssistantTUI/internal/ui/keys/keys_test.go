@@ -21,8 +21,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 )
 
 // allBindings flattens KeyMap into a list of (group, name, binding)

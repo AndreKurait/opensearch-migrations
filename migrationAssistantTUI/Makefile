@@ -1,12 +1,41 @@
-.PHONY: build test test-update lint fmt cover cover-xml run testdata-budget tidy clean
+.PHONY: build install uninstall release-snapshot test test-update lint fmt cover cover-xml run testdata-budget tidy clean
 
 BIN_DIR ?= build/bin
 COV_DIR ?= build/coverage
 MODULE  := github.com/opensearch-project/opensearch-migrations/tui
+PREFIX  ?= /usr/local
+BINARY  := migration-assistant
+
+# Embed version info at build time. Falls back to "dev" outside a git checkout.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
+DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -s -w \
+    -X main.version=$(VERSION) \
+    -X main.commit=$(COMMIT) \
+    -X main.date=$(DATE)
 
 build:
 	@mkdir -p $(BIN_DIR)
-	go build -o $(BIN_DIR)/migration-assistant ./cmd/tui
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY) ./cmd/tui
+
+# Install the binary to $PREFIX/bin (default /usr/local/bin). Override with
+# PREFIX=$HOME/.local for a per-user install. Used by scripts/install.sh and
+# anyone who has the source checked out.
+install: build
+	@install -d "$(PREFIX)/bin"
+	install -m 0755 "$(BIN_DIR)/$(BINARY)" "$(PREFIX)/bin/$(BINARY)"
+	@echo "[migration-assistant] installed to $(PREFIX)/bin/$(BINARY)"
+	@echo "[migration-assistant] run 'migration-assistant' to start"
+
+uninstall:
+	rm -f "$(PREFIX)/bin/$(BINARY)"
+
+# Build a snapshot release locally (no tag, no upload) for hand-testing the
+# goreleaser pipeline. Requires goreleaser >= 2.0.
+release-snapshot:
+	@command -v goreleaser >/dev/null 2>&1 || { echo "goreleaser not installed (https://goreleaser.com)"; exit 1; }
+	goreleaser release --snapshot --clean
 
 test:
 	go test -race -timeout 2m ./...

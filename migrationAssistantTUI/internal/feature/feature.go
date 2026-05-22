@@ -22,9 +22,9 @@ type AWSIdentity struct {
 
 // VPC is one row in the VPC picker (UX.md §8.1).
 type VPC struct {
-	ID    string
-	Name  string
-	CIDR  string
+	ID        string
+	Name      string
+	CIDR      string
 	IsDefault bool
 }
 
@@ -50,8 +50,8 @@ const (
 // CFNExport is a CloudFormation export entry — used to detect prior MA
 // installs (UX.md §6.1 step 3).
 type CFNExport struct {
-	Name        string
-	Value       string
+	Name               string
+	Value              string
 	ExportingStackName string
 }
 
@@ -60,10 +60,10 @@ type CFNExport struct {
 // suffix ("s3", "ecr", "ecr.dkr") used by the bootstrap.sh
 // --create-vpc-endpoints flag.
 type VPCEndpoint struct {
-	ID        string // vpce-XXXX
+	ID          string // vpce-XXXX
 	ServiceName string
-	ShortName string // "s3" | "ecr" | "ecrDocker"
-	State     string
+	ShortName   string // "s3" | "ecr" | "ecrDocker"
+	State       string
 }
 
 // HelmRelease is the abridged result of `helm status` (UX.md §5.1).
@@ -133,6 +133,64 @@ type HelmInstallParams struct {
 // for their latest version (UX.md §0.6).
 type AgentDetector interface {
 	Detect(ctx context.Context) ([]AgentCLI, error)
+}
+
+// Tool is one detected (or not-detected) external CLI required by the
+// TUI: helm, kubectl, aws, git, docker, kiro-cli, claude-code.
+//
+// The TUI replaces bootstrap-kiro-agent.sh; both the detection AND the
+// "auto-install helm + kiro-cli" behaviors of that script live behind
+// the ToolDetector interface so the welcome page can drive them.
+type Tool struct {
+	Name        string // canonical: "helm", "kubectl", "aws", ...
+	Path        string // absolute path on PATH; "" if not installed
+	Version     string // raw `--version` first line; "" if unknown
+	Required    bool   // hard prerequisite for any TUI deploy path
+	Installable bool   // TUI knows how to install this (helm, kiro-cli)
+}
+
+// Installed reports whether the tool was found on $PATH.
+func (t Tool) Installed() bool { return t.Path != "" }
+
+// ToolDetector locates external CLIs on PATH (helm, kubectl, aws, ...).
+// Always non-nil at runtime.
+type ToolDetector interface {
+	Detect(ctx context.Context) ([]Tool, error)
+}
+
+// InstallEvent is a streaming progress event from a ToolInstaller.
+//
+// Installers MUST NOT log to stdout/stderr; they emit progress through
+// this channel so the TUI renders consistently. The ui layer never
+// reads this — installers run inside a tea.Cmd and the cmd publishes
+// final status as a msg.
+type InstallEvent struct {
+	Tool    string // canonical tool name
+	Stage   string // e.g. "downloading", "verifying", "linking"
+	Pct     int    // 0..100; -1 if unknown
+	Message string // human-readable line for status bar
+	Done    bool   // last event for this tool
+	Err     error  // non-nil iff installation failed
+}
+
+// ToolInstaller installs an installable Tool (Tool.Installable == true).
+//
+// Contract:
+//   - Detect() in ToolDetector MUST NEVER call Install(); detection is
+//     read-only. Install is invoked only when the user explicitly chooses
+//     "install missing tools" from the welcome page.
+//   - Implementations MUST be idempotent: calling Install on an
+//     already-installed tool returns nil without re-downloading.
+//   - Implementations MUST honour ctx cancellation (download / unpack
+//     are the long-running steps).
+//   - events is buffered by the caller; installers send and forget.
+//     If events is nil, installer runs silently.
+type ToolInstaller interface {
+	// Supports reports which tool names this installer can handle
+	// ("helm", "kiro-cli"). Lookup is by exact match.
+	Supports() []string
+	// Install fetches + links the tool. Blocks until done or ctx cancels.
+	Install(ctx context.Context, tool string, events chan<- InstallEvent) error
 }
 
 // ArtifactSource fetches release / raw-repo artifacts per UX.md §0.7.

@@ -101,9 +101,9 @@ type TUIVersionDetectedMsg struct {
 
 // AWSDetectedMsg is emitted once the launch-time AWS detection finishes.
 type AWSDetectedMsg struct {
-	Identity feature.AWSIdentity
+	Identity  feature.AWSIdentity
 	MAExports []feature.CFNExport
-	Err      error
+	Err       error
 }
 
 // WorkdirDetectedMsg is emitted once we've inspected the cwd's named
@@ -143,9 +143,13 @@ type AgentsDetectedMsg struct {
 	Err    error
 }
 
-// ToolsDetectedMsg lands once required-CLI detection (kubectl/helm/aws/git) completes.
+// ToolsDetectedMsg lands once required-CLI detection (kubectl/helm/aws/git/kiro) completes.
+// Carries the full Tool list so the welcome page can render install affordances
+// for missing-but-installable tools (e.g. helm, kiro-cli) that bootstrap-kiro-agent.sh
+// previously side-installed.
 type ToolsDetectedMsg struct {
-	Found map[string]string // name -> path
+	Tools []feature.Tool
+	Err   error
 }
 
 // ShutdownMsg is emitted when the broker channel closes (PLAN §4.3).

@@ -1,8 +1,8 @@
 // Package artifacts implements feature.ArtifactSource per UX.md §0.7:
 //
-//	1. GitHub release asset at the chosen MA tag.
-//	2. Tag-pinned raw repo file.
-//	3. Hard-fail with the URLs we tried.
+//  1. GitHub release asset at the chosen MA tag.
+//  2. Tag-pinned raw repo file.
+//  3. Hard-fail with the URLs we tried.
 //
 // Every fallback to (2) is logged with a TODO note so we have a clean
 // upstream-promotion backlog.

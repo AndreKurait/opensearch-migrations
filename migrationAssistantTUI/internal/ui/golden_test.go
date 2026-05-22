@@ -36,6 +36,12 @@ func TestGolden_Welcome_Loaded(t *testing.T) {
 		{Name: "claude-code", Path: "/usr/local/bin/claude", LocalVersion: "2.1.140", LatestVersion: "2.1.147", BehindBy: feature.DeltaPatch},
 		{Name: "kiro-cli", Path: "/usr/local/bin/kiro-cli", LocalVersion: "0.4.1"},
 	}})
+	m.Update(msg.ToolsDetectedMsg{Tools: []feature.Tool{
+		{Name: "helm", Path: "/usr/local/bin/helm", Version: "v3.15.0", Required: true, Installable: true},
+		{Name: "kubectl", Path: "/usr/local/bin/kubectl", Version: "v1.31.0", Required: true},
+		{Name: "aws", Path: "/usr/local/bin/aws", Version: "2.17.0", Required: true},
+		{Name: "docker", Path: "/usr/local/bin/docker", Version: "27.1.0", Required: false},
+	}})
 	out := stripANSI(m.View().Content)
 	golden.RequireEqual(t, []byte(out))
 }

@@ -1,14 +1,31 @@
 # Deploying the Migration Assistant on AWS EKS
 
-This guide is for **developers** that are interested in building everything and
-deploying those artifacts directly to EKS themselves.
-
-For a more details about Kubernetes, see the [README](../README.md)
-for the overall K8s deployment project.
-
-See the [project wiki](https://github.com/opensearch-project/opensearch-migrations/wiki)
-for instructions of how to deploy directly from AWS without installing anything.
-
+> **`aws-bootstrap.sh` is being retired.** The Migration Assistant TUI
+> ([`migrationAssistantTUI/`](../../../migrationAssistantTUI/)) is now the
+> authoritative way to install, bootstrap, and enter MA on EKS. It absorbs
+> every CFN, EKS, helm, image-mirroring, kubectl-context, EKS-access-entry,
+> and console-handoff capability of this script — see
+> [`migrationAssistantTUI/docs/GAPS.md`](../../../migrationAssistantTUI/docs/GAPS.md)
+> for the per-flag absorption ledger.
+>
+> **Recommended path** (Linux / macOS, amd64 / arm64):
+>
+> ```sh
+> curl -fsSL https://opensearch-migrations.io/tui/install.sh | bash
+> migration-assistant
+> ```
+>
+> The TUI walks the same form, surfaces the same flags as a confirmation
+> screen before launch, runs the same CloudFormation + helm pipeline, and on
+> success `exec`s into `migration-console-0` (or hands off to a Kiro / Claude
+> agent primed with the migration skill kit). It uses the AWS SDK natively
+> instead of shelling out, and no longer depends on a working `bash`/`curl`
+> environment.
+>
+> The instructions below describe the legacy script-driven path. They remain
+> supported for now, but new automation should target the TUI. The script
+> will be reduced to a 30-line shim that points at the TUI in a future
+> release (see `GAPS.md` §6).
 
 ## Difference from the ECS version
 

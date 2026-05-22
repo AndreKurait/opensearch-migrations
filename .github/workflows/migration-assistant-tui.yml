@@ -1,0 +1,142 @@
+# CI for the Migration Assistant TUI (Go subproject under migrationAssistantTUI/).
+#
+# Three jobs, sharing a single `setup-go` step:
+#   1. test  — gofmt + go vet + go test (race) on linux/macos × amd64
+#   2. build — cross-compile linux/darwin × amd64/arm64 binaries
+#   3. release — on `tui-v*` tag push, run goreleaser to publish the GitHub release
+#
+# This workflow only triggers when files under migrationAssistantTUI/** change,
+# so it doesn't slow down the rest of the monorepo.
+
+name: migration-assistant-tui
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'migrationAssistantTUI/**'
+      - '.github/workflows/migration-assistant-tui.yml'
+    tags:
+      - 'tui-v*'
+  pull_request:
+    paths:
+      - 'migrationAssistantTUI/**'
+      - '.github/workflows/migration-assistant-tui.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: migrationAssistantTUI
+    shell: bash
+
+env:
+  GO_VERSION: '1.25'
+
+jobs:
+  # -------------------------------------------------------------------------
+  # 1. test — fmt + vet + race tests on Linux and macOS.
+  # -------------------------------------------------------------------------
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: migrationAssistantTUI/go.sum
+      - name: gofmt
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+              echo "::error::the following files are not gofmt-clean:"
+              echo "$unformatted"
+              exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test (race, 2m)
+        run: go test -race -timeout 2m ./...
+      - name: testdata budget
+        run: make testdata-budget
+
+  # -------------------------------------------------------------------------
+  # 2. build — cross-compile artifacts. Validates the goreleaser-relevant
+  # platform matrix without invoking goreleaser on every PR.
+  # -------------------------------------------------------------------------
+  build:
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux,  goarch: amd64 }
+          - { goos: linux,  goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: migrationAssistantTUI/go.sum
+      - name: cross-compile
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p build/bin
+          go build -trimpath -ldflags "-s -w" \
+              -o "build/bin/migration-assistant_${GOOS}_${GOARCH}" \
+              ./cmd/tui
+          ls -lh build/bin/
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-assistant_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: migrationAssistantTUI/build/bin/migration-assistant_${{ matrix.goos }}_${{ matrix.goarch }}
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  # 3. release — only on tui-v* tags. Runs goreleaser to publish a GitHub
+  # release with binaries + checksums.txt for scripts/install.sh.
+  # -------------------------------------------------------------------------
+  release:
+    name: release (goreleaser)
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: startsWith(github.ref, 'refs/tags/tui-v')
+    permissions:
+      contents: write
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: migrationAssistantTUI/go.sum
+      - name: goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+          workdir: migrationAssistantTUI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

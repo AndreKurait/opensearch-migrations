@@ -24,7 +24,7 @@ import (
 
 // Result is what PrepareWorkdir returns once the named subdir is ready.
 type Result struct {
-	Path string         // resolved workdir, e.g. ./opensearch-migration-123-us-east-1
+	Path  string         // resolved workdir, e.g. ./opensearch-migration-123-us-east-1
 	State *workdir.State // current state snapshot, nil if fresh
 	Guard workdir.Guard
 }

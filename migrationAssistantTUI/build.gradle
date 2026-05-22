@@ -1,0 +1,155 @@
+// =============================================================================
+// migrationAssistantTUI — Go TUI subproject
+//
+// This is a Go module (charm.land/bubbletea/v2 + AWS SDK v2) that ships the
+// `migration-assistant` binary — the single user-facing entrypoint that
+// replaces aws-bootstrap.sh and bootstrap-kiro-agent.sh.
+//
+// The Makefile (`migrationAssistantTUI/Makefile`) is the authoritative source
+// for build/test/lint commands. This Gradle file delegates to it so the TUI
+// participates in the monorepo's `./gradlew build` and CI gates.
+//
+// Hooks into standard lifecycle tasks:
+//   ./gradlew :migrationAssistantTUI:assemble  -> go build (binary in build/bin/)
+//   ./gradlew :migrationAssistantTUI:check     -> go vet + go test (race) + lint (if installed)
+//   ./gradlew :migrationAssistantTUI:build     -> assemble + check
+//   ./gradlew :migrationAssistantTUI:clean     -> rm -rf build/
+//
+// Usage:
+//   -Pgo.skipLint=true      Skip golangci-lint even if installed (CI may pin its own version)
+//   -Pgo.race=false         Disable -race in tests (default: race enabled)
+// =============================================================================
+
+plugins {
+    id 'base'
+}
+
+def goExe = 'go'
+def projectRoot = projectDir
+def binDir       = layout.buildDirectory.dir('bin')
+def coverageDir  = layout.buildDirectory.dir('coverage')
+def binaryName   = 'migration-assistant'
+
+// --- pre-flight: a missing `go` binary should fail eagerly with a helpful message ---
+tasks.register('goVerify') {
+    description = 'Verify the Go toolchain is available.'
+    group = 'verification'
+    doFirst {
+        try {
+            def proc = ['sh', '-c', "${goExe} version"].execute()
+            proc.waitFor()
+            if (proc.exitValue() != 0) {
+                throw new GradleException("'${goExe} version' failed (exit ${proc.exitValue()}). Install Go 1.25+ from https://go.dev/dl/")
+            }
+            logger.lifecycle("[migrationAssistantTUI] toolchain: ${proc.in.text.trim()}")
+        } catch (IOException e) {
+            throw new GradleException("'${goExe}' not found on PATH. Install Go 1.25+ from https://go.dev/dl/", e)
+        }
+    }
+}
+
+// --- build the binary ---
+tasks.register('goBuild', Exec) {
+    description = "Compile the Go TUI to ${binaryName}."
+    group = 'build'
+    dependsOn 'goVerify'
+    workingDir projectRoot
+    doFirst {
+        binDir.get().asFile.mkdirs()
+    }
+    commandLine goExe, 'build', '-trimpath', '-o', "${binDir.get().asFile}/${binaryName}", './cmd/tui'
+    inputs.files(fileTree(projectRoot) {
+        include '**/*.go'
+        include 'go.mod'
+        include 'go.sum'
+        exclude '**/build/**'
+        exclude '**/testdata/**'
+    })
+    outputs.file("${binDir.get().asFile}/${binaryName}")
+}
+
+// --- go vet: cheap static check, runs on every `check` ---
+tasks.register('goVet', Exec) {
+    description = 'Run go vet over all packages.'
+    group = 'verification'
+    dependsOn 'goVerify'
+    workingDir projectRoot
+    commandLine goExe, 'vet', './...'
+}
+
+// --- go test: race detector + 2m timeout (mirrors Makefile's `test` target) ---
+tasks.register('goTest', Exec) {
+    description = 'Run unit tests with race detector.'
+    group = 'verification'
+    dependsOn 'goVerify'
+    workingDir projectRoot
+    def args = ['test']
+    def raceEnabled = !(project.findProperty('go.race') == 'false')
+    if (raceEnabled) args << '-race'
+    args.addAll(['-timeout', '2m', './...'])
+    commandLine([goExe] + args)
+}
+
+// --- coverage profile (Cobertura XML for Codecov; matches Makefile cover-xml) ---
+tasks.register('goCover', Exec) {
+    description = 'Run tests with coverage and emit Cobertura XML.'
+    group = 'verification'
+    dependsOn 'goVerify'
+    workingDir projectRoot
+    doFirst {
+        coverageDir.get().asFile.mkdirs()
+    }
+    def covOut = "${coverageDir.get().asFile}/coverage.out"
+    commandLine goExe, 'test', '-race', '-covermode=atomic',
+        '-coverpkg=./internal/...',
+        "-coverprofile=${covOut}", './...'
+    outputs.file(covOut)
+}
+
+// --- golangci-lint: skip silently if not installed (parity with Makefile lint) ---
+tasks.register('goLint', Exec) {
+    description = 'Run golangci-lint (skipped if not installed or -Pgo.skipLint=true).'
+    group = 'verification'
+    dependsOn 'goVerify'
+    workingDir projectRoot
+    onlyIf {
+        if (project.findProperty('go.skipLint') == 'true') {
+            logger.lifecycle('[migrationAssistantTUI] goLint: skipped (-Pgo.skipLint=true)')
+            return false
+        }
+        def found = ['sh', '-c', 'command -v golangci-lint >/dev/null 2>&1'].execute()
+        found.waitFor()
+        if (found.exitValue() != 0) {
+            logger.lifecycle('[migrationAssistantTUI] goLint: skipped (golangci-lint not on PATH)')
+            return false
+        }
+        return true
+    }
+    commandLine 'golangci-lint', 'run', './...'
+}
+
+// --- testdata budget guard (PLAN.MD §11.3) ---
+tasks.register('goTestdataBudget') {
+    description = 'Fail if total testdata directories exceed 1MB.'
+    group = 'verification'
+    doLast {
+        long totalKB = 0
+        fileTree(projectRoot) {
+            include '**/testdata/**'
+            exclude '**/build/**'
+        }.files.each { f ->
+            totalKB += (f.length() + 1023) / 1024
+        }
+        if (totalKB > 1024) {
+            throw new GradleException("testdata budget exceeded: ${totalKB}KB > 1024KB (PLAN.MD §11.3)")
+        }
+        logger.lifecycle("[migrationAssistantTUI] testdata budget OK: ${totalKB}KB")
+    }
+}
+
+// --- wire into standard Gradle lifecycle ---
+assemble.dependsOn goBuild
+check.dependsOn   goVet, goTest, goLint, goTestdataBudget
+
+// `clean` already deletes layout.buildDirectory via the base plugin —
+// no additional doFirst needed since Go writes everything under ./build/.

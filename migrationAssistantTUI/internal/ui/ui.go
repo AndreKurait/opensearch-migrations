@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/feature"
 	deployfeat "github.com/opensearch-project/opensearch-migrations/tui/internal/feature/deploy"
@@ -25,7 +25,6 @@ import (
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/launch"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/marelease"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/skillkit"
-	"github.com/opensearch-project/opensearch-migrations/tui/internal/versioncheck"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/common"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/dialog"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/msg"
@@ -36,6 +35,7 @@ import (
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/pages/welcome"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/pages/wizard"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/workspace"
+	"github.com/opensearch-project/opensearch-migrations/tui/internal/versioncheck"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/workdir"
 )
 
@@ -63,11 +63,11 @@ type Model struct {
 	deploy  *deploypage.Model
 	handoff *handoff.Model
 
-	mode    welcome.Mode
-	captured intent.Captured
-	wizState wizard.State
-	callerARN string // captured from AWSDetectedMsg for the deploy driver
-	workdirPath string // resolved by prepareWorkdirCmd; passed to launch helpers
+	mode            welcome.Mode
+	captured        intent.Captured
+	wizState        wizard.State
+	callerARN       string // captured from AWSDetectedMsg for the deploy driver
+	workdirPath     string // resolved by prepareWorkdirCmd; passed to launch helpers
 	skillBundlePath string // populated by FetchArtifacts; used by finalizeInstallSideEffects
 
 	help    help.Model
@@ -107,6 +107,7 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.detectAWSCmd(),
 		m.detectAgentsCmd(),
+		m.detectToolsCmd(),
 		m.detectWorkdirCmd(),
 		m.detectMAReleaseCmd(),
 		m.detectTUIVersionCmd(),
@@ -344,8 +345,8 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 	case welcome.RefreshAWSMsg:
 		// Re-run detection. The cmds run async and emit AWSDetectedMsg /
-		// AgentsDetectedMsg back into Update.
-		return m, tea.Batch(m.detectAWSCmd(), m.detectAgentsCmd())
+		// AgentsDetectedMsg / ToolsDetectedMsg back into Update.
+		return m, tea.Batch(m.detectAWSCmd(), m.detectAgentsCmd(), m.detectToolsCmd())
 
 	case welcome.SwitchProfileMsg:
 		// Open a profile-picker dialog. v1 surface: input the AWS_PROFILE
@@ -796,6 +797,22 @@ func (m *Model) detectAgentsCmd() tea.Cmd {
 		ctx := context.Background()
 		ag, err := det.Detect(ctx)
 		return msg.AgentsDetectedMsg{Agents: ag, Err: err}
+	}
+}
+
+// detectToolsCmd schedules detection of required CLIs (kubectl/helm/aws/git/kiro).
+// Mirrors detectAgentsCmd; result lands as ToolsDetectedMsg and is teed to the
+// welcome page so the user sees missing/installable tools at startup. This is
+// the TUI replacement for `bootstrap-kiro-agent.sh`'s side-effect installs.
+func (m *Model) detectToolsCmd() tea.Cmd {
+	det := m.c.WS.Tools()
+	if det == nil {
+		return func() tea.Msg { return msg.ToolsDetectedMsg{} }
+	}
+	return func() tea.Msg {
+		ctx := context.Background()
+		ts, err := det.Detect(ctx)
+		return msg.ToolsDetectedMsg{Tools: ts, Err: err}
 	}
 }
 

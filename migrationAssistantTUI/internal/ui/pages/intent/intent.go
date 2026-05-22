@@ -11,9 +11,9 @@ package intent
 import (
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/common"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/msg"

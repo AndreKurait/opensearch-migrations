@@ -10,8 +10,8 @@ package dialog
 import (
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 )
 
@@ -88,9 +88,9 @@ func (s *Stack) View(w, h int) string {
 
 // ErrorDialog is the modal variant of ErrorMsg routing.
 type ErrorDialog struct {
-	id     string
-	title  string
-	body   string
+	id    string
+	title string
+	body  string
 }
 
 // NewError constructs an error modal.
@@ -98,7 +98,7 @@ func NewError(title, body string) *ErrorDialog {
 	return &ErrorDialog{id: "error", title: title, body: body}
 }
 
-func (e *ErrorDialog) ID() string  { return e.id }
+func (e *ErrorDialog) ID() string    { return e.id }
 func (e *ErrorDialog) Init() tea.Cmd { return nil }
 
 func (e *ErrorDialog) Update(message tea.Msg) (Dialog, tea.Cmd, Action) {

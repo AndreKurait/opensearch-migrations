@@ -18,27 +18,27 @@ import (
 
 // Brief is the schema we serialize. Embedded in HANDOFF.md frontmatter.
 type Brief struct {
-	MAVersion       string `yaml:"ma_version"`
-	AWSAccount      string `yaml:"aws_account"`
-	Region          string `yaml:"region"`
-	EKSCluster      string `yaml:"eks_cluster"`
-	Namespace       string `yaml:"namespace"`
-	Stage           string `yaml:"stage"`
-	Source          Source `yaml:"source"`
-	Target          Target `yaml:"target"`
-	ConsoleExec     string `yaml:"console_exec,omitempty"`
-	WrittenAt       string `yaml:"written_at"`
-	SchemaVersion   int    `yaml:"schema_version"`
+	MAVersion     string `yaml:"ma_version"`
+	AWSAccount    string `yaml:"aws_account"`
+	Region        string `yaml:"region"`
+	EKSCluster    string `yaml:"eks_cluster"`
+	Namespace     string `yaml:"namespace"`
+	Stage         string `yaml:"stage"`
+	Source        Source `yaml:"source"`
+	Target        Target `yaml:"target"`
+	ConsoleExec   string `yaml:"console_exec,omitempty"`
+	WrittenAt     string `yaml:"written_at"`
+	SchemaVersion int    `yaml:"schema_version"`
 }
 
 // Source is the source-cluster summary.
 type Source struct {
-	Endpoint        string `yaml:"endpoint,omitempty"`
-	Engine          string `yaml:"engine,omitempty"`
-	EngineVersion   string `yaml:"engine_version,omitempty"`
-	AuthMethod      string `yaml:"auth_method,omitempty"`
-	AuthKeychainID  string `yaml:"auth_keychain_id,omitempty"`
-	ApproxSize      string `yaml:"approx_size,omitempty"`
+	Endpoint       string `yaml:"endpoint,omitempty"`
+	Engine         string `yaml:"engine,omitempty"`
+	EngineVersion  string `yaml:"engine_version,omitempty"`
+	AuthMethod     string `yaml:"auth_method,omitempty"`
+	AuthKeychainID string `yaml:"auth_keychain_id,omitempty"`
+	ApproxSize     string `yaml:"approx_size,omitempty"`
 }
 
 // Target is the destination summary.

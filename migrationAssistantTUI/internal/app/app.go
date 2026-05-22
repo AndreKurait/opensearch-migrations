@@ -25,9 +25,10 @@ import (
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/config"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/feature"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/feature/agents"
-	awssvc "github.com/opensearch-project/opensearch-migrations/tui/internal/feature/aws"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/feature/artifacts"
+	awssvc "github.com/opensearch-project/opensearch-migrations/tui/internal/feature/aws"
 	deployfeat "github.com/opensearch-project/opensearch-migrations/tui/internal/feature/deploy"
+	"github.com/opensearch-project/opensearch-migrations/tui/internal/feature/tools"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/pubsub"
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/ui/workspace"
 )
@@ -58,6 +59,8 @@ type App struct {
 	aws       feature.AWSService     // nil OK — UI degrades
 	helm      feature.HelmService    // nil OK — set after EKS resolution
 	agents    feature.AgentDetector  // never nil
+	tools     feature.ToolDetector   // never nil
+	installer feature.ToolInstaller  // never nil
 	artifacts feature.ArtifactSource // never nil
 
 	// AWS SDK config + clients (used by the deploy driver)
@@ -79,7 +82,7 @@ type App struct {
 
 	// workdirMu/workdirPath are populated by SetWorkdir from the UI
 	// after the named-subdir is resolved.
-	workdirMu sync.Mutex
+	workdirMu   sync.Mutex
 	workdirPath string
 
 	// agentMu/agentBin track which agent CLI is on PATH. The handoff
@@ -138,6 +141,8 @@ func New(parent context.Context, cfg Config) (*App, error) {
 
 	// Always-available services
 	a.agents = agents.NewDetector()
+	a.tools = tools.NewDetector()
+	a.installer = tools.NewInstaller()
 	a.artifacts = artifacts.NewSource()
 
 	// Best-effort AWS service — missing creds is not fatal.
@@ -206,7 +211,9 @@ func (a *App) AgentBin() string {
 }
 
 // Workspace returns the read-only façade exposed to the UI.
-func (a *App) Workspace() workspace.Workspace { return appWorkspace{a: a, sub: a.events.Subscribe(a.ctx)} }
+func (a *App) Workspace() workspace.Workspace {
+	return appWorkspace{a: a, sub: a.events.Subscribe(a.ctx)}
+}
 
 // Shutdown is the §9.2 contract. Idempotent. Safe to call from defer.
 func (a *App) Shutdown() {
@@ -225,17 +232,19 @@ type appWorkspace struct {
 	sub <-chan tea.Msg
 }
 
-func (w appWorkspace) Config() config.Config              { return w.a.cfgFile }
-func (w appWorkspace) Logger() *slog.Logger                { return w.a.logger }
-func (w appWorkspace) Events() <-chan tea.Msg              { return w.sub }
-func (w appWorkspace) AWS() feature.AWSService             { return w.a.aws }
-func (w appWorkspace) Helm() feature.HelmService           { return w.a.helm }
-func (w appWorkspace) Agents() feature.AgentDetector       { return w.a.agents }
-func (w appWorkspace) Artifacts() feature.ArtifactSource   { return w.a.artifacts }
-func (w appWorkspace) Cwd() string                         { return w.a.cwd }
-func (w appWorkspace) Version() string                     { return w.a.cfg.Version }
-func (w appWorkspace) Workdir() string                     { return w.a.Workdir() }
-func (w appWorkspace) AgentBin() string                    { return w.a.AgentBin() }
+func (w appWorkspace) Config() config.Config                { return w.a.cfgFile }
+func (w appWorkspace) Logger() *slog.Logger                 { return w.a.logger }
+func (w appWorkspace) Events() <-chan tea.Msg               { return w.sub }
+func (w appWorkspace) AWS() feature.AWSService              { return w.a.aws }
+func (w appWorkspace) Helm() feature.HelmService            { return w.a.helm }
+func (w appWorkspace) Agents() feature.AgentDetector        { return w.a.agents }
+func (w appWorkspace) Tools() feature.ToolDetector          { return w.a.tools }
+func (w appWorkspace) ToolInstaller() feature.ToolInstaller { return w.a.installer }
+func (w appWorkspace) Artifacts() feature.ArtifactSource    { return w.a.artifacts }
+func (w appWorkspace) Cwd() string                          { return w.a.cwd }
+func (w appWorkspace) Version() string                      { return w.a.cfg.Version }
+func (w appWorkspace) Workdir() string                      { return w.a.Workdir() }
+func (w appWorkspace) AgentBin() string                     { return w.a.AgentBin() }
 func (w appWorkspace) SetHandoff(bin string, args []string, cwd string) {
 	w.a.SetHandoff(HandoffCommand{Bin: bin, Args: args, Cwd: cwd})
 }

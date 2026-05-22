@@ -10,18 +10,44 @@ Code) primed with the migration skill kit.
 
 ## Install
 
-Pre-built binaries ship from
-`opensearch-project/opensearch-migrations` releases. Download the asset
-matching your platform, place it on `PATH`, and run:
+The TUI is now THE authoritative entry point for installing, bootstrapping,
+deploying, and entering Migration Assistant on AWS EKS. It absorbs everything
+that `deployment/k8s/aws/aws-bootstrap.sh` and `deployment/k8s/bootstrap-kiro-agent.sh`
+used to do — see [`docs/GAPS.md`](docs/GAPS.md) for the absorption ledger.
+
+**One-line install** (Linux / macOS, amd64 / arm64):
 
 ```sh
+curl -fsSL https://opensearch-migrations.io/tui/install.sh | bash
 migration-assistant
 ```
 
-To build from source:
+The installer downloads the latest pre-built binary from
+[`opensearch-project/opensearch-migrations` releases](https://github.com/opensearch-project/opensearch-migrations/releases?q=tui-v),
+verifies it against the published `checksums.txt`, and drops it into
+`/usr/local/bin` (or `~/.local/bin` if the system path isn't writable).
+
+**Pin a specific version**:
 
 ```sh
-make build      # → ./build/bin/migration-assistant
+MA_TUI_VERSION=tui-v0.1.0 \
+  curl -fsSL https://opensearch-migrations.io/tui/install.sh | bash
+```
+
+**Install from source**:
+
+```sh
+git clone https://github.com/opensearch-project/opensearch-migrations
+cd opensearch-migrations/migrationAssistantTUI
+make install                       # → /usr/local/bin/migration-assistant
+make install PREFIX=$HOME/.local   # per-user
+```
+
+**Or via Gradle** (participates in the monorepo build):
+
+```sh
+./gradlew :migrationAssistantTUI:build
+# binary at migrationAssistantTUI/build/bin/migration-assistant
 ```
 
 ## Quickstart

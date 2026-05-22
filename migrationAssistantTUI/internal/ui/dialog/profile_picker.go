@@ -3,9 +3,9 @@ package dialog
 import (
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 )
 
@@ -14,8 +14,8 @@ import (
 // Calls onSubmit with the typed value when the user presses enter; the
 // dialog closes regardless. Pressing esc cancels (onSubmit not called).
 type ProfilePicker struct {
-	id    string
-	input textinput.Model
+	id       string
+	input    textinput.Model
 	onSubmit func(name string) tea.Cmd
 }
 

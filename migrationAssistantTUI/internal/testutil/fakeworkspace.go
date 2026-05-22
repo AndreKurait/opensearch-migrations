@@ -37,11 +37,11 @@ func FakeDriver(producer func(events chan<- WSDeployEvent) error) *workspace.Dep
 
 // FakeAWS is a hand-rolled stub. Set the result fields directly in tests.
 type FakeAWS struct {
-	Identity    feature.AWSIdentity
-	IdentityErr error
-	VPCs        []feature.VPC
-	Subnets     []feature.Subnet
-	Exports     []feature.CFNExport
+	Identity     feature.AWSIdentity
+	IdentityErr  error
+	VPCs         []feature.VPC
+	Subnets      []feature.Subnet
+	Exports      []feature.CFNExport
 	VPCEndpoints []feature.VPCEndpoint
 }
 
@@ -59,6 +59,35 @@ func (f *FakeAWS) ListMAExports(ctx context.Context, region string) ([]feature.C
 }
 func (f *FakeAWS) ListVPCEndpoints(ctx context.Context, region, vpcID string) ([]feature.VPCEndpoint, error) {
 	return f.VPCEndpoints, nil
+}
+
+// FakeTools always returns the same set.
+type FakeTools struct{ Result []feature.Tool }
+
+func (f *FakeTools) Detect(ctx context.Context) ([]feature.Tool, error) {
+	return f.Result, nil
+}
+
+// FakeInstaller is a no-op installer used in tests. Records invocations
+// so tests can assert "Install was called for tool X" without spawning
+// real subprocesses.
+type FakeInstaller struct {
+	SupportedTools []string
+	Calls          []string // tool names passed to Install
+	Err            error    // returned from Install when set
+}
+
+func (f *FakeInstaller) Supports() []string { return f.SupportedTools }
+
+func (f *FakeInstaller) Install(ctx context.Context, tool string, events chan<- feature.InstallEvent) error {
+	f.Calls = append(f.Calls, tool)
+	if events != nil {
+		select {
+		case events <- feature.InstallEvent{Tool: tool, Stage: "completed", Done: f.Err == nil, Err: f.Err}:
+		case <-ctx.Done():
+		}
+	}
+	return f.Err
 }
 
 // FakeAgents always returns the same set.
@@ -86,14 +115,16 @@ type FakeWS struct {
 	AWSSvc  feature.AWSService
 	HelmSvc feature.HelmService
 	AgSvc   feature.AgentDetector
+	ToolSvc feature.ToolDetector
+	InstSvc feature.ToolInstaller
 	ArtSvc  feature.ArtifactSource
 	WD      string
 	Ver     string
 	Broker  *pubsub.Broker[tea.Msg]
 
-	HandoffBin  string
-	HandoffArgs []string
-	HandoffCwd  string
+	HandoffBin     string
+	HandoffArgs    []string
+	HandoffCwd     string
 	HandoffPreBin  string
 	HandoffPreArgs []string
 
@@ -113,27 +144,31 @@ func NewFakeWS(t *testing.T) *FakeWS {
 	t.Cleanup(br.Close)
 	wd, _ := os.Getwd()
 	return &FakeWS{
-		Cfg:    config.Default(),
-		AgSvc:  &FakeAgents{},
-		ArtSvc: FakeArtifacts{},
-		WD:     wd,
-		Ver:    "test-0.0.0",
-		Broker: br,
-		logger: slog.Default(),
+		Cfg:     config.Default(),
+		AgSvc:   &FakeAgents{},
+		ToolSvc: &FakeTools{},
+		InstSvc: &FakeInstaller{SupportedTools: []string{"helm", "kiro-cli"}},
+		ArtSvc:  FakeArtifacts{},
+		WD:      wd,
+		Ver:     "test-0.0.0",
+		Broker:  br,
+		logger:  slog.Default(),
 	}
 }
 
-func (f *FakeWS) Config() config.Config           { return f.Cfg }
-func (f *FakeWS) Logger() *slog.Logger             { return f.logger }
-func (f *FakeWS) Events() <-chan tea.Msg           { return f.Broker.Subscribe(context.Background()) }
-func (f *FakeWS) AWS() feature.AWSService          { return f.AWSSvc }
-func (f *FakeWS) Helm() feature.HelmService        { return f.HelmSvc }
-func (f *FakeWS) Agents() feature.AgentDetector    { return f.AgSvc }
-func (f *FakeWS) Artifacts() feature.ArtifactSource { return f.ArtSvc }
-func (f *FakeWS) Cwd() string                      { return f.WD }
-func (f *FakeWS) Version() string                  { return f.Ver }
-func (f *FakeWS) Workdir() string                  { return f.WorkdirPath }
-func (f *FakeWS) AgentBin() string                 { return f.Agent }
+func (f *FakeWS) Config() config.Config                      { return f.Cfg }
+func (f *FakeWS) Logger() *slog.Logger                       { return f.logger }
+func (f *FakeWS) Events() <-chan tea.Msg                     { return f.Broker.Subscribe(context.Background()) }
+func (f *FakeWS) AWS() feature.AWSService                    { return f.AWSSvc }
+func (f *FakeWS) Helm() feature.HelmService                  { return f.HelmSvc }
+func (f *FakeWS) Agents() feature.AgentDetector              { return f.AgSvc }
+func (f *FakeWS) Tools() feature.ToolDetector                { return f.ToolSvc }
+func (f *FakeWS) ToolInstaller() feature.ToolInstaller       { return f.InstSvc }
+func (f *FakeWS) Artifacts() feature.ArtifactSource          { return f.ArtSvc }
+func (f *FakeWS) Cwd() string                                { return f.WD }
+func (f *FakeWS) Version() string                            { return f.Ver }
+func (f *FakeWS) Workdir() string                            { return f.WorkdirPath }
+func (f *FakeWS) AgentBin() string                           { return f.Agent }
 func (f *FakeWS) DeployDriver() *workspace.DeployDriverProxy { return f.Driver }
 func (f *FakeWS) SetHandoff(bin string, args []string, cwd string) {
 	f.HandoffBin = bin

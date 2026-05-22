@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 
 	"github.com/opensearch-project/opensearch-migrations/tui/internal/feature"
@@ -52,13 +52,17 @@ type Model struct {
 	cursor int // 0 = Manual, 1 = AI Agent
 
 	// Detection summary, populated as background detection completes.
-	identity feature.AWSIdentity
-	awsErr   error
-	awsReady bool
+	identity  feature.AWSIdentity
+	awsErr    error
+	awsReady  bool
 	maExports []feature.CFNExport
 
 	agents      []feature.AgentCLI
 	agentsReady bool
+
+	tools      []feature.Tool
+	toolsReady bool
+	toolsErr   error
 
 	// MA release version: detected at launch from GitHub. PinnedTag
 	// reflects what this TUI binary was built against.
@@ -111,6 +115,10 @@ func (m *Model) Update(message tea.Msg) (*Model, tea.Cmd) {
 	case msg.AgentsDetectedMsg:
 		m.agentsReady = true
 		m.agents = v.Agents
+	case msg.ToolsDetectedMsg:
+		m.toolsReady = true
+		m.tools = v.Tools
+		m.toolsErr = v.Err
 	case msg.MAReleaseDetectedMsg:
 		m.maTagReady = true
 		m.latestMATag = v.LatestTag
@@ -157,7 +165,7 @@ func (m *Model) View() string {
 	b.WriteString(s.Form.Label.Render("How do you want to drive the migration?") + "\n\n")
 	if m.hasResume {
 		b.WriteString(s.Status.Warn.Render(
-			"  ⚠ Existing install detected at " + m.resumeWorkdir + " (status: " + m.resumeStatus + ")\n" +
+			"  ⚠ Existing install detected at "+m.resumeWorkdir+" (status: "+m.resumeStatus+")\n"+
 				"    Pressing [enter] resumes; press [c] to clear and start fresh, or [d] to delete.") + "\n\n")
 	}
 	b.WriteString(m.modeChoice("Manual", "TUI walks setup, then drops you into a console shell", 0))
@@ -228,8 +236,47 @@ func (m *Model) detectionLines() string {
 		}
 	}
 
-	// MA version line — always render so the user knows what they're
-	// about to deploy.
+	// Required CLI tools (helm, kubectl, aws, docker). Fed by ToolDetector.
+	if !m.toolsReady {
+		lines = append(lines, s.Status.Info.Render("  CLI tools      resolving…"))
+	} else if m.toolsErr != nil {
+		lines = append(lines, s.Status.Error.Render(fmt.Sprintf("  CLI tools      error: %v", truncate(m.toolsErr.Error(), 200))))
+	} else {
+		var missingRequired []string
+		var rows []string
+		for _, t := range m.tools {
+			marker := "✓"
+			style := s.Status.Info
+			ver := t.Version
+			if !t.Installed() {
+				marker = "✗"
+				if t.Required {
+					style = s.Status.Error
+					missingRequired = append(missingRequired, t.Name)
+				} else {
+					style = s.Status.Warn
+				}
+				ver = "(not found)"
+			}
+			rows = append(rows, style.Render(fmt.Sprintf("%s %-8s %s", marker, t.Name, ver)))
+		}
+		first := true
+		for _, r := range rows {
+			label := "  CLI tools      "
+			if !first {
+				label = "                 "
+			}
+			lines = append(lines, label+r)
+			first = false
+		}
+		if len(missingRequired) > 0 {
+			lines = append(lines, s.Status.Error.Render(fmt.Sprintf(
+				"                 → missing required: %s — install before launch",
+				strings.Join(missingRequired, ", "))))
+		}
+	}
+
+	// MA release version — always render so the user knows what they're
 	switch {
 	case !m.maTagReady:
 		lines = append(lines, s.Status.Info.Render("  MA version     resolving latest…"))

@@ -1,0 +1,94 @@
+# goreleaser config for the Migration Assistant TUI.
+#
+# Builds linux/darwin × amd64/arm64 binaries, bundles them as tar.gz alongside
+# the contributor docs, publishes a checksums.txt, and pushes a GitHub release.
+#
+# Local hand-test:
+#     make release-snapshot
+#
+# Tagged release (CI):
+#     git tag tui-vX.Y.Z && git push --tags
+#     # the migration-assistant-tui workflow takes it from there.
+
+version: 2
+
+project_name: migration-assistant
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: migration-assistant
+    main: ./cmd/tui
+    binary: migration-assistant
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: migration-assistant
+    ids:
+      - migration-assistant
+    name_template: >-
+      {{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+    files:
+      - README.md
+      - UX.md
+      - PLAN.MD
+      - LICENSE*
+      - docs/**/*
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: '{{ incpatch .Version }}-snapshot'
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - 'merge conflict'
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+
+# Tag prefix is `tui-v…` so the TUI can release independently of the parent
+# Migration Assistant cadence. The release workflow filters on this prefix.
+release:
+  github:
+    owner: opensearch-project
+    name: opensearch-migrations
+  name_template: 'Migration Assistant TUI {{ .Version }}'
+  header: |
+    ## migration-assistant {{ .Tag }}
+
+    Single-binary terminal UI for installing, bootstrapping, and entering the
+    Migration Assistant on AWS EKS. Replaces `aws-bootstrap.sh` and
+    `bootstrap-kiro-agent.sh`.
+
+    Install:
+        curl -fsSL https://opensearch-migrations.io/tui/install.sh | bash
+
+  footer: |
+    See `migrationAssistantTUI/README.md` for usage. Issues:
+    https://github.com/opensearch-project/opensearch-migrations/issues
