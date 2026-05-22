@@ -55,3 +55,8 @@ frontend/
 deployment/k8s/aws/dist/
 .scannerwork/
 .sisyphus/
+
+# Migration assistant TUI local experience artifacts
+E2E_EXPERIENCE.docx
+E2E_EXPERIENCE.MD
+opensearch-migration-*-*
