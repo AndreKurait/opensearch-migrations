@@ -1,0 +1,58 @@
+# Codecov configuration — PLAN §11.7.
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  precision: 1
+  round: down
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 0.5%
+    patch:
+      default:
+        target: 80%
+        threshold: 0%
+
+component_management:
+  individual_components:
+    - component_id: tui-feature
+      name: tui/internal/feature
+      paths: [internal/feature/**]
+      statuses:
+        - type: project
+          target: 90%
+    - component_id: tui-pages
+      name: tui/internal/ui/pages
+      paths: [internal/ui/pages/**]
+      statuses:
+        - type: project
+          target: 85%
+    - component_id: tui-pubsub
+      name: tui/internal/pubsub
+      paths: [internal/pubsub/**]
+      statuses:
+        - type: project
+          target: 90%
+    - component_id: tui-workdir
+      name: tui/internal/workdir
+      paths: [internal/workdir/**]
+      statuses:
+        - type: project
+          target: 90%
+
+flags:
+  go:
+    paths: [.]
+    carryforward: true
+
+ignore:
+  - "cmd/**"                         # main.go is wiring; not gated
+  - "internal/ui/**/View"            # rendering — covered by golden tests
+  - "**/testdata/**"
+  - "**/*_test.go"
+
+comment:
+  layout: "diff,flags,components,files"
+  require_changes: true

@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.0"
+
+      - name: Build
+        run: make build
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.62
+          args: --timeout=3m
+
+      - name: Test (race)
+        run: make test
+
+      - name: Goldens up-to-date
+        run: |
+          go test ./... -update
+          if ! git diff --quiet; then
+            echo "Golden files are stale — run 'make test-update' and commit."
+            git diff --stat
+            exit 1
+          fi
+
+      - name: Testdata budget
+        run: make testdata-budget
+
+      - name: Coverage XML
+        run: make cover-xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build/coverage/coverage.xml
+          flags: go
+          fail_ci_if_error: false

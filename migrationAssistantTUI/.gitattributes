@@ -1,0 +1,3 @@
+# PLAN §11.9 — keep golden / testdata bytes byte-identical across platforms.
+testdata/** -text
+*.golden    -text

@@ -1,0 +1,21 @@
+                                                                                    
+  1;38;2;90;240;200mOpenSearch Migration Assistant CLIm                                                
+                                                                                    
+  3;38;2;122;122;138mWelcome. This tool helps you stand up the OpenSearch Migrationm                    
+  3;38;2;122;122;138mAssistant in your AWS account, then either drops you into them                     
+  3;38;2;122;122;138mmigration console or hands off to an AI agent.m                                    
+                                                                                    
+  1;38;2;232;232;240mDetected:m                                                                         
+    AWS identity   123456789012 / arn:aws:iam::123456789012:user/Admin              
+    Region         us-east-1                                                        
+    Existing MA    none found in us-east-1                                          
+    AI agents      claude-code   2.1.140  (latest 2.1.147 — patch behind) ⚠         
+                   kiro-cli      0.4.1  (online version unknown)                    
+  38;2;232;232;240m  MA version     resolving latest…m                                                
+  1;38;2;232;232;240mHow do you want to drive the migration?m                                           
+                                                                                    
+    ▸ 1;38;2;90;240;200mManualm — 38;2;122;122;138mTUI walks setup, then drops you into a console shellm                 
+      38;2;232;232;240mAI Agentm — 38;2;122;122;138mTUI walks setup, then launches an AI agent for youm                 
+                                                                                    
+  3;38;2;122;122;138m[↑↓] choose   [enter] continue   [r] refresh   [a] switch AWS profile   [q] quitm  
+                                                                                    
