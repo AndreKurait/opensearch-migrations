@@ -3,42 +3,44 @@ kind: ConfigMap
 metadata:
   name: replayer-debug-log4j
   # Used by integ-test workflows (cdcOnlyImportedClusters, cdcOverlay) via
-  # replayerConfig.loggingConfigurationOverrideConfigMap. Mirrors the in-tree
-  # default (TrafficCapture/trafficReplayer/src/main/resources/log4j2.properties)
-  # but elevates the accumulator / kafka-consumer / commit pathway to DEBUG so
-  # CDC drain stalls leave a trail of which records entered which terminal state
-  # (committed, expired, ignored, or stuck mid-accumulation).
+  # replayerConfig.loggingConfigurationOverrideConfigMap. The replayer pod
+  # mounts this ConfigMap at /config/logConfiguration/configuration (a single
+  # file with no extension). log4j2's default ConfigurationFactory detector
+  # falls back to XML when it cannot infer the format from the filename, so
+  # the body MUST be XML (not properties) — a properties-format body will
+  # fail to parse with "Content is not allowed in prolog" and the replayer
+  # starts with no logging configuration at all.
+  #
+  # DEBUG is enabled on TrafficReplayerCore, the accumulator, the Kafka
+  # consumer, the offset-lifecycle tracker, and the ReplayEngine so CDC
+  # drain stalls leave a trail of which records entered the tracker, which
+  # commit calls advanced the head vs. were BLOCKED_BY_OTHER_COMMITS, and
+  # which accumulations terminated without firing onConnectionClose.
 data:
   active: "true"
   configuration: |
-    status = warn
+    <?xml version="1.0" encoding="UTF-8"?>
+    <Configuration status="warn">
+      <Appenders>
+        <Console name="STDERR" target="SYSTEM_ERR" direct="true">
+          <PatternLayout pattern="[%-5level] %d{DEFAULT_MICROS}{UTC} [%t] %c{1} - %msg%equals{ ctx=%mdc}{ ctx={}}{}%n"/>
+        </Console>
+      </Appenders>
+      <Loggers>
+        <Root level="info">
+          <AppenderRef ref="STDERR"/>
+        </Root>
+        <Logger name="org.apache.kafka" level="warn"/>
 
-    appenders = console
-
-    appender.console.type = Console
-    appender.console.name = STDERR
-    appender.console.target = SYSTEM_ERR
-    appender.console.layout.type = PatternLayout
-    appender.console.layout.pattern = [%-5level] %d{DEFAULT_MICROS}{UTC} [%t] %c{1} - %msg%equals{ ctx=%mdc}{ ctx={}}{}%n
-    appender.console.direct = true
-
-    rootLogger.level = info
-    rootLogger.appenderRef.STDERR.ref = STDERR
-
-    logger.kafkaInternals.name = org.apache.kafka
-    logger.kafkaInternals.level = warn
-
-    # Trace records from Kafka entry through accumulator state machine to commit.
-    # Targets the suspected drain-stall paths: handleCloseObservation*,
-    # rotateAccumulationIfNecessary, fireAccumulationsCallbacksAndClose,
-    # OffsetLifecycleTracker add/remove, commitTrafficStreams, commitKafkaKey.
-    logger.replayCore.name = org.opensearch.migrations.replay.TrafficReplayerCore
-    logger.replayCore.level = debug
-    logger.accumulator.name = org.opensearch.migrations.replay.CapturedTrafficToHttpTransactionAccumulator
-    logger.accumulator.level = debug
-    logger.kafkaConsumer.name = org.opensearch.migrations.replay.kafka.TrackingKafkaConsumer
-    logger.kafkaConsumer.level = debug
-    logger.offsetTracker.name = org.opensearch.migrations.replay.kafka.OffsetLifecycleTracker
-    logger.offsetTracker.level = debug
-    logger.replayEngine.name = org.opensearch.migrations.replay.ReplayEngine
-    logger.replayEngine.level = debug
+        <!-- Drain-stall instrumentation. See the DEBUG markers in:
+             - TrackingKafkaConsumer (per-record entry, HEAD-ADVANCE / BLOCKED commits)
+             - CapturedTrafficToHttpTransactionAccumulator (DRAIN-STALL CANDIDATE / LEAK)
+             - TrafficReplayerCore (commit hand-off)
+        -->
+        <Logger name="org.opensearch.migrations.replay.TrafficReplayerCore" level="debug"/>
+        <Logger name="org.opensearch.migrations.replay.CapturedTrafficToHttpTransactionAccumulator" level="debug"/>
+        <Logger name="org.opensearch.migrations.replay.kafka.TrackingKafkaConsumer" level="debug"/>
+        <Logger name="org.opensearch.migrations.replay.kafka.OffsetLifecycleTracker" level="debug"/>
+        <Logger name="org.opensearch.migrations.replay.ReplayEngine" level="debug"/>
+      </Loggers>
+    </Configuration>
