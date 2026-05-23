@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Verifies that handleCompletedTransaction commits traffic streams even when the tuple
- * writer throws synchronously.
+ * writer throws synchronously, and does so without rethrowing the failure.
  *
  * <p>Regression test: a synchronous exception out of {@code packageAndWriteTuple}
  * (e.g. {@code S3TupleSink.openNewStream} -&gt; AWS SDK
@@ -36,6 +36,10 @@ import static org.mockito.Mockito.when;
  * whenComplete could schedule {@code commitTrafficStreams}, leaving the offset at the
  * head of {@code OffsetLifecycleTracker}'s priority queue forever. Every subsequent
  * commit was blocked, and the consumer-group LAG never drained.</p>
+ *
+ * <p>The target request itself completes before this finalization runs, so a tuple-sink
+ * failure is observability loss, not migration loss. The fix logs and commits inline
+ * rather than rethrowing.</p>
  */
 @Slf4j
 public class HandleCompletedTransactionCommitTest {
@@ -101,7 +105,7 @@ public class HandleCompletedTransactionCommitTest {
     }
 
     @Test
-    void synchronousTupleWriterFailure_stillCommitsTrafficStreams() {
+    void synchronousTupleWriterFailure_swallowsExceptionAndCommits() {
         var core = new TestableReplayerCore();
 
         // Set up a real RequestResponsePacketPair-like rrPair with traffic stream keys.
@@ -136,9 +140,9 @@ public class HandleCompletedTransactionCommitTest {
         var summary = mock(TransformedTargetRequestAndResponseList.class);
         var tupleWriter = throwingTupleWriter();
 
-        // Expect: handleCompletedTransaction throws (rethrows the IllegalStateException), but
-        // commitTrafficStreams MUST have been called for the held keys before the rethrow.
-        Assertions.assertThrows(RuntimeException.class, () ->
+        // Tuple finalization failures are post-response observability loss only — log
+        // and continue, do not propagate. The Kafka offset MUST advance.
+        Assertions.assertDoesNotThrow(() ->
             core.invokeHandle(ctx, rrPair, summary, null, tupleWriter, capturedSrc));
 
         Assertions.assertEquals(1, commitCount.get(),
