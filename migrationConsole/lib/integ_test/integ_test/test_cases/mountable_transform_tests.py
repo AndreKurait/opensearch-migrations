@@ -8,7 +8,7 @@ from .cdc_base import (
     MATestBase, MigrationType, MATestUserArguments,
     CDC_SOURCE_TARGET_COMBINATIONS, REPLAYER_LABEL_SELECTOR, PROXY_LABEL_SELECTOR,
     wait_for_pod_ready, wait_for_replayer_consuming,
-    make_proxy_cluster,
+    make_proxy_cluster, log_kafka_consumer_group_state, assert_replay_drained,
 )
 from .ma_argo_test_base import ClusterVersionCombinationUnsupported
 
@@ -189,6 +189,7 @@ class Test0042CdcFullE2eMountableTransforms(MATestBase):
         wait_for_pod_ready(ns, REPLAYER_LABEL_SELECTOR, timeout_seconds)
         logger.info("Waiting for replayer to join Kafka consumer group...")
         wait_for_replayer_consuming(namespace=ns, timeout_seconds=300)
+        log_kafka_consumer_group_state(label="replay-start")
 
         proxy_cluster = make_proxy_cluster(self.source_cluster)
         logger.info("Sending validation request for tuple capture through proxy...")
@@ -200,15 +201,18 @@ class Test0042CdcFullE2eMountableTransforms(MATestBase):
 
     def verify_clusters(self):
         logger.info("Verifying transformed backfill documents on target...")
-        self.target_operations.check_doc_counts_match(
-            cluster=self.target_cluster,
-            expected_index_details={self.index_name: {"count": self.DOC_COUNT}},
-            max_attempts=120,
-            delay=10.0,
-        )
-        self._assert_metadata_field_mapping()
-        self._wait_for_transformed_backfill_docs()
-        self._wait_for_transformed_tuple_file()
+        try:
+            self.target_operations.check_doc_counts_match(
+                cluster=self.target_cluster,
+                expected_index_details={self.index_name: {"count": self.DOC_COUNT}},
+                max_attempts=120,
+                delay=10.0,
+            )
+            self._assert_metadata_field_mapping()
+            self._wait_for_transformed_backfill_docs()
+            self._wait_for_transformed_tuple_file()
+        finally:
+            assert_replay_drained(label="replay-end")
 
     def _assert_metadata_field_mapping(self):
         response = self.target_operations.get_index(index_name=self.index_name, cluster=self.target_cluster)

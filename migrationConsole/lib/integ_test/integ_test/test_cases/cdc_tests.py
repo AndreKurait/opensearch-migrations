@@ -5,7 +5,7 @@ from .cdc_base import (
     MATestBase, MigrationType, MATestUserArguments,
     CDC_SOURCE_TARGET_COMBINATIONS, REPLAYER_LABEL_SELECTOR,
     wait_for_pod_ready, wait_for_replayer_consuming,
-    make_proxy_cluster,
+    make_proxy_cluster, log_kafka_consumer_group_state, assert_replay_drained,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,7 @@ class Test0031CdcOnlyLiveTraffic(MATestBase):
     def post_migration_actions(self):
         logger.info("Waiting for replayer to join Kafka consumer group...")
         wait_for_replayer_consuming(namespace=self.argo_service.namespace)
+        log_kafka_consumer_group_state(label="replay-start")
 
         proxy_cluster = make_proxy_cluster(self.source_cluster)
         logger.info("Creating %d CDC documents through proxy...", CDC_NUM_DOCS)
@@ -66,8 +67,11 @@ class Test0031CdcOnlyLiveTraffic(MATestBase):
 
     def verify_clusters(self):
         logger.info("Verifying CDC docs on target...")
-        self.target_operations.check_doc_counts_match(
-            cluster=self.target_cluster,
-            expected_index_details={self.cdc_index: {"count": CDC_NUM_DOCS}},
-            max_attempts=120, delay=10.0,
-        )
+        try:
+            self.target_operations.check_doc_counts_match(
+                cluster=self.target_cluster,
+                expected_index_details={self.cdc_index: {"count": CDC_NUM_DOCS}},
+                max_attempts=120, delay=10.0,
+            )
+        finally:
+            assert_replay_drained(label="replay-end")
