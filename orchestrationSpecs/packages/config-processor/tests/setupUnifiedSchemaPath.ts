@@ -16,7 +16,16 @@ const strimziFixturePath = path.resolve(
     "strimzi",
     "minimal-openapi.json"
 );
-const outputPath = path.join(os.tmpdir(), "orchestrationSpecs-config-processor-test-unified-schema.json");
+// setupFiles runs once per Jest worker, but the previous version wrote to a
+// fixed path in os.tmpdir() — so two workers racing the writeFileSync left a
+// partially-truncated JSON file on disk. The validator's JSON.parse then blew
+// up mid-document (e.g. "Expected property name or '}' at position 40954").
+// Scope the file to the current worker so writes never collide.
+const workerId = process.env.JEST_WORKER_ID ?? "1";
+const outputPath = path.join(
+    os.tmpdir(),
+    `orchestrationSpecs-config-processor-test-unified-schema-w${workerId}.json`,
+);
 const {schema} = buildUnifiedSchema({strimziSchemaPath: strimziFixturePath});
 
 fs.writeFileSync(outputPath, JSON.stringify(schema, null, 2) + "\n");
