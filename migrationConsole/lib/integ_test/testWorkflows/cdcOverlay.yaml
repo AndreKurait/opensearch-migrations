@@ -86,7 +86,7 @@ spec:
                       "observedPacketConnectionTimeout": {{inputs.parameters.observedPacketTimeout}},
                       "speedupFactor": {{inputs.parameters.speedupFactor}},
                       "useLocalStack": $useLocalStack,
-                      "jvmArgs": "-Dreplayer.drainStallLogLevel=DEBUG"
+                      "jvmArgs": "-Dreplayer.rootLogLevel=DEBUG"
                     }
                     + (if $tupleS3Bucket != "" then {
                         "tupleS3Bucket": $tupleS3Bucket,
