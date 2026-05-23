@@ -123,7 +123,7 @@ spec:
                       "replayerConfig": {
                         "observedPacketConnectionTimeout": 30,
                         "speedupFactor": {{workflow.parameters.speedup-factor}},
-                        "loggingConfigurationOverrideConfigMap": "replayer-debug-log4j"
+                        "jvmArgs": "-Dreplayer.drainStallLogLevel=DEBUG"
                       }
                     }
                   }
