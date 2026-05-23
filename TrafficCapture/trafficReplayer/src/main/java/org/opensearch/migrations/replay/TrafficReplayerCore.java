@@ -190,6 +190,9 @@ public abstract class TrafficReplayerCore extends RequestTransformerAndSender<Tr
             TransformedTargetRequestAndResponseList summary,
             Throwable t
         ) {
+            // Track whether commitTrafficStreams has been scheduled (either inline or via writeFuture)
+            // so the catch block can handle the synchronous-throw path without double-committing.
+            boolean commitScheduled = false;
             try (var httpContext = rrPair.getHttpTransactionContext()) {
                 // if this comes in with a serious Throwable (not an Exception), don't bother
                 // packaging it up and calling the callback.
@@ -204,6 +207,7 @@ public abstract class TrafficReplayerCore extends RequestTransformerAndSender<Tr
                                 summary,
                                 (Exception) t
                             );
+                            commitScheduled = true;
                             writeFuture.whenComplete((v, writeErr) -> {
                                 if (writeErr != null) {
                                     log.atError().setCause(writeErr)
@@ -228,6 +232,7 @@ public abstract class TrafficReplayerCore extends RequestTransformerAndSender<Tr
                     recordTargetResponseCodes(summary);
                     if (tupleWriter == null) {
                         commitTrafficStreams(rrPair.completionStatus, rrPair.trafficStreamKeysBeingHeld);
+                        commitScheduled = true;
                     }
                     return null;
                 } else {
@@ -247,6 +252,19 @@ public abstract class TrafficReplayerCore extends RequestTransformerAndSender<Tr
                     .addArgument(context)
                     .setCause(e)
                     .log();
+                // Commit the traffic streams even when tuple writing failed synchronously, so the
+                // Kafka consumer-group offset advances past this record. Without this, an offset
+                // at the head of OffsetLifecycleTracker's priority queue stalls forever, blocking
+                // every later commit and pinning the consumer-group LAG indefinitely.
+                if (!commitScheduled) {
+                    try {
+                        commitTrafficStreams(rrPair.completionStatus, rrPair.trafficStreamKeysBeingHeld);
+                    } catch (Exception commitEx) {
+                        log.atError().setCause(commitEx)
+                            .setMessage("Failed to commit traffic streams during exception recovery for {}")
+                            .addArgument(context).log();
+                    }
+                }
                 throw e;
             } finally {
                 var requestKey = context.getReplayerRequestKey();
