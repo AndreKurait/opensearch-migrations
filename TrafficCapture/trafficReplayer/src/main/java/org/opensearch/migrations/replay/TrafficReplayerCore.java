@@ -190,65 +190,13 @@ public abstract class TrafficReplayerCore extends RequestTransformerAndSender<Tr
             TransformedTargetRequestAndResponseList summary,
             Throwable t
         ) {
-            // True when tuple writing handed off to a writeFuture that will commit on completion.
-            // Otherwise we commit inline (legacy log4j path, or the failure-recovery path below)
-            // so the Kafka offset always advances past this record.
-            boolean commitDeferredToWriteFuture = false;
             try (var httpContext = rrPair.getHttpTransactionContext()) {
                 // if this comes in with a serious Throwable (not an Exception), don't bother
                 // packaging it up and calling the callback.
                 // Escalate it up out handling stack and shutdown.
                 if (t == null || t instanceof Exception) {
-                    try {
-                        try (var tupleHandlingContext = httpContext.createTupleContext()) {
-                            if (tupleWriter != null) {
-                                var writeFuture = packageAndWriteTuple(
-                                    tupleHandlingContext,
-                                    tupleWriter,
-                                    rrPair,
-                                    summary,
-                                    (Exception) t
-                                );
-                                commitDeferredToWriteFuture = true;
-                                writeFuture.whenComplete((v, writeErr) -> {
-                                    if (writeErr != null) {
-                                        log.atError().setCause(writeErr)
-                                            .setMessage("Tuple write failed for {} (streams={})")
-                                            .addArgument(context)
-                                            .addArgument(rrPair.trafficStreamKeysBeingHeld).log();
-                                    }
-                                    commitTrafficStreams(rrPair.completionStatus, rrPair.trafficStreamKeysBeingHeld);
-                                });
-                            } else {
-                                packageAndWriteResponse(
-                                    tupleHandlingContext,
-                                    resultTupleConsumer,
-                                    rrPair,
-                                    summary,
-                                    (Exception) t
-                                );
-                            }
-                        }
-                        // Count the final outcome once per request (not per retry)
-                        countFinalOutcome(summary, t);
-                        recordTargetResponseCodes(summary);
-                    } catch (Exception finalizationFailure) {
-                        // The target request itself already completed before this point — we are
-                        // only finalizing observability (tuple write to S3 / log4j, response-code
-                        // accounting). Losing a tuple file does not invalidate the migration, so
-                        // log and continue rather than rethrowing. Falling through to the inline
-                        // commit below is mandatory: if we let the offset stay in
-                        // OffsetLifecycleTracker's priority queue, the head pins forever and
-                        // every later commit on this partition is BLOCKED_BY_OTHER_COMMITS
-                        // (observed: CURRENT-OFFSET stuck at 1, LAG=731+ for the run).
-                        log.atError().setCause(finalizationFailure)
-                            .setMessage("Tuple finalization failed for {}; target request already "
-                                + "completed, continuing past the failure to commit Kafka offsets.")
-                            .addArgument(context).log();
-                        // The synchronous throw happened before writeFuture was built, so its
-                        // whenComplete will not run. Commit inline.
-                        commitDeferredToWriteFuture = false;
-                    }
+                    boolean commitDeferredToWriteFuture =
+                        runTupleFinalization(context, httpContext, rrPair, summary, (Exception) t);
                     if (!commitDeferredToWriteFuture) {
                         commitTrafficStreams(rrPair.completionStatus, rrPair.trafficStreamKeysBeingHeld);
                     }
@@ -268,6 +216,62 @@ public abstract class TrafficReplayerCore extends RequestTransformerAndSender<Tr
                 requestWorkTracker.remove(requestKey);
                 log.atTrace().setMessage("removed rrPair.requestData from targetTransactionInProgressMap for {}").addArgument(requestKey).log();
             }
+        }
+
+        /**
+         * Run tuple writing + outcome accounting under a try/catch that converts a synchronous
+         * tuple-finalization failure into a logged warning.
+         *
+         * <p>The target request itself already completed before this runs — we are only
+         * finalizing observability (tuple write to S3 / log4j, response-code accounting).
+         * Losing a tuple file does not invalidate the migration, so log and continue rather
+         * than rethrowing. The caller MUST commit the held traffic stream keys after this
+         * returns (unless the return value is {@code true}, in which case the writeFuture's
+         * whenComplete is on the hook). Skipping that commit leaves the offset at the head
+         * of OffsetLifecycleTracker's priority queue forever, blocking every later commit
+         * (observed: CURRENT-OFFSET stuck at 1, LAG=731+ for the run that motivated this).</p>
+         *
+         * @return {@code true} if commit was deferred to the writeFuture (S3 path on success),
+         *         {@code false} if the caller must commit inline (log4j path or finalization
+         *         failed before writeFuture was built).
+         */
+        private boolean runTupleFinalization(
+            IReplayContexts.IReplayerHttpTransactionContext context,
+            IReplayContexts.IReplayerHttpTransactionContext httpContext,
+            RequestResponsePacketPair rrPair,
+            TransformedTargetRequestAndResponseList summary,
+            Exception t
+        ) {
+            boolean commitDeferredToWriteFuture = false;
+            try (var tupleHandlingContext = httpContext.createTupleContext()) {
+                if (tupleWriter != null) {
+                    var writeFuture = packageAndWriteTuple(tupleHandlingContext, tupleWriter, rrPair, summary, t);
+                    commitDeferredToWriteFuture = true;
+                    writeFuture.whenComplete((v, writeErr) -> {
+                        if (writeErr != null) {
+                            log.atError().setCause(writeErr)
+                                .setMessage("Tuple write failed for {} (streams={})")
+                                .addArgument(context)
+                                .addArgument(rrPair.trafficStreamKeysBeingHeld).log();
+                        }
+                        commitTrafficStreams(rrPair.completionStatus, rrPair.trafficStreamKeysBeingHeld);
+                    });
+                } else {
+                    packageAndWriteResponse(tupleHandlingContext, resultTupleConsumer, rrPair, summary, t);
+                }
+            } catch (Exception finalizationFailure) {
+                log.atError().setCause(finalizationFailure)
+                    .setMessage("Tuple finalization failed for {}; target request already "
+                        + "completed, continuing past the failure to commit Kafka offsets.")
+                    .addArgument(context).log();
+                // The synchronous throw happened before writeFuture was built, so its
+                // whenComplete will not run. Force the caller to commit inline.
+                return false;
+            }
+            // Count the final outcome once per request (not per retry).
+            countFinalOutcome(summary, t);
+            recordTargetResponseCodes(summary);
+            return commitDeferredToWriteFuture;
         }
 
         private void countFinalOutcome(TransformedTargetRequestAndResponseList summary, Throwable t) {
