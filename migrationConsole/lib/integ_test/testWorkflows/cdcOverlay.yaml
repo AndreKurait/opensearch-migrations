@@ -85,7 +85,8 @@ spec:
                     "replayerConfig": ({
                       "observedPacketConnectionTimeout": {{inputs.parameters.observedPacketTimeout}},
                       "speedupFactor": {{inputs.parameters.speedupFactor}},
-                      "useLocalStack": $useLocalStack
+                      "useLocalStack": $useLocalStack,
+                      "loggingConfigurationOverrideConfigMap": "replayer-debug-log4j"
                     }
                     + (if $tupleS3Bucket != "" then {
                         "tupleS3Bucket": $tupleS3Bucket,

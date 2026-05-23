@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: replayer-debug-log4j
+  # Used by integ-test workflows (cdcOnlyImportedClusters, cdcOverlay) via
+  # replayerConfig.loggingConfigurationOverrideConfigMap. Mirrors the in-tree
+  # default (TrafficCapture/trafficReplayer/src/main/resources/log4j2.properties)
+  # but elevates the accumulator / kafka-consumer / commit pathway to DEBUG so
+  # CDC drain stalls leave a trail of which records entered which terminal state
+  # (committed, expired, ignored, or stuck mid-accumulation).
+data:
+  active: "true"
+  configuration: |
+    status = warn
+
+    appenders = console
+
+    appender.console.type = Console
+    appender.console.name = STDERR
+    appender.console.target = SYSTEM_ERR
+    appender.console.layout.type = PatternLayout
+    appender.console.layout.pattern = [%-5level] %d{DEFAULT_MICROS}{UTC} [%t] %c{1} - %msg%equals{ ctx=%mdc}{ ctx={}}{}%n
+    appender.console.direct = true
+
+    rootLogger.level = info
+    rootLogger.appenderRef.STDERR.ref = STDERR
+
+    logger.kafkaInternals.name = org.apache.kafka
+    logger.kafkaInternals.level = warn
+
+    # Trace records from Kafka entry through accumulator state machine to commit.
+    # Targets the suspected drain-stall paths: handleCloseObservation*,
+    # rotateAccumulationIfNecessary, fireAccumulationsCallbacksAndClose,
+    # OffsetLifecycleTracker add/remove, commitTrafficStreams, commitKafkaKey.
+    logger.replayCore.name = org.opensearch.migrations.replay.TrafficReplayerCore
+    logger.replayCore.level = debug
+    logger.accumulator.name = org.opensearch.migrations.replay.CapturedTrafficToHttpTransactionAccumulator
+    logger.accumulator.level = debug
+    logger.kafkaConsumer.name = org.opensearch.migrations.replay.kafka.TrackingKafkaConsumer
+    logger.kafkaConsumer.level = debug
+    logger.offsetTracker.name = org.opensearch.migrations.replay.kafka.OffsetLifecycleTracker
+    logger.offsetTracker.level = debug
+    logger.replayEngine.name = org.opensearch.migrations.replay.ReplayEngine
+    logger.replayEngine.level = debug

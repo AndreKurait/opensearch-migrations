@@ -385,7 +385,12 @@ public class TrackingKafkaConsumer implements ConsumerRebalanceListener {
             );
             offsetTracker.add(offsetDetails.getOffset(), kafkaRecord.key());
             kafkaRecordsLeftToCommitEventually.incrementAndGet();
-            log.atTrace().setMessage("records in flight={}").addArgument(kafkaRecordsLeftToCommitEventually::get).log();
+            log.atDebug().setMessage("Kafka record entered tracker: partition={} offset={} connectionId={} inflight={}")
+                .addArgument(kafkaRecord::partition)
+                .addArgument(kafkaRecord::offset)
+                .addArgument(kafkaRecord::key)
+                .addArgument(kafkaRecordsLeftToCommitEventually::get)
+                .log();
             return builder.apply(offsetDetails, kafkaRecord);
         });
     }
@@ -461,7 +466,9 @@ public class TrackingKafkaConsumer implements ConsumerRebalanceListener {
         newHeadValue = tracker.removeAndReturnNewHead(kafkaTsk.getOffset());
         return newHeadValue.map(o -> {
             var v = new OffsetAndMetadata(o);
-            log.atDebug().setMessage("Adding new commit {}->{} to map").addArgument(k).addArgument(v).log();
+            log.atDebug().setMessage("commitKafkaKey HEAD-ADVANCE: partition={} offset={} connectionId={} newHead={}")
+                .addArgument(p).addArgument(kafkaTsk::getOffset).addArgument(streamKey::getConnectionId).addArgument(o)
+                .log();
             synchronized (commitDataLock) {
                 addKeyContextForEventualCommit(streamKey, kafkaTsk, k);
                 nextSetOfCommitsMap.put(k, v);
@@ -469,6 +476,11 @@ public class TrackingKafkaConsumer implements ConsumerRebalanceListener {
             kafkaRecordsReadyToCommit.set(true);
             return ITrafficCaptureSource.CommitResult.AFTER_NEXT_READ;
         }).orElseGet(() -> {
+            log.atDebug().setMessage("commitKafkaKey BLOCKED: partition={} offset={} connectionId={} headOffset={} "
+                    + "(removed from queue but not at head — head will need to be removed before commit advances)")
+                .addArgument(p).addArgument(kafkaTsk::getOffset).addArgument(streamKey::getConnectionId)
+                .addArgument(() -> tracker.peekHeadOffset().map(String::valueOf).orElse("<empty>"))
+                .log();
             synchronized (commitDataLock) {
                 addKeyContextForEventualCommit(streamKey, kafkaTsk, k);
             }

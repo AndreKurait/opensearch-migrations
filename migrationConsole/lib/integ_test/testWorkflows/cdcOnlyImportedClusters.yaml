@@ -122,7 +122,8 @@ spec:
                       "toTarget": "target1",
                       "replayerConfig": {
                         "observedPacketConnectionTimeout": 30,
-                        "speedupFactor": {{workflow.parameters.speedup-factor}}
+                        "speedupFactor": {{workflow.parameters.speedup-factor}},
+                        "loggingConfigurationOverrideConfigMap": "replayer-debug-log4j"
                       }
                     }
                   }

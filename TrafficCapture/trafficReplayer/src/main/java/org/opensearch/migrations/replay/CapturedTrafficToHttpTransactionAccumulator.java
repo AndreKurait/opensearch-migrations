@@ -692,6 +692,18 @@ public class CapturedTrafficToHttpTransactionAccumulator {
                     break;
                 case WAITING_FOR_NEXT_READ_CHUNK:
                 case IGNORING_LAST_REQUEST:
+                    // Suspected drain-stall path: we may hold trafficStreamKeys here that
+                    // never produced an HTTP request, and the finally below skips the
+                    // onConnectionClose commit because hasSignaledRequests() is false.
+                    log.atDebug().setMessage("DRAIN-STALL CANDIDATE: terminating accum {} in state={} status={} "
+                            + "hasRrPair={} heldKeys={} hasSignaledRequests={}")
+                        .addArgument(accumulation.trafficChannelKey)
+                        .addArgument(accumulation.state)
+                        .addArgument(status)
+                        .addArgument(accumulation::hasRrPair)
+                        .addArgument(() -> getTrafficStreamsHeldByAccum(accumulation).size())
+                        .addArgument(accumulation::hasSignaledRequests)
+                        .log();
                     break;
                 default:
                     throw new IllegalStateException("Unknown enum type: " + accumulation.state);
@@ -704,6 +716,22 @@ public class CapturedTrafficToHttpTransactionAccumulator {
                     accumulation.getLastTimestamp(),
                     getTrafficStreamsHeldByAccum(accumulation)
                 );
+            } else {
+                // Confirms the leak: traffic stream keys held by this accumulation will
+                // not be committed by any path below this point. The onTrafficStreamIgnored
+                // call (CapturedTrafficToHttpTransactionAccumulator.accept(), line ~352)
+                // is the only commit hand-off and only fires for streams routed through
+                // there — accumulations expired while accumulating fall through this gap.
+                var heldStreams = getTrafficStreamsHeldByAccum(accumulation);
+                if (!heldStreams.isEmpty()) {
+                    log.atDebug().setMessage("DRAIN-STALL LEAK: accum {} state={} status={} held {} traffic stream "
+                            + "keys but never signaled a request — onConnectionClose suppressed, no commit will fire.")
+                        .addArgument(accumulation.trafficChannelKey)
+                        .addArgument(accumulation.state)
+                        .addArgument(status)
+                        .addArgument(heldStreams::size)
+                        .log();
+                }
             }
         }
     }
