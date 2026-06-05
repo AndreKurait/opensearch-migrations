@@ -53,24 +53,41 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
  * pressure: a failed tuple write is fatal to the replayer and it shuts down WITHOUT committing the
  * held offsets (TrafficReplayerCore.failReplayForTupleWrite), so on restart it resumes at the same
  * offset, re-reads the same tuples, and — if S3 is still down — crash-loops forever, never
- * advancing. So instead we apply real backpressure: a semaphore caps accepted-but-not-yet-durably-
- * uploaded tuples at {@code maxInFlightTuples}, and when the cap is reached {@code accept()} BLOCKS
- * the calling thread until a permit frees (i.e. until an in-flight upload completes). This bounds
- * memory (buffered tuples + temp files + pending futures) while letting the replayer ride out an S3
- * outage and resume — throughput drops to zero during the outage by design, rather than failing.
- * The blocking happens on the replay response-completion thread, which is independent of the S3 SDK
- * threads and the sink's worker thread, so the upload/retry machinery keeps draining (no deadlock).
- * Permits are released when each tuple's future settles.</p>
+ * advancing. So instead we apply real backpressure via TWO gates, each guarding the resource that
+ * accumulates at its stage; both BLOCK (never fail) so the replayer rides out an S3 outage and
+ * resumes, with throughput dropping toward zero during the outage by design:</p>
+ * <ul>
+ *   <li><b>Intake gate (producer-side, coarse count).</b> {@code accept()} blocks until one of
+ *       {@code maxInFlightTuples} permits is free, bounding the heap held by accepted-but-not-yet-
+ *       durably-uploaded tuples (queued tupleMaps + pending futures). Count, not bytes, because with
+ *       serialization deferred to the worker (Option A) the byte size isn't known at accept() time;
+ *       the byte-accurate bound is the disk gate below. Released when each tuple future settles.
+ *       Blocks the replay response-completion thread — independent of the worker/SDK threads that
+ *       drain it, so no deadlock.</li>
+ *   <li><b>Disk-backlog gate (worker-side, bytes + file count).</b> Rotated-but-not-yet-uploaded
+ *       temp files are the genuinely unbounded resource under an outage (each rotation adds a file
+ *       to /tmp; none delete until upload succeeds). Before handing a finished file to the upload
+ *       retry loop, the worker thread blocks until {@code maxOutstandingUploadBytes} AND
+ *       {@code maxOutstandingUploadFiles} permits are free, then releases them on upload success.
+ *       Because this blocks the single worker thread, new writes and the age flush also pause while
+ *       the disk backlog is full — intended backpressure. Drains via the SDK's upload threads.</li>
+ * </ul>
  */
 @Slf4j
 public class S3TupleSink implements TupleSink {
     static final Duration DEFAULT_UPLOAD_RETRY_DELAY = Duration.ofSeconds(10);
 
     /**
-     * Default cap on accepted-but-not-yet-durably-uploaded tuples. Bounds memory under a sustained
-     * S3 outage; when reached, accept() blocks (waits for an upload to drain) rather than failing.
+     * Default intake-gate cap on accepted-but-not-yet-durably-uploaded tuples (coarse count bound on
+     * heap). When reached, accept() blocks (waits for an upload to drain) rather than failing.
      */
     static final int DEFAULT_MAX_IN_FLIGHT_TUPLES = 100_000;
+
+    /** Default disk-backlog cap on bytes of rotated-but-not-yet-uploaded temp files (1 GiB). */
+    static final long DEFAULT_MAX_OUTSTANDING_UPLOAD_BYTES = 1024L * 1024L * 1024L;
+
+    /** Default disk-backlog cap on the number of rotated-but-not-yet-uploaded temp files. */
+    static final int DEFAULT_MAX_OUTSTANDING_UPLOAD_FILES = 64;
 
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
         DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
@@ -94,9 +111,21 @@ public class S3TupleSink implements TupleSink {
     // upload callback runs on an SDK thread but only touches atomics, never buffer state.) This
     // keeps the Netty event loop free of all per-tuple serialize/gzip/disk work.
     private final ScheduledExecutorService executor;
-    // Bounds accepted-but-not-yet-durably-uploaded tuples. See class javadoc (Backpressure).
+    // Separate scheduler for upload retries + the upload-success release path. MUST be distinct from
+    // `executor`: the worker thread can block in rotate() on the disk-backlog gate, and the permits
+    // it waits on are only released after an upload succeeds. If retries were rescheduled onto the
+    // (single, parked) worker they could never run → the gate would never drain → deadlock. Keeping
+    // retries on their own thread means the worker can park safely.
+    private final ScheduledExecutorService uploadRetryScheduler;
+    // Intake gate: bounds accepted-but-not-yet-durably-uploaded tuples (coarse count). See javadoc.
     private final Semaphore inFlightPermits;
     private final int maxInFlightTuples;
+    // Disk-backlog gates: bound rotated-but-not-yet-uploaded temp files by total size and count.
+    // Byte permits are denominated in KiB so the permit count stays an int even for large caps.
+    private static final long UPLOAD_BYTE_PERMIT_UNIT = 1024L;
+    private final Semaphore outstandingUploadBytePermits;
+    private final Semaphore outstandingUploadFilePermits;
+    private final int maxOutstandingUploadBytePermits;
     private final AtomicInteger activeUploads = new AtomicInteger();
     private final AtomicBoolean closeRequested = new AtomicBoolean();
     private final AtomicLong sequenceCounter = new AtomicLong();
@@ -161,6 +190,25 @@ public class S3TupleSink implements TupleSink {
         Duration uploadRetryDelay,
         int maxInFlightTuples
     ) {
+        this(s3Client, bucket, prefix, replayerId, sinkIndex, rotateAfterBytes, rotateAfterAge,
+            rotateAfterTuples, uploadRetryDelay, maxInFlightTuples,
+            DEFAULT_MAX_OUTSTANDING_UPLOAD_BYTES, DEFAULT_MAX_OUTSTANDING_UPLOAD_FILES);
+    }
+
+    S3TupleSink(
+        S3AsyncClient s3Client,
+        String bucket,
+        String prefix,
+        String replayerId,
+        int sinkIndex,
+        long rotateAfterBytes,
+        Duration rotateAfterAge,
+        int rotateAfterTuples,
+        Duration uploadRetryDelay,
+        int maxInFlightTuples,
+        long maxOutstandingUploadBytes,
+        int maxOutstandingUploadFiles
+    ) {
         this.s3Client = s3Client;
         this.bucket = bucket;
         this.prefix = prefix;
@@ -172,7 +220,14 @@ public class S3TupleSink implements TupleSink {
         this.uploadRetryDelay = uploadRetryDelay;
         this.maxInFlightTuples = maxInFlightTuples;
         this.inFlightPermits = new Semaphore(maxInFlightTuples);
-        this.executor = Executors.newSingleThreadScheduledExecutor(makeWorkerThreadFactory());
+        // Byte gate in KiB units (ceil) so a large cap stays within int permit range.
+        this.maxOutstandingUploadBytePermits =
+            (int) Math.min(Integer.MAX_VALUE, (maxOutstandingUploadBytes + UPLOAD_BYTE_PERMIT_UNIT - 1)
+                / UPLOAD_BYTE_PERMIT_UNIT);
+        this.outstandingUploadBytePermits = new Semaphore(maxOutstandingUploadBytePermits);
+        this.outstandingUploadFilePermits = new Semaphore(maxOutstandingUploadFiles);
+        this.executor = Executors.newSingleThreadScheduledExecutor(makeThreadFactory("worker"));
+        this.uploadRetryScheduler = Executors.newSingleThreadScheduledExecutor(makeThreadFactory("upload-retry"));
         openNewStream();
         // Self-scheduled age flush: re-checks file age on its own thread so a sink that stops
         // receiving tuples still rotates its trailing batch (otherwise those tuple futures never
@@ -331,15 +386,57 @@ public class S3TupleSink implements TupleSink {
             return;
         }
 
+        // Disk-backlog gate: block the worker until the rotated file fits within the outstanding-
+        // upload caps (bytes + file count). This is the byte-accurate bound that protects /tmp from
+        // a sustained S3 outage; the worker parking here also pauses new writes + the age flush
+        // (intended backpressure). Permits are released on upload success (see uploadFileWithRetries).
+        var bytePermits = acquireDiskBacklogPermits(file);
+
         log.atInfo().setMessage("Completing S3 upload to s3://{}/{}").addArgument(bucket).addArgument(key).log();
 
         activeUploads.incrementAndGet();
-        uploadFileWithRetries(key, file, futures, 1);
+        uploadFileWithRetries(key, file, futures, bytePermits, 1);
 
         if (openNextStream) {
             openNewStream();
         } else {
             clearCurrentStream();
+        }
+    }
+
+    /**
+     * Block (on the worker thread) until the just-finished file fits within the outstanding-upload
+     * byte + file caps, then return the number of byte permits reserved (to release on success). A
+     * file larger than the whole byte cap is clamped to the cap so it can still proceed solo rather
+     * than deadlock. Interruption (shutdown) returns the clamped count without having acquired, so
+     * release stays balanced.
+     */
+    private int acquireDiskBacklogPermits(Path file) {
+        long sizeBytes;
+        try {
+            sizeBytes = Files.size(file);
+        } catch (IOException e) {
+            // Can't size it — don't block on the byte gate for this file; still take a file permit.
+            sizeBytes = 0;
+        }
+        int bytePermits = (int) Math.min(
+            maxOutstandingUploadBytePermits,
+            (sizeBytes + UPLOAD_BYTE_PERMIT_UNIT - 1) / UPLOAD_BYTE_PERMIT_UNIT);
+        try {
+            outstandingUploadFilePermits.acquire();
+            if (bytePermits > 0) {
+                outstandingUploadBytePermits.acquire(bytePermits);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return bytePermits;
+    }
+
+    private void releaseDiskBacklogPermits(int bytePermits) {
+        outstandingUploadFilePermits.release();
+        if (bytePermits > 0) {
+            outstandingUploadBytePermits.release(bytePermits);
         }
     }
 
@@ -392,11 +489,15 @@ public class S3TupleSink implements TupleSink {
         String key,
         Path file,
         List<CompletableFuture<Void>> futures,
+        int diskBacklogBytePermits,
         int attempt
     ) {
         uploadFile(key, file).whenComplete((response, error) -> {
             if (error == null) {
                 deleteFile(file);
+                // Release the disk-backlog gate first: the file is gone and its futures are about
+                // to complete, so unblock the worker (which may be parked in rotate()) promptly.
+                releaseDiskBacklogPermits(diskBacklogBytePermits);
                 futures.forEach(f -> f.complete(null));
                 activeUploads.decrementAndGet();
                 shutdownExecutorIfDone();
@@ -410,8 +511,8 @@ public class S3TupleSink implements TupleSink {
                 .addArgument(attempt)
                 .addArgument(uploadRetryDelay::toMillis)
                 .log();
-            executor.schedule(
-                () -> uploadFileWithRetries(key, file, futures, attempt + 1),
+            uploadRetryScheduler.schedule(
+                () -> uploadFileWithRetries(key, file, futures, diskBacklogBytePermits, attempt + 1),
                 uploadRetryDelay.toMillis(),
                 TimeUnit.MILLISECONDS
             );
@@ -428,9 +529,9 @@ public class S3TupleSink implements TupleSink {
             .thenApply(r -> null);
     }
 
-    private ThreadFactory makeWorkerThreadFactory() {
+    private ThreadFactory makeThreadFactory(String role) {
         return runnable -> {
-            var thread = new Thread(runnable, "s3-tuple-sink-worker-" + sinkIndex);
+            var thread = new Thread(runnable, "s3-tuple-sink-" + role + "-" + sinkIndex);
             thread.setDaemon(false);
             return thread;
         };
@@ -439,6 +540,7 @@ public class S3TupleSink implements TupleSink {
     private void shutdownExecutorIfDone() {
         if (closeRequested.get() && activeUploads.get() == 0) {
             executor.shutdown();
+            uploadRetryScheduler.shutdown();
         }
     }
 

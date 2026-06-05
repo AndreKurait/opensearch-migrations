@@ -233,6 +233,45 @@ class S3TupleSinkTest {
         }
     }
 
+    @Test
+    void diskBacklogGateBlocksWorkerWhenOutstandingFilesExceedCapThenDrains() throws Exception {
+        var s3Client = mock(S3AsyncClient.class);
+        var firstUpload = new CompletableFuture<PutObjectResponse>();
+        var secondUpload = new CompletableFuture<PutObjectResponse>();
+        var putCallCount = new AtomicInteger();
+        when(s3Client.putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class)))
+            .thenAnswer(invocation -> putCallCount.incrementAndGet() == 1 ? firstUpload : secondUpload);
+
+        // rotate every tuple; intake cap is generous so the DISK gate (max 1 outstanding file) is
+        // what blocks; large byte cap so only the file-count gate is exercised here.
+        try (var sink = makeSink(s3Client, /*rotateAfterTuples*/ 1, Duration.ofMinutes(10),
+                                 /*maxInFlight*/ 1000,
+                                 /*maxOutstandingUploadBytes*/ 1024L * 1024L * 1024L,
+                                 /*maxOutstandingUploadFiles*/ 1)) {
+            var f1 = new CompletableFuture<Void>();
+            sink.accept(makeTuple("conn1.0"), f1);
+            // First file rotates and starts uploading (held open) — consumes the only file permit.
+            waitForPutCalls(putCallCount, 1);
+
+            // Second tuple: it gets buffered+rotated on the worker, which must then BLOCK acquiring
+            // the disk file-permit. So no second putObject happens while the first upload is open.
+            var f2 = new CompletableFuture<Void>();
+            sink.accept(makeTuple("conn2.0"), f2);
+            Thread.sleep(300);
+            assertEquals(1, putCallCount.get(),
+                "worker should be parked on the disk-backlog gate; no 2nd upload until the 1st drains");
+            assertFalse(f2.isDone());
+
+            // Complete the first upload → releases the file permit → worker proceeds to upload #2.
+            firstUpload.complete(PutObjectResponse.builder().build());
+            f1.get(2, TimeUnit.SECONDS);
+            waitForPutCalls(putCallCount, 2);
+
+            secondUpload.complete(PutObjectResponse.builder().build());
+            f2.get(2, TimeUnit.SECONDS);
+        }
+    }
+
     private void waitForPutCalls(AtomicInteger putCallCount, int expectedCalls) throws InterruptedException {
         var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
         while (putCallCount.get() < expectedCalls && System.nanoTime() < deadline) {
@@ -251,6 +290,13 @@ class S3TupleSinkTest {
 
     private S3TupleSink makeSink(S3AsyncClient s3Client, int rotateAfterTuples, Duration rotateAfterAge,
                                  int maxInFlightTuples) {
+        return makeSink(s3Client, rotateAfterTuples, rotateAfterAge, maxInFlightTuples,
+            S3TupleSink.DEFAULT_MAX_OUTSTANDING_UPLOAD_BYTES, S3TupleSink.DEFAULT_MAX_OUTSTANDING_UPLOAD_FILES);
+    }
+
+    private S3TupleSink makeSink(S3AsyncClient s3Client, int rotateAfterTuples, Duration rotateAfterAge,
+                                 int maxInFlightTuples, long maxOutstandingUploadBytes,
+                                 int maxOutstandingUploadFiles) {
         return new S3TupleSink(
             s3Client,
             "bucket",
@@ -261,7 +307,9 @@ class S3TupleSinkTest {
             rotateAfterAge,
             rotateAfterTuples,
             Duration.ofMillis(10),
-            maxInFlightTuples
+            maxInFlightTuples,
+            maxOutstandingUploadBytes,
+            maxOutstandingUploadFiles
         );
     }
 }
