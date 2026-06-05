@@ -18,13 +18,15 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.GZIPOutputStream;
+
+import org.opensearch.migrations.replay.limiter.ProducerLimiter;
+import org.opensearch.migrations.replay.limiter.WeightedProducerLimiter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -138,19 +140,15 @@ public class S3TupleSink implements TupleSink {
     // (single, parked) worker they could never run → the gate would never drain → deadlock. Keeping
     // retries on their own thread means the worker can park safely.
     private final ScheduledExecutorService uploadRetryScheduler;
-    // Byte-denominated semaphores count permits in KiB units (ceil) so the permit count stays an int
-    // even for multi-GiB caps. Shared by the intake byte gate and the disk-backlog byte gate.
-    private static final long BYTE_PERMIT_UNIT = 1024L;
     // Intake gate: bounds accepted-but-not-yet-durably-uploaded tuples by count AND estimated bytes
-    // (either fills first). See class javadoc.
-    private final Semaphore inFlightTuplePermits;
-    private final Semaphore inFlightBytePermits;
-    private final int maxInFlightTuples;
-    private final int maxInFlightBytePermits;
-    // Disk-backlog gates: bound rotated-but-not-yet-uploaded temp files by total size and count.
-    private final Semaphore outstandingUploadBytePermits;
-    private final Semaphore outstandingUploadFilePermits;
-    private final int maxOutstandingUploadBytePermits;
+    // (either fills first). Released when each tuple future settles. See class javadoc.
+    private final ProducerLimiter intakeTupleLimiter;
+    private final ProducerLimiter intakeByteLimiter;
+    // Disk-backlog gate: bounds rotated-but-not-yet-uploaded temp files by count AND total size.
+    // Released on upload success — and that release MUST run off the worker thread (see the
+    // uploadRetryScheduler note above), because the worker parks on this gate inside rotate().
+    private final ProducerLimiter diskFileLimiter;
+    private final ProducerLimiter diskByteLimiter;
     private final AtomicInteger activeUploads = new AtomicInteger();
     private final AtomicBoolean closeRequested = new AtomicBoolean();
     private final AtomicLong sequenceCounter = new AtomicLong();
@@ -244,13 +242,10 @@ public class S3TupleSink implements TupleSink {
         this.rotateAfterAge = rotateAfterAge;
         this.rotateAfterTuples = rotateAfterTuples;
         this.uploadRetryDelay = uploadRetryDelay;
-        this.maxInFlightTuples = maxInFlightTuples;
-        this.inFlightTuplePermits = new Semaphore(maxInFlightTuples);
-        this.maxInFlightBytePermits = bytesToPermits(maxInFlightTupleBytes);
-        this.inFlightBytePermits = new Semaphore(maxInFlightBytePermits);
-        this.maxOutstandingUploadBytePermits = bytesToPermits(maxOutstandingUploadBytes);
-        this.outstandingUploadBytePermits = new Semaphore(maxOutstandingUploadBytePermits);
-        this.outstandingUploadFilePermits = new Semaphore(maxOutstandingUploadFiles);
+        this.intakeTupleLimiter = WeightedProducerLimiter.ofCount("s3-intake-tuples-" + sinkIndex, maxInFlightTuples);
+        this.intakeByteLimiter = WeightedProducerLimiter.ofBytes("s3-intake-bytes-" + sinkIndex, maxInFlightTupleBytes);
+        this.diskFileLimiter = WeightedProducerLimiter.ofCount("s3-disk-files-" + sinkIndex, maxOutstandingUploadFiles);
+        this.diskByteLimiter = WeightedProducerLimiter.ofBytes("s3-disk-bytes-" + sinkIndex, maxOutstandingUploadBytes);
         this.executor = Executors.newSingleThreadScheduledExecutor(makeThreadFactory("worker"));
         this.uploadRetryScheduler = Executors.newSingleThreadScheduledExecutor(makeThreadFactory("upload-retry"));
         openNewStream();
@@ -270,12 +265,10 @@ public class S3TupleSink implements TupleSink {
         // on in-flight (accepted-but-not-yet-durably-uploaded) tuples. When S3 is backed up this
         // throttles tuple production (replay slows) instead of growing memory without bound or
         // failing the tuple (which would crash the replayer into a no-progress restart loop). The
-        // permits cover the whole lifecycle and release exactly once, when `future` settles.
-        int bytePermits = bytesToPermits(estimateTupleBytes(tupleMap));
-        if (!acquireIntakePermits(bytePermits, future)) {
+        // reservations cover the whole lifecycle and release exactly once, when `future` settles.
+        if (!reserveIntakeUntilSettled(estimateTupleBytes(tupleMap), future)) {
             return;  // interrupted/shutting down — future already completed exceptionally
         }
-        releaseIntakePermitsWhenSettled(bytePermits, future);
 
         // Do NO per-tuple CPU on the calling (event-loop) thread: JSON serialization and gzip both
         // run on the worker thread, so accept() only estimates size, reserves permits, and enqueues.
@@ -299,37 +292,29 @@ public class S3TupleSink implements TupleSink {
     }
 
     /**
-     * Block until both an in-flight tuple permit and {@code bytePermits} byte permits are available.
-     * Returns false (and fails the future) only if the thread is interrupted — never on cap
-     * exhaustion, which just waits, so a transient S3 outage throttles rather than fails. The blocked
-     * thread is the replay response-completion thread, independent of the worker/SDK threads that
-     * drain permits, so this can't deadlock. The byte request is clamped to the cap so a single
-     * oversized tuple proceeds solo rather than blocking forever against a too-small cap.
+     * Reserve both intake dimensions (one tuple + its estimated bytes) and release both exactly once
+     * when {@code future} settles. Both reservations are taken BEFORE registering the release so an
+     * interrupt mid-way frees the one already held; if interrupted, the future is completed
+     * exceptionally and false is returned. Blocking here parks the replay response-completion thread,
+     * which is independent of the worker/SDK threads that drain the gates, so it can't deadlock.
      */
-    private boolean acquireIntakePermits(int bytePermits, CompletableFuture<Void> future) {
-        int clampedBytePermits = Math.min(bytePermits, maxInFlightBytePermits);
-        try {
-            inFlightTuplePermits.acquire();
-            if (clampedBytePermits > 0) {
-                inFlightBytePermits.acquire(clampedBytePermits);
-            }
-            return true;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            future.completeExceptionally(e);
+    private boolean reserveIntakeUntilSettled(long estimatedBytes, CompletableFuture<Void> future) {
+        var tupleReservation = intakeTupleLimiter.reserve(1);
+        if (tupleReservation.isEmpty()) {
+            future.completeExceptionally(new InterruptedException("interrupted reserving intake tuple permit"));
             return false;
         }
-    }
-
-    /** Release the in-flight tuple + byte permits exactly once, when the tuple's future settles. */
-    private void releaseIntakePermitsWhenSettled(int bytePermits, CompletableFuture<Void> future) {
-        int clampedBytePermits = Math.min(bytePermits, maxInFlightBytePermits);
+        var byteReservation = intakeByteLimiter.reserve(estimatedBytes);
+        if (byteReservation.isEmpty()) {
+            tupleReservation.get().release();
+            future.completeExceptionally(new InterruptedException("interrupted reserving intake byte permits"));
+            return false;
+        }
         future.whenComplete((v, t) -> {
-            inFlightTuplePermits.release();
-            if (clampedBytePermits > 0) {
-                inFlightBytePermits.release(clampedBytePermits);
-            }
+            tupleReservation.get().release();
+            byteReservation.get().release();
         });
+        return true;
     }
 
     /**
@@ -470,15 +455,16 @@ public class S3TupleSink implements TupleSink {
         }
 
         // Disk-backlog gate: block the worker until the rotated file fits within the outstanding-
-        // upload caps (bytes + file count). This is the byte-accurate bound that protects /tmp from
+        // upload caps (file count + bytes). This is the byte-accurate bound that protects /tmp from
         // a sustained S3 outage; the worker parking here also pauses new writes + the age flush
-        // (intended backpressure). Permits are released on upload success (see uploadFileWithRetries).
-        var bytePermits = acquireDiskBacklogPermits(file);
+        // (intended backpressure). Reservations are released on upload success (see
+        // uploadFileWithRetries) — on a thread OTHER than this worker, so the parked worker can drain.
+        var diskReservations = acquireDiskBacklogReservations(file);
 
         log.atInfo().setMessage("Completing S3 upload to s3://{}/{}").addArgument(bucket).addArgument(key).log();
 
         activeUploads.incrementAndGet();
-        uploadFileWithRetries(key, file, futures, bytePermits, 1);
+        uploadFileWithRetries(key, file, futures, diskReservations, 1);
 
         if (openNextStream) {
             openNewStream();
@@ -489,12 +475,12 @@ public class S3TupleSink implements TupleSink {
 
     /**
      * Block (on the worker thread) until the just-finished file fits within the outstanding-upload
-     * byte + file caps, then return the number of byte permits reserved (to release on success). A
-     * file larger than the whole byte cap is clamped to the cap so it can still proceed solo rather
-     * than deadlock. Interruption (shutdown) returns the clamped count without having acquired, so
-     * release stays balanced.
+     * file-count and byte caps, then return the held reservations (to release on upload success).
+     * Acquire order is file-then-bytes; an oversized file is clamped to the byte cap by the limiter
+     * so it proceeds solo rather than deadlock. On interrupt (shutdown) a reservation may be empty;
+     * releasing an empty reservation is a no-op, so release stays balanced.
      */
-    private int acquireDiskBacklogPermits(Path file) {
+    private DiskBacklogReservations acquireDiskBacklogReservations(Path file) {
         long sizeBytes;
         try {
             sizeBytes = Files.size(file);
@@ -502,31 +488,31 @@ public class S3TupleSink implements TupleSink {
             // Can't size it — don't block on the byte gate for this file; still take a file permit.
             sizeBytes = 0;
         }
-        int bytePermits = Math.min(maxOutstandingUploadBytePermits, bytesToPermits(sizeBytes));
-        try {
-            outstandingUploadFilePermits.acquire();
-            if (bytePermits > 0) {
-                outstandingUploadBytePermits.acquire(bytePermits);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        // Acquire file-then-bytes (consistent order; releasers never acquire → no deadlock). A null
+        // reservation (interrupted, or size unknown for the byte gate) releases as a no-op.
+        var fileReservation = diskFileLimiter.reserve(1).orElse(null);
+        var byteReservation = sizeBytes > 0 ? diskByteLimiter.reserve(sizeBytes).orElse(null) : null;
+        return new DiskBacklogReservations(fileReservation, byteReservation);
+    }
+
+    /** Held file + byte reservations for one in-flight upload; released together on success. */
+    private static final class DiskBacklogReservations {
+        private final ProducerLimiter.Reservation fileReservation;
+        private final ProducerLimiter.Reservation byteReservation;
+
+        DiskBacklogReservations(ProducerLimiter.Reservation fileReservation,
+                                ProducerLimiter.Reservation byteReservation) {
+            this.fileReservation = fileReservation;
+            this.byteReservation = byteReservation;
         }
-        return bytePermits;
-    }
 
-    /**
-     * Convert a byte count to the number of KiB-denominated permits (ceil), clamped to the int
-     * permit range so a multi-GiB cap stays representable. Shared by the intake byte gate and the
-     * disk-backlog byte gate.
-     */
-    private static int bytesToPermits(long bytes) {
-        return (int) Math.min(Integer.MAX_VALUE, (bytes + BYTE_PERMIT_UNIT - 1) / BYTE_PERMIT_UNIT);
-    }
-
-    private void releaseDiskBacklogPermits(int bytePermits) {
-        outstandingUploadFilePermits.release();
-        if (bytePermits > 0) {
-            outstandingUploadBytePermits.release(bytePermits);
+        void release() {
+            if (fileReservation != null) {
+                fileReservation.release();
+            }
+            if (byteReservation != null) {
+                byteReservation.release();
+            }
         }
     }
 
@@ -579,7 +565,7 @@ public class S3TupleSink implements TupleSink {
         String key,
         Path file,
         List<CompletableFuture<Void>> futures,
-        int diskBacklogBytePermits,
+        DiskBacklogReservations diskReservations,
         int attempt
     ) {
         uploadFile(key, file).whenComplete((response, error) -> {
@@ -587,7 +573,8 @@ public class S3TupleSink implements TupleSink {
                 deleteFile(file);
                 // Release the disk-backlog gate first: the file is gone and its futures are about
                 // to complete, so unblock the worker (which may be parked in rotate()) promptly.
-                releaseDiskBacklogPermits(diskBacklogBytePermits);
+                // This runs on an SDK/retry thread, never the worker, so the parked worker can drain.
+                diskReservations.release();
                 futures.forEach(f -> f.complete(null));
                 activeUploads.decrementAndGet();
                 shutdownExecutorIfDone();
@@ -602,7 +589,7 @@ public class S3TupleSink implements TupleSink {
                 .addArgument(uploadRetryDelay::toMillis)
                 .log();
             uploadRetryScheduler.schedule(
-                () -> uploadFileWithRetries(key, file, futures, diskBacklogBytePermits, attempt + 1),
+                () -> uploadFileWithRetries(key, file, futures, diskReservations, attempt + 1),
                 uploadRetryDelay.toMillis(),
                 TimeUnit.MILLISECONDS
             );
