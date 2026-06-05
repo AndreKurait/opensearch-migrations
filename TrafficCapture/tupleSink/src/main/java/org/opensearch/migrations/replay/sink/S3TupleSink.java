@@ -92,11 +92,11 @@ public class S3TupleSink implements TupleSink {
 
     /**
      * Default intake-gate cap on the estimated bytes of accepted-but-not-yet-durably-uploaded tuples
-     * (256 MiB). Guards against a small number of very large tuples (big request/response payloads)
+     * (2 GiB). Guards against a small number of very large tuples (big request/response payloads)
      * blowing the heap before the count cap above would trip. Coarse by design — see
      * {@link #estimateTupleBytes}.
      */
-    static final long DEFAULT_MAX_IN_FLIGHT_TUPLE_BYTES = 256L * 1024L * 1024L;
+    static final long DEFAULT_MAX_IN_FLIGHT_TUPLE_BYTES = 2L * 1024L * 1024L * 1024L;
 
     /** Default disk-backlog cap on bytes of rotated-but-not-yet-uploaded temp files (1 GiB). */
     static final long DEFAULT_MAX_OUTSTANDING_UPLOAD_BYTES = 1024L * 1024L * 1024L;
