@@ -36,6 +36,12 @@ class S3TupleSinkTest {
         return map;
     }
 
+    private Map<String, Object> makeTupleWithPayload(String id, String payload) {
+        var map = makeTuple(id);
+        map.put("payload", payload);
+        return map;
+    }
+
     @Test
     void flushWithoutPendingTuplesDoesNotUpload() {
         var s3Client = mock(S3AsyncClient.class);
@@ -57,7 +63,7 @@ class S3TupleSinkTest {
             var future = new CompletableFuture<Void>();
             sink.accept(recursiveTuple, future);
 
-            // Serialization now runs on the worker thread (Option A), so completion is async —
+            // Serialization runs on the worker thread, so completion is async —
             // await it rather than asserting synchronously right after accept().
             var ex = assertThrows(ExecutionException.class, () -> future.get(2, TimeUnit.SECONDS));
             assertTrue(ex.getCause() instanceof IOException);
@@ -68,21 +74,26 @@ class S3TupleSinkTest {
 
     @Test
     void serializationRunsOffTheCallingThread() throws Exception {
-        // Option A: accept() must not serialize on the calling thread. A tuple whose toString/
-        // serialization would run on the worker should leave the calling thread immediately.
+        // accept() must not serialize on the calling thread: a tuple's serialization runs on the
+        // worker, so the calling (event-loop) thread should be released immediately.
         var s3Client = mock(S3AsyncClient.class);
         var callingThread = Thread.currentThread().getName();
         var serializeThread = new java.util.concurrent.CompletableFuture<String>();
 
-        // A Map whose entry iteration records the serializing thread.
-        var probeTuple = new LinkedHashMap<String, Object>() {
-            @Override
-            public java.util.Set<Map.Entry<String, Object>> entrySet() {
+        // A scalar VALUE whose Jackson serialization (getValue) records the thread. Using a value
+        // (not a Map override) ensures we capture true JSON serialization, not the cheap structural
+        // size estimate accept() runs on the calling thread — the estimator never invokes value
+        // getters, so only the worker-thread serialize trips this.
+        var probeValue = new Object() {
+            @com.fasterxml.jackson.annotation.JsonValue
+            public String getValue() {
                 serializeThread.complete(Thread.currentThread().getName());
-                return super.entrySet();
+                return "probe";
             }
         };
+        var probeTuple = new LinkedHashMap<String, Object>();
         probeTuple.put("connectionId", "probe.0");
+        probeTuple.put("probe", probeValue);
 
         try (var sink = makeSink(s3Client, 100)) {
             sink.accept(probeTuple, new CompletableFuture<>());
@@ -128,6 +139,63 @@ class S3TupleSinkTest {
             secondAcceptReturned.get(2, TimeUnit.SECONDS);
             t.join(2000);
         }
+    }
+
+    @Test
+    void acceptBlocksWhenInFlightByteCapExhaustedThenProceedsAsUploadsDrain() throws Exception {
+        var s3Client = mock(S3AsyncClient.class);
+        var upload = new CompletableFuture<PutObjectResponse>();
+        when(s3Client.putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class)))
+            .thenReturn(upload);
+
+        // Generous tuple-count cap so the BYTE gate is what blocks. Byte cap = 2 KiB; each tuple's
+        // payload is ~1.5 KiB, so the first tuple fits but the second can't until the first drains.
+        var bigPayload = "x".repeat(1500);
+        try (var sink = makeSink(s3Client, /*rotateAfterTuples*/ 1, Duration.ofMinutes(10),
+                                 /*maxInFlight*/ 1000, /*maxInFlightTupleBytes*/ 2048L,
+                                 S3TupleSink.DEFAULT_MAX_OUTSTANDING_UPLOAD_BYTES,
+                                 S3TupleSink.DEFAULT_MAX_OUTSTANDING_UPLOAD_FILES)) {
+            var f1 = new CompletableFuture<Void>();
+            sink.accept(makeTupleWithPayload("conn1.0", bigPayload), f1);
+
+            // Second accept on a separate thread; it should BLOCK on the byte gate (first tuple's
+            // ~1.5 KiB leaves <1.5 KiB free under the 2 KiB cap), held until f1's upload drains.
+            var f2 = new CompletableFuture<Void>();
+            var secondAcceptReturned = new CompletableFuture<Void>();
+            var t = new Thread(() -> {
+                sink.accept(makeTupleWithPayload("conn2.0", bigPayload), f2);
+                secondAcceptReturned.complete(null);
+            }, "second-accept-bytes");
+            t.start();
+
+            assertThrows(TimeoutException.class,
+                () -> secondAcceptReturned.get(500, TimeUnit.MILLISECONDS),
+                "second accept should block while the in-flight BYTE cap is exhausted");
+
+            // Drain the first upload → releases the byte permits → second accept proceeds.
+            upload.complete(PutObjectResponse.builder().build());
+            f1.get(2, TimeUnit.SECONDS);
+            secondAcceptReturned.get(2, TimeUnit.SECONDS);
+            t.join(2000);
+        }
+    }
+
+    @Test
+    void estimateTupleBytesIsCoarseStructuralSum() {
+        // CharSequence values dominate (counted by length); a nested map + list sums children.
+        var tuple = new LinkedHashMap<String, Object>();
+        tuple.put("connectionId", "conn.0");
+        tuple.put("payload", "x".repeat(1000));
+        var nested = new LinkedHashMap<String, Object>();
+        nested.put("k", "value");
+        tuple.put("nested", nested);
+        tuple.put("list", java.util.List.of("a", "bb"));
+
+        long estimate = S3TupleSink.estimateTupleBytes(tuple);
+        // Must be dominated by the 1000-char payload and strictly exceed the sum of string lengths.
+        long stringChars = "conn.0".length() + 1000 + "value".length() + "a".length() + "bb".length();
+        assertTrue(estimate > stringChars, "estimate should exceed bare string length sum: " + estimate);
+        assertTrue(estimate < stringChars + 200, "estimate should stay coarse/cheap, not balloon: " + estimate);
     }
 
     @Test
@@ -291,12 +359,20 @@ class S3TupleSinkTest {
     private S3TupleSink makeSink(S3AsyncClient s3Client, int rotateAfterTuples, Duration rotateAfterAge,
                                  int maxInFlightTuples) {
         return makeSink(s3Client, rotateAfterTuples, rotateAfterAge, maxInFlightTuples,
+            S3TupleSink.DEFAULT_MAX_IN_FLIGHT_TUPLE_BYTES,
             S3TupleSink.DEFAULT_MAX_OUTSTANDING_UPLOAD_BYTES, S3TupleSink.DEFAULT_MAX_OUTSTANDING_UPLOAD_FILES);
     }
 
     private S3TupleSink makeSink(S3AsyncClient s3Client, int rotateAfterTuples, Duration rotateAfterAge,
                                  int maxInFlightTuples, long maxOutstandingUploadBytes,
                                  int maxOutstandingUploadFiles) {
+        return makeSink(s3Client, rotateAfterTuples, rotateAfterAge, maxInFlightTuples,
+            S3TupleSink.DEFAULT_MAX_IN_FLIGHT_TUPLE_BYTES, maxOutstandingUploadBytes, maxOutstandingUploadFiles);
+    }
+
+    private S3TupleSink makeSink(S3AsyncClient s3Client, int rotateAfterTuples, Duration rotateAfterAge,
+                                 int maxInFlightTuples, long maxInFlightTupleBytes,
+                                 long maxOutstandingUploadBytes, int maxOutstandingUploadFiles) {
         return new S3TupleSink(
             s3Client,
             "bucket",
@@ -308,6 +384,7 @@ class S3TupleSinkTest {
             rotateAfterTuples,
             Duration.ofMillis(10),
             maxInFlightTuples,
+            maxInFlightTupleBytes,
             maxOutstandingUploadBytes,
             maxOutstandingUploadFiles
         );

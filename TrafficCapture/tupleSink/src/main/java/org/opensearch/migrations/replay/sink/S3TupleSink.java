@@ -9,7 +9,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -57,13 +59,15 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
  * accumulates at its stage; both BLOCK (never fail) so the replayer rides out an S3 outage and
  * resumes, with throughput dropping toward zero during the outage by design:</p>
  * <ul>
- *   <li><b>Intake gate (producer-side, coarse count).</b> {@code accept()} blocks until one of
- *       {@code maxInFlightTuples} permits is free, bounding the heap held by accepted-but-not-yet-
- *       durably-uploaded tuples (queued tupleMaps + pending futures). Count, not bytes, because with
- *       serialization deferred to the worker (Option A) the byte size isn't known at accept() time;
- *       the byte-accurate bound is the disk gate below. Released when each tuple future settles.
- *       Blocks the replay response-completion thread — independent of the worker/SDK threads that
- *       drain it, so no deadlock.</li>
+ *   <li><b>Intake gate (producer-side, count + coarse bytes).</b> {@code accept()} blocks until both
+ *       a tuple permit (cap {@code maxInFlightTuples}) and enough byte permits for the tuple's
+ *       estimated size (cap {@code maxInFlightTupleBytes}) are free, bounding the heap held by
+ *       accepted-but-not-yet-durably-uploaded tuples (queued tupleMaps + pending futures) by both
+ *       count and size — whichever fills first throttles. The byte figure is a coarse structural
+ *       estimate (sum of CharSequence lengths, computed on the calling thread without serializing),
+ *       which is why it's paired with the count cap; the byte-accurate bound is the disk gate below.
+ *       Both permit sets release when each tuple future settles. Blocks the replay response-completion
+ *       thread — independent of the worker/SDK threads that drain it, so no deadlock.</li>
  *   <li><b>Disk-backlog gate (worker-side, bytes + file count).</b> Rotated-but-not-yet-uploaded
  *       temp files are the genuinely unbounded resource under an outage (each rotation adds a file
  *       to /tmp; none delete until upload succeeds). Before handing a finished file to the upload
@@ -78,16 +82,33 @@ public class S3TupleSink implements TupleSink {
     static final Duration DEFAULT_UPLOAD_RETRY_DELAY = Duration.ofSeconds(10);
 
     /**
-     * Default intake-gate cap on accepted-but-not-yet-durably-uploaded tuples (coarse count bound on
-     * heap). When reached, accept() blocks (waits for an upload to drain) rather than failing.
+     * Default intake-gate cap on the number of accepted-but-not-yet-durably-uploaded tuples (coarse
+     * count bound on heap). When reached, accept() blocks (waits for an upload to drain) rather than
+     * failing.
      */
     static final int DEFAULT_MAX_IN_FLIGHT_TUPLES = 100_000;
+
+    /**
+     * Default intake-gate cap on the estimated bytes of accepted-but-not-yet-durably-uploaded tuples
+     * (256 MiB). Guards against a small number of very large tuples (big request/response payloads)
+     * blowing the heap before the count cap above would trip. Coarse by design — see
+     * {@link #estimateTupleBytes}.
+     */
+    static final long DEFAULT_MAX_IN_FLIGHT_TUPLE_BYTES = 256L * 1024L * 1024L;
 
     /** Default disk-backlog cap on bytes of rotated-but-not-yet-uploaded temp files (1 GiB). */
     static final long DEFAULT_MAX_OUTSTANDING_UPLOAD_BYTES = 1024L * 1024L * 1024L;
 
     /** Default disk-backlog cap on the number of rotated-but-not-yet-uploaded temp files. */
     static final int DEFAULT_MAX_OUTSTANDING_UPLOAD_FILES = 64;
+
+    /**
+     * Upper bound on nodes walked by {@link #estimateTupleBytes}. Caps the calling-thread cost of
+     * the estimate and makes it immune to deeply-nested / self-referential maps. A normal tuple has
+     * far fewer nodes than this; the bulk of its size is in a handful of long payload strings, each
+     * counted in O(1), so the budget only bites on pathological structures.
+     */
+    static final int ESTIMATE_NODE_BUDGET = 10_000;
 
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
         DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
@@ -117,12 +138,16 @@ public class S3TupleSink implements TupleSink {
     // (single, parked) worker they could never run → the gate would never drain → deadlock. Keeping
     // retries on their own thread means the worker can park safely.
     private final ScheduledExecutorService uploadRetryScheduler;
-    // Intake gate: bounds accepted-but-not-yet-durably-uploaded tuples (coarse count). See javadoc.
-    private final Semaphore inFlightPermits;
+    // Byte-denominated semaphores count permits in KiB units (ceil) so the permit count stays an int
+    // even for multi-GiB caps. Shared by the intake byte gate and the disk-backlog byte gate.
+    private static final long BYTE_PERMIT_UNIT = 1024L;
+    // Intake gate: bounds accepted-but-not-yet-durably-uploaded tuples by count AND estimated bytes
+    // (either fills first). See class javadoc.
+    private final Semaphore inFlightTuplePermits;
+    private final Semaphore inFlightBytePermits;
     private final int maxInFlightTuples;
+    private final int maxInFlightBytePermits;
     // Disk-backlog gates: bound rotated-but-not-yet-uploaded temp files by total size and count.
-    // Byte permits are denominated in KiB so the permit count stays an int even for large caps.
-    private static final long UPLOAD_BYTE_PERMIT_UNIT = 1024L;
     private final Semaphore outstandingUploadBytePermits;
     private final Semaphore outstandingUploadFilePermits;
     private final int maxOutstandingUploadBytePermits;
@@ -191,7 +216,7 @@ public class S3TupleSink implements TupleSink {
         int maxInFlightTuples
     ) {
         this(s3Client, bucket, prefix, replayerId, sinkIndex, rotateAfterBytes, rotateAfterAge,
-            rotateAfterTuples, uploadRetryDelay, maxInFlightTuples,
+            rotateAfterTuples, uploadRetryDelay, maxInFlightTuples, DEFAULT_MAX_IN_FLIGHT_TUPLE_BYTES,
             DEFAULT_MAX_OUTSTANDING_UPLOAD_BYTES, DEFAULT_MAX_OUTSTANDING_UPLOAD_FILES);
     }
 
@@ -206,6 +231,7 @@ public class S3TupleSink implements TupleSink {
         int rotateAfterTuples,
         Duration uploadRetryDelay,
         int maxInFlightTuples,
+        long maxInFlightTupleBytes,
         long maxOutstandingUploadBytes,
         int maxOutstandingUploadFiles
     ) {
@@ -219,11 +245,10 @@ public class S3TupleSink implements TupleSink {
         this.rotateAfterTuples = rotateAfterTuples;
         this.uploadRetryDelay = uploadRetryDelay;
         this.maxInFlightTuples = maxInFlightTuples;
-        this.inFlightPermits = new Semaphore(maxInFlightTuples);
-        // Byte gate in KiB units (ceil) so a large cap stays within int permit range.
-        this.maxOutstandingUploadBytePermits =
-            (int) Math.min(Integer.MAX_VALUE, (maxOutstandingUploadBytes + UPLOAD_BYTE_PERMIT_UNIT - 1)
-                / UPLOAD_BYTE_PERMIT_UNIT);
+        this.inFlightTuplePermits = new Semaphore(maxInFlightTuples);
+        this.maxInFlightBytePermits = bytesToPermits(maxInFlightTupleBytes);
+        this.inFlightBytePermits = new Semaphore(maxInFlightBytePermits);
+        this.maxOutstandingUploadBytePermits = bytesToPermits(maxOutstandingUploadBytes);
         this.outstandingUploadBytePermits = new Semaphore(maxOutstandingUploadBytePermits);
         this.outstandingUploadFilePermits = new Semaphore(maxOutstandingUploadFiles);
         this.executor = Executors.newSingleThreadScheduledExecutor(makeThreadFactory("worker"));
@@ -241,17 +266,19 @@ public class S3TupleSink implements TupleSink {
 
     @Override
     public void accept(Map<String, Object> tupleMap, CompletableFuture<Void> future) {
-        // Backpressure: block the caller until an in-flight permit is available. When S3 is backed
-        // up this throttles tuple production (replay slows) instead of growing memory without bound
-        // or failing the tuple (which would crash the replayer into a no-progress restart loop).
-        // The permit covers the whole lifecycle and is released exactly once when `future` settles.
-        if (!acquirePermit(future)) {
+        // Backpressure: block the caller until this tuple fits within both the count and byte caps
+        // on in-flight (accepted-but-not-yet-durably-uploaded) tuples. When S3 is backed up this
+        // throttles tuple production (replay slows) instead of growing memory without bound or
+        // failing the tuple (which would crash the replayer into a no-progress restart loop). The
+        // permits cover the whole lifecycle and release exactly once, when `future` settles.
+        int bytePermits = bytesToPermits(estimateTupleBytes(tupleMap));
+        if (!acquireIntakePermits(bytePermits, future)) {
             return;  // interrupted/shutting down — future already completed exceptionally
         }
-        releasePermitWhenSettled(future);
+        releaseIntakePermitsWhenSettled(bytePermits, future);
 
-        // Option A: do NO per-tuple CPU on the calling (event-loop) thread. JSON serialization and
-        // gzip both run on the worker thread; accept() only reserves a permit and enqueues.
+        // Do NO per-tuple CPU on the calling (event-loop) thread: JSON serialization and gzip both
+        // run on the worker thread, so accept() only estimates size, reserves permits, and enqueues.
         runOnWorker(() -> {
             try {
                 byte[] json = mapper.writeValueAsBytes(tupleMap);
@@ -272,14 +299,20 @@ public class S3TupleSink implements TupleSink {
     }
 
     /**
-     * Block until an in-flight permit is available. Returns false (and fails the future) only if
-     * the thread is interrupted — never on cap exhaustion, which just waits, so a transient S3
-     * outage throttles rather than fails. The blocked thread is the replay response-completion
-     * thread, independent of the worker/SDK threads that drain permits, so this can't deadlock.
+     * Block until both an in-flight tuple permit and {@code bytePermits} byte permits are available.
+     * Returns false (and fails the future) only if the thread is interrupted — never on cap
+     * exhaustion, which just waits, so a transient S3 outage throttles rather than fails. The blocked
+     * thread is the replay response-completion thread, independent of the worker/SDK threads that
+     * drain permits, so this can't deadlock. The byte request is clamped to the cap so a single
+     * oversized tuple proceeds solo rather than blocking forever against a too-small cap.
      */
-    private boolean acquirePermit(CompletableFuture<Void> future) {
+    private boolean acquireIntakePermits(int bytePermits, CompletableFuture<Void> future) {
+        int clampedBytePermits = Math.min(bytePermits, maxInFlightBytePermits);
         try {
-            inFlightPermits.acquire();
+            inFlightTuplePermits.acquire();
+            if (clampedBytePermits > 0) {
+                inFlightBytePermits.acquire(clampedBytePermits);
+            }
             return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -288,9 +321,59 @@ public class S3TupleSink implements TupleSink {
         }
     }
 
-    /** Release the in-flight permit exactly once, when the tuple's future settles. */
-    private void releasePermitWhenSettled(CompletableFuture<Void> future) {
-        future.whenComplete((v, t) -> inFlightPermits.release());
+    /** Release the in-flight tuple + byte permits exactly once, when the tuple's future settles. */
+    private void releaseIntakePermitsWhenSettled(int bytePermits, CompletableFuture<Void> future) {
+        int clampedBytePermits = Math.min(bytePermits, maxInFlightBytePermits);
+        future.whenComplete((v, t) -> {
+            inFlightTuplePermits.release();
+            if (clampedBytePermits > 0) {
+                inFlightBytePermits.release(clampedBytePermits);
+            }
+        });
+    }
+
+    /**
+     * Coarse estimate of a tuple's serialized size, used only to bound in-flight heap (the intake
+     * byte gate) — NOT for rotation, which uses the exact compressed byte count. Sums CharSequence
+     * lengths (each O(1)) plus a small fixed charge per node for keys/structure; the bulk of a tuple
+     * is HTTP payload strings, which this captures cheaply. It intentionally ignores
+     * encoding/JSON-escaping overhead; the count cap and the byte-accurate disk gate cover the rest.
+     *
+     * <p>Deliberately iterative with a fixed node budget so it stays cheap on the calling
+     * (event-loop) thread and is immune to deeply-nested or self-referential maps — it walks at most
+     * {@code ESTIMATE_NODE_BUDGET} nodes, under-counting a pathologically large tuple rather than
+     * risking a StackOverflow or a long traversal. (Container values only; it never invokes methods
+     * on scalar/bean values, so estimating a tuple does not trigger its serialization.)</p>
+     */
+    static long estimateTupleBytes(Object root) {
+        long sum = 0;
+        int visited = 0;
+        Deque<Object> stack = new ArrayDeque<>();
+        stack.push(root);
+        while (!stack.isEmpty() && visited < ESTIMATE_NODE_BUDGET) {
+            Object value = stack.pop();
+            visited++;
+            if (value == null) {
+                sum += 4;  // "null"
+            } else if (value instanceof CharSequence) {
+                sum += ((CharSequence) value).length();
+            } else if (value instanceof Map) {
+                for (var entry : ((Map<?, ?>) value).entrySet()) {
+                    sum += 4;  // per-entry structural/key charge
+                    stack.push(entry.getKey());
+                    stack.push(entry.getValue());
+                }
+            } else if (value instanceof Iterable) {
+                for (var element : (Iterable<?>) value) {
+                    sum += 1;
+                    stack.push(element);
+                }
+            } else {
+                // Numbers, booleans, beans, and other scalars: a small fixed charge, no method call.
+                sum += 8;
+            }
+        }
+        return sum;
     }
 
     @Override
@@ -419,9 +502,7 @@ public class S3TupleSink implements TupleSink {
             // Can't size it — don't block on the byte gate for this file; still take a file permit.
             sizeBytes = 0;
         }
-        int bytePermits = (int) Math.min(
-            maxOutstandingUploadBytePermits,
-            (sizeBytes + UPLOAD_BYTE_PERMIT_UNIT - 1) / UPLOAD_BYTE_PERMIT_UNIT);
+        int bytePermits = Math.min(maxOutstandingUploadBytePermits, bytesToPermits(sizeBytes));
         try {
             outstandingUploadFilePermits.acquire();
             if (bytePermits > 0) {
@@ -431,6 +512,15 @@ public class S3TupleSink implements TupleSink {
             Thread.currentThread().interrupt();
         }
         return bytePermits;
+    }
+
+    /**
+     * Convert a byte count to the number of KiB-denominated permits (ceil), clamped to the int
+     * permit range so a multi-GiB cap stays representable. Shared by the intake byte gate and the
+     * disk-backlog byte gate.
+     */
+    private static int bytesToPermits(long bytes) {
+        return (int) Math.min(Integer.MAX_VALUE, (bytes + BYTE_PERMIT_UNIT - 1) / BYTE_PERMIT_UNIT);
     }
 
     private void releaseDiskBacklogPermits(int bytePermits) {
