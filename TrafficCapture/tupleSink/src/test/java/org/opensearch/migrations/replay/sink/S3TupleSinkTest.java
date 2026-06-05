@@ -8,6 +8,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
@@ -47,7 +48,7 @@ class S3TupleSinkTest {
     }
 
     @Test
-    void serializationFailureCompletesOnlyThatTupleFuture() {
+    void serializationFailureCompletesOnlyThatTupleFuture() throws Exception {
         var s3Client = mock(S3AsyncClient.class);
         var recursiveTuple = new LinkedHashMap<String, Object>();
         recursiveTuple.put("self", recursiveTuple);
@@ -56,11 +57,77 @@ class S3TupleSinkTest {
             var future = new CompletableFuture<Void>();
             sink.accept(recursiveTuple, future);
 
-            assertTrue(future.isCompletedExceptionally());
-            assertThrows(ExecutionException.class, () -> future.get(1, TimeUnit.SECONDS));
+            // Serialization now runs on the worker thread (Option A), so completion is async —
+            // await it rather than asserting synchronously right after accept().
+            var ex = assertThrows(ExecutionException.class, () -> future.get(2, TimeUnit.SECONDS));
+            assertTrue(ex.getCause() instanceof IOException);
         }
 
         verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class));
+    }
+
+    @Test
+    void serializationRunsOffTheCallingThread() throws Exception {
+        // Option A: accept() must not serialize on the calling thread. A tuple whose toString/
+        // serialization would run on the worker should leave the calling thread immediately.
+        var s3Client = mock(S3AsyncClient.class);
+        var callingThread = Thread.currentThread().getName();
+        var serializeThread = new java.util.concurrent.CompletableFuture<String>();
+
+        // A Map whose entry iteration records the serializing thread.
+        var probeTuple = new LinkedHashMap<String, Object>() {
+            @Override
+            public java.util.Set<Map.Entry<String, Object>> entrySet() {
+                serializeThread.complete(Thread.currentThread().getName());
+                return super.entrySet();
+            }
+        };
+        probeTuple.put("connectionId", "probe.0");
+
+        try (var sink = makeSink(s3Client, 100)) {
+            sink.accept(probeTuple, new CompletableFuture<>());
+            var threadThatSerialized = serializeThread.get(2, TimeUnit.SECONDS);
+            assertFalse(threadThatSerialized.equals(callingThread),
+                "serialization should run on the sink worker, not the calling thread");
+            assertTrue(threadThatSerialized.startsWith("s3-tuple-sink-worker-"),
+                "expected the sink worker thread, got: " + threadThatSerialized);
+        }
+    }
+
+    @Test
+    void acceptBlocksWhenInFlightCapExhaustedThenProceedsAsUploadsDrain() throws Exception {
+        var s3Client = mock(S3AsyncClient.class);
+        var upload = new CompletableFuture<PutObjectResponse>();
+        when(s3Client.putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class)))
+            .thenReturn(upload);
+
+        // Cap of 1 in-flight tuple, rotate every tuple → first accept consumes the only permit and
+        // starts an upload that we hold open; the second accept must block until that upload drains.
+        try (var sink = makeSink(s3Client, /*rotateAfterTuples*/ 1, Duration.ofMinutes(10),
+                                 /*maxInFlight*/ 1)) {
+            var f1 = new CompletableFuture<Void>();
+            sink.accept(makeTuple("conn1.0"), f1);
+
+            // Second accept on a separate thread; it should BLOCK (permit held by f1's pending upload).
+            var f2 = new CompletableFuture<Void>();
+            var secondAcceptReturned = new CompletableFuture<Void>();
+            var t = new Thread(() -> {
+                sink.accept(makeTuple("conn2.0"), f2);
+                secondAcceptReturned.complete(null);
+            }, "second-accept");
+            t.start();
+
+            // It must not return while the permit is held.
+            assertThrows(TimeoutException.class,
+                () -> secondAcceptReturned.get(500, TimeUnit.MILLISECONDS),
+                "second accept should block while the in-flight cap is exhausted");
+
+            // Drain the first upload → releases the permit → second accept proceeds.
+            upload.complete(PutObjectResponse.builder().build());
+            f1.get(2, TimeUnit.SECONDS);
+            secondAcceptReturned.get(2, TimeUnit.SECONDS);
+            t.join(2000);
+        }
     }
 
     @Test
@@ -179,6 +246,11 @@ class S3TupleSinkTest {
     }
 
     private S3TupleSink makeSink(S3AsyncClient s3Client, int rotateAfterTuples, Duration rotateAfterAge) {
+        return makeSink(s3Client, rotateAfterTuples, rotateAfterAge, S3TupleSink.DEFAULT_MAX_IN_FLIGHT_TUPLES);
+    }
+
+    private S3TupleSink makeSink(S3AsyncClient s3Client, int rotateAfterTuples, Duration rotateAfterAge,
+                                 int maxInFlightTuples) {
         return new S3TupleSink(
             s3Client,
             "bucket",
@@ -188,7 +260,8 @@ class S3TupleSinkTest {
             1024 * 1024,
             rotateAfterAge,
             rotateAfterTuples,
-            Duration.ofMillis(10)
+            Duration.ofMillis(10),
+            maxInFlightTuples
         );
     }
 }

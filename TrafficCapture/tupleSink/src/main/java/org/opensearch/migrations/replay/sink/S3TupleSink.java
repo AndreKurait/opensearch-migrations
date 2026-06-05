@@ -16,6 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -42,10 +43,34 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
  *
  * <p>Each instance is single-threaded (one per Netty event loop). The {@code sinkIndex}
  * is embedded in keys to avoid collisions between concurrent writers.</p>
+ *
+ * <p><b>Threading.</b> {@code accept()} does no work on the calling (Netty event-loop) thread
+ * beyond reserving an in-flight permit and enqueueing — JSON serialization, gzip, and disk I/O
+ * all run on the sink's single worker thread. This keeps request replay off the critical path.</p>
+ *
+ * <p><b>Backpressure (block, don't fail).</b> S3 upload failures retry indefinitely so replay
+ * progress stays tied to durable output. Failing a tuple future is NOT an option for transient
+ * pressure: a failed tuple write is fatal to the replayer and it shuts down WITHOUT committing the
+ * held offsets (TrafficReplayerCore.failReplayForTupleWrite), so on restart it resumes at the same
+ * offset, re-reads the same tuples, and — if S3 is still down — crash-loops forever, never
+ * advancing. So instead we apply real backpressure: a semaphore caps accepted-but-not-yet-durably-
+ * uploaded tuples at {@code maxInFlightTuples}, and when the cap is reached {@code accept()} BLOCKS
+ * the calling thread until a permit frees (i.e. until an in-flight upload completes). This bounds
+ * memory (buffered tuples + temp files + pending futures) while letting the replayer ride out an S3
+ * outage and resume — throughput drops to zero during the outage by design, rather than failing.
+ * The blocking happens on the replay response-completion thread, which is independent of the S3 SDK
+ * threads and the sink's worker thread, so the upload/retry machinery keeps draining (no deadlock).
+ * Permits are released when each tuple's future settles.</p>
  */
 @Slf4j
 public class S3TupleSink implements TupleSink {
     static final Duration DEFAULT_UPLOAD_RETRY_DELAY = Duration.ofSeconds(10);
+
+    /**
+     * Default cap on accepted-but-not-yet-durably-uploaded tuples. Bounds memory under a sustained
+     * S3 outage; when reached, accept() blocks (waits for an upload to drain) rather than failing.
+     */
+    static final int DEFAULT_MAX_IN_FLIGHT_TUPLES = 100_000;
 
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
         DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
@@ -63,12 +88,15 @@ public class S3TupleSink implements TupleSink {
     private final int rotateAfterTuples;
     private final Duration uploadRetryDelay;
     // Single work thread that owns ALL buffer state (gzipOut / pendingFutures / currentFile /
-    // counters). accept()/flush()/close() marshal onto it, and it self-schedules the age-based
-    // flush. Because every buffer mutation runs on this one thread, no lock is needed — this is
-    // the sink's own "event loop". (The async S3 upload callback runs on an SDK thread but only
-    // touches atomics, never buffer state.) This also frees the Netty event loop from the
-    // gzip/serialize work that accept() used to do inline.
+    // counters) AND all CPU work (JSON serialization + gzip). accept()/flush()/close() marshal
+    // onto it, and it self-schedules the age-based flush. Because every buffer mutation runs on
+    // this one thread, no lock is needed — this is the sink's own "event loop". (The async S3
+    // upload callback runs on an SDK thread but only touches atomics, never buffer state.) This
+    // keeps the Netty event loop free of all per-tuple serialize/gzip/disk work.
     private final ScheduledExecutorService executor;
+    // Bounds accepted-but-not-yet-durably-uploaded tuples. See class javadoc (Backpressure).
+    private final Semaphore inFlightPermits;
+    private final int maxInFlightTuples;
     private final AtomicInteger activeUploads = new AtomicInteger();
     private final AtomicBoolean closeRequested = new AtomicBoolean();
     private final AtomicLong sequenceCounter = new AtomicLong();
@@ -101,7 +129,8 @@ public class S3TupleSink implements TupleSink {
             rotateAfterBytes,
             rotateAfterAge,
             rotateAfterTuples,
-            DEFAULT_UPLOAD_RETRY_DELAY
+            DEFAULT_UPLOAD_RETRY_DELAY,
+            DEFAULT_MAX_IN_FLIGHT_TUPLES
         );
     }
 
@@ -116,6 +145,22 @@ public class S3TupleSink implements TupleSink {
         int rotateAfterTuples,
         Duration uploadRetryDelay
     ) {
+        this(s3Client, bucket, prefix, replayerId, sinkIndex, rotateAfterBytes, rotateAfterAge,
+            rotateAfterTuples, uploadRetryDelay, DEFAULT_MAX_IN_FLIGHT_TUPLES);
+    }
+
+    S3TupleSink(
+        S3AsyncClient s3Client,
+        String bucket,
+        String prefix,
+        String replayerId,
+        int sinkIndex,
+        long rotateAfterBytes,
+        Duration rotateAfterAge,
+        int rotateAfterTuples,
+        Duration uploadRetryDelay,
+        int maxInFlightTuples
+    ) {
         this.s3Client = s3Client;
         this.bucket = bucket;
         this.prefix = prefix;
@@ -125,6 +170,8 @@ public class S3TupleSink implements TupleSink {
         this.rotateAfterAge = rotateAfterAge;
         this.rotateAfterTuples = rotateAfterTuples;
         this.uploadRetryDelay = uploadRetryDelay;
+        this.maxInFlightTuples = maxInFlightTuples;
+        this.inFlightPermits = new Semaphore(maxInFlightTuples);
         this.executor = Executors.newSingleThreadScheduledExecutor(makeWorkerThreadFactory());
         openNewStream();
         // Self-scheduled age flush: re-checks file age on its own thread so a sink that stops
@@ -139,24 +186,27 @@ public class S3TupleSink implements TupleSink {
 
     @Override
     public void accept(Map<String, Object> tupleMap, CompletableFuture<Void> future) {
-        // Serialize the tuple on the calling (event-loop) thread so a serialization failure can
-        // be reported synchronously and the tupleMap isn't retained across threads. The actual
-        // buffer write is marshalled onto the worker thread.
-        final byte[] json;
-        try {
-            json = mapper.writeValueAsBytes(tupleMap);
-        } catch (IOException e) {
-            future.completeExceptionally(e);
-            return;
+        // Backpressure: block the caller until an in-flight permit is available. When S3 is backed
+        // up this throttles tuple production (replay slows) instead of growing memory without bound
+        // or failing the tuple (which would crash the replayer into a no-progress restart loop).
+        // The permit covers the whole lifecycle and is released exactly once when `future` settles.
+        if (!acquirePermit(future)) {
+            return;  // interrupted/shutting down — future already completed exceptionally
         }
+        releasePermitWhenSettled(future);
+
+        // Option A: do NO per-tuple CPU on the calling (event-loop) thread. JSON serialization and
+        // gzip both run on the worker thread; accept() only reserves a permit and enqueues.
         runOnWorker(() -> {
             try {
+                byte[] json = mapper.writeValueAsBytes(tupleMap);
                 gzipOut.write(json);
                 gzipOut.write('\n');
                 uncompressedBytes += json.length + 1;
                 tupleCount++;
                 pendingFutures.add(future);
             } catch (IOException e) {
+                // Serialization/gzip failure is per-tuple and not helped by retry — fail it.
                 future.completeExceptionally(e);
                 return;
             }
@@ -164,6 +214,28 @@ public class S3TupleSink implements TupleSink {
                 rotate(true);
             }
         }, future);
+    }
+
+    /**
+     * Block until an in-flight permit is available. Returns false (and fails the future) only if
+     * the thread is interrupted — never on cap exhaustion, which just waits, so a transient S3
+     * outage throttles rather than fails. The blocked thread is the replay response-completion
+     * thread, independent of the worker/SDK threads that drain permits, so this can't deadlock.
+     */
+    private boolean acquirePermit(CompletableFuture<Void> future) {
+        try {
+            inFlightPermits.acquire();
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            future.completeExceptionally(e);
+            return false;
+        }
+    }
+
+    /** Release the in-flight permit exactly once, when the tuple's future settles. */
+    private void releasePermitWhenSettled(CompletableFuture<Void> future) {
+        future.whenComplete((v, t) -> inFlightPermits.release());
     }
 
     @Override
