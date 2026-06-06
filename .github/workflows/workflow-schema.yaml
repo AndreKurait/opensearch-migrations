@@ -1,4 +1,4 @@
-name: Generate workflow schema standalone
+name: Workflow schema
 
 on:
   workflow_dispatch:
@@ -7,18 +7,20 @@ on:
       - main
     paths:
       - 'deployment/k8s/**'
+      - '!deployment/k8s/aws/cli/**'
       - 'packages/schemas/**'
       - 'packages/config-processor/**'
       - 'migrationConsole/**'
-      - '.github/workflows/generate-workflow-schema.yaml'
+      - '.github/workflows/workflow-schema.yaml'
       - '.github/workflows/release-drafter.yml'
   pull_request:
     paths:
       - 'deployment/k8s/**'
+      - '!deployment/k8s/aws/cli/**'
       - 'packages/schemas/**'
       - 'packages/config-processor/**'
       - 'migrationConsole/**'
-      - '.github/workflows/generate-workflow-schema.yaml'
+      - '.github/workflows/workflow-schema.yaml'
       - '.github/workflows/release-drafter.yml'
 
 jobs:
