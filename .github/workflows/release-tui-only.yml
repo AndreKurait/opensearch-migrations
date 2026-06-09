@@ -1,0 +1,209 @@
+# FORK-TEST workflow — exists ONLY on the andrekurait/migration-tui-poc-fork-test
+# branch. Validates the tag → matrix-build → upload-artifact → draft-release
+# pipeline that release-drafter.yml uses for the Rust TUI, WITHOUT touching
+# the existing maven/docker/S3/helm release plumbing (those have side
+# effects and require secrets the fork doesn't have).
+#
+# Mirrors the build-tui-binaries job in release-drafter.yml — same matrix,
+# same JDK/Gradle/Rust setup, same retry logic — so a green run here is a
+# strong signal the upstream PR will pass.
+#
+# Trigger: push a tag matching `tui-poc-test-*` to AndreKurait/opensearch-migrations.
+# This file MUST NOT be merged to upstream; it's deleted before the PR.
+name: release-tui-only (fork-test)
+
+on:
+  push:
+    tags:
+      - 'tui-poc-test-*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.get_data.outputs.version }}
+    steps:
+      - id: get_data
+        run: |
+          # tui-poc-test-0.0.1 → 0.0.1
+          raw="${GITHUB_REF#refs/tags/}"
+          version="${raw#tui-poc-test-}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+  build-tui-binaries:
+    needs: extract-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
+            shell: bash
+            bin_suffix: ''
+            jdk_distribution: corretto
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+            shell: bash
+            bin_suffix: ''
+            jdk_distribution: corretto
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+            shell: bash
+            bin_suffix: ''
+            jdk_distribution: corretto
+          - target: aarch64-apple-darwin
+            runner: macos-15
+            shell: bash
+            bin_suffix: ''
+            jdk_distribution: corretto
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2022
+            shell: bash
+            bin_suffix: '.exe'
+            jdk_distribution: corretto
+          # Windows ARM64 (aarch64-pc-windows-msvc) is intentionally
+          # excluded. The SystemInfo error from gradle/native-platform on
+          # windows-aarch64 fires at JVM startup, before any user config
+          # (gradle.properties, gradle-daemon-jvm.properties, settings.gradle)
+          # is read, so it cannot be worked around at file scope. Native
+          # win-aarch64 support requires the monorepo to bump to Gradle 9.2+
+          # which ships gradle/native-platform with aarch64-windows binaries.
+          # Win-ARM users can run the x86_64 binary under x64 emulation in
+          # the meantime; the performance cost on a TUI is imperceptible.
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Set up Java 21
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: ${{ matrix.jdk_distribution }}
+          java-version: '21'
+      - name: Set up Gradle
+        # Cross-run cache so :buildSrc transitive deps survive across runs.
+        # Without this, Windows runners cold-resolve from plugins.gradle.org
+        # and have hit sustained 503s that defeated build-step retries.
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
+        with:
+          cache-disabled: false
+          cache-read-only: false
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # 1.92.0 pinned
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+          components: clippy
+      - name: Build TUI release artifacts
+        # Retry up to 3 times to absorb transient 503s from
+        # plugins.gradle.org during cold buildSrc resolve. Mirrors the
+        # retry in release-drafter.yml — see that workflow for context.
+        run: |
+          set -euo pipefail
+          attempt=0
+          max_attempts=3
+          until ./gradlew :tui:release:assemble \
+              -PtuiVersion=${{ needs.extract-version.outputs.version }} \
+              -Ptarget=${{ matrix.target }} \
+              --no-daemon; do
+            attempt=$((attempt+1))
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::gradle assemble failed after ${max_attempts} attempts"
+              exit 1
+            fi
+            echo "::warning::gradle assemble attempt ${attempt} failed; retrying in $((attempt*30))s"
+            sleep $((attempt*30))
+          done
+      - name: Stage per-target artifacts
+        run: |
+          set -euo pipefail
+          DIST="tui/release/build/dist/${{ needs.extract-version.outputs.version }}"
+          mkdir -p staged-bin staged-shared-posix staged-shared-windows
+          cp "${DIST}/migration-tui-${{ matrix.target }}${{ matrix.bin_suffix }}" staged-bin/
+          # POSIX shared artifacts (install.sh, VERSION.txt, bundle) come
+          # from the linux x86_64 leg only — single source of truth.
+          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
+            cp "${DIST}/install.sh" \
+               "${DIST}/VERSION.txt" \
+               "${DIST}/migration-assistant-bundle.tar.gz" \
+               staged-shared-posix/
+          fi
+          # Windows shared artifacts (install.ps1) come from windows x86_64
+          # only.
+          if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then
+            cp "${DIST}/install.ps1" staged-shared-windows/
+          fi
+      - name: Upload per-target binary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tui-bin-${{ matrix.target }}
+          path: staged-bin/
+          if-no-files-found: error
+      - name: Upload shared POSIX artifacts (linux x86_64 only)
+        if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tui-shared-posix
+          path: staged-shared-posix/
+          if-no-files-found: error
+      - name: Upload shared Windows artifacts (windows x86_64 only)
+        if: ${{ matrix.target == 'x86_64-pc-windows-msvc' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tui-shared-windows
+          path: staged-shared-windows/
+          if-no-files-found: error
+
+  draft-release:
+    needs: [extract-version, build-tui-binaries]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Download TUI artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          path: tui-release-artifacts
+          pattern: tui-*
+          merge-multiple: true
+      - name: Stage with versioned filenames
+        run: |
+          set -euo pipefail
+          mv tui-release-artifacts/install.sh           tui-release-artifacts/migration-tui-install.sh
+          mv tui-release-artifacts/install.ps1          tui-release-artifacts/migration-tui-install.ps1
+          mv tui-release-artifacts/VERSION.txt          tui-release-artifacts/migration-tui-VERSION.txt
+          mv tui-release-artifacts/migration-assistant-bundle.tar.gz \
+             tui-release-artifacts/migration-tui-bundle-${{ needs.extract-version.outputs.version }}.tar.gz
+          ls -la tui-release-artifacts/
+      - name: Smoke test --version on the built binary
+        run: |
+          set -euo pipefail
+          chmod +x tui-release-artifacts/migration-tui-x86_64-unknown-linux-gnu
+          # Place sibling VERSION.txt for runtime resolution.
+          cp tui-release-artifacts/migration-tui-VERSION.txt /tmp/VERSION.txt
+          cp tui-release-artifacts/migration-tui-x86_64-unknown-linux-gnu /tmp/migration-tui
+          (cd /tmp && ./migration-tui --version)
+          (cd /tmp && ./migration-tui --version | grep -F "${{ needs.extract-version.outputs.version }}")
+      - name: Draft a release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
+        with:
+          draft: true
+          generate_release_notes: false
+          name: "TUI POC fork-test ${{ needs.extract-version.outputs.version }}"
+          body: |
+            Fork-test release validating the migration-tui matrix build pipeline.
+            Not a real release. Do not consume.
+          files: |
+            tui-release-artifacts/migration-tui-x86_64-unknown-linux-gnu
+            tui-release-artifacts/migration-tui-aarch64-unknown-linux-gnu
+            tui-release-artifacts/migration-tui-x86_64-apple-darwin
+            tui-release-artifacts/migration-tui-aarch64-apple-darwin
+            tui-release-artifacts/migration-tui-x86_64-pc-windows-msvc.exe
+            tui-release-artifacts/migration-tui-install.sh
+            tui-release-artifacts/migration-tui-install.ps1
+            tui-release-artifacts/migration-tui-VERSION.txt
+            tui-release-artifacts/migration-tui-bundle-${{ needs.extract-version.outputs.version }}.tar.gz
