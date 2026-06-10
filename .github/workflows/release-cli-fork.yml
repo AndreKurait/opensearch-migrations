@@ -1,11 +1,11 @@
 # Fork-only: build CLI for all targets and create a GitHub release.
-# Trigger by pushing a tag like `cli-0.2.0-rc2`.
+# Trigger by pushing a version tag (e.g. `3.3.3`).
 name: release-cli (fork)
 
 on:
   push:
     tags:
-      - 'cli-*'
+      - '*'
   workflow_dispatch:
     inputs:
       version:
@@ -26,7 +26,7 @@ jobs:
           if [ -n "${{ inputs.version }}" ]; then
             echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           else
-            raw="${GITHUB_REF#refs/tags/cli-}"
+            raw="${GITHUB_REF#refs/tags/}"
             echo "version=${raw}" >> "$GITHUB_OUTPUT"
           fi
 
@@ -67,14 +67,14 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: cli-${{ matrix.target }}
+          name: bin-${{ matrix.target }}
           path: deployment/k8s/aws/build/dist/${{ needs.extract-version.outputs.version }}/migration-assistant-${{ matrix.target }}
           if-no-files-found: error
       - name: Upload shared (linux x86_64 only)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         uses: actions/upload-artifact@v4
         with:
-          name: cli-shared
+          name: shared
           path: |
             deployment/k8s/aws/build/dist/${{ needs.extract-version.outputs.version }}/migration-assistant-bundle.tar.gz
             deployment/k8s/aws/build/dist/${{ needs.extract-version.outputs.version }}/install.sh
@@ -87,14 +87,14 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: cli-*
+          pattern: '*'
           merge-multiple: true
       - name: List artifacts
         run: ls -la artifacts/
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: cli-${{ needs.extract-version.outputs.version }}
+          tag_name: ${{ needs.extract-version.outputs.version }}
           name: "migration-assistant CLI ${{ needs.extract-version.outputs.version }}"
           draft: false
           prerelease: true
