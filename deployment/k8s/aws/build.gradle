@@ -220,8 +220,13 @@ tasks.register('assembleBundle', Tar) {
         into('cfn/cdk.out-minified')
     }
 
-    // VERSION.txt
-    from(distDir.map { it.file('VERSION.txt') })
+    // VERSION.txt — generated inline to avoid reading from distDir (which
+    // stageBinary also writes to, triggering Gradle's implicit-dependency check).
+    doFirst {
+        def versionFile = new File(temporaryDir, 'VERSION.txt')
+        versionFile.text = "${cliVersion.get()}\n"
+    }
+    from({ new File(temporaryDir, 'VERSION.txt') })
 }
 
 // Copy bundle tarball into distDir alongside the binary + install.sh.
