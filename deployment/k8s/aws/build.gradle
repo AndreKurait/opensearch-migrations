@@ -184,7 +184,7 @@ tasks.register('stageBinary', Copy) {
     }
 
     doLast {
-        distDir.get().asFile.listFiles { f -> f.name.startsWith('migration-assistant-') }
+        distDir.get().asFile.listFiles({ f -> f.name.startsWith('migration-assistant-') } as FileFilter)
                 ?.each { it.setExecutable(true, false) }
     }
 }
