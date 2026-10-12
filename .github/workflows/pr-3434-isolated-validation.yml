@@ -1,0 +1,115 @@
+name: PR 3434 isolated validation
+run-name: Isolated suites for reader reuse 766a3845a
+
+on:
+  push:
+    branches:
+      - codex/pr-3434-isolated-validation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-3434-isolated-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VALIDATION_COMMIT: 766a3845a102ce2d3900015a6d165ccd3119afce
+  OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
+
+jobs:
+  isolated-tests:
+    name: ${{ matrix.module }} stripe ${{ matrix.index }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        include:
+          - module: RFS
+            index: 0
+            total: 2
+          - module: RFS
+            index: 1
+            total: 2
+          - module: DocumentsFromSnapshotMigration
+            index: 0
+            total: 8
+          - module: DocumentsFromSnapshotMigration
+            index: 1
+            total: 8
+          - module: DocumentsFromSnapshotMigration
+            index: 2
+            total: 8
+          - module: DocumentsFromSnapshotMigration
+            index: 3
+            total: 8
+          - module: DocumentsFromSnapshotMigration
+            index: 4
+            total: 8
+          - module: DocumentsFromSnapshotMigration
+            index: 5
+            total: 8
+          - module: DocumentsFromSnapshotMigration
+            index: 6
+            total: 8
+          - module: DocumentsFromSnapshotMigration
+            index: 7
+            total: 8
+          - module: SnapshotReader
+            index: 0
+            total: 2
+          - module: SnapshotReader
+            index: 1
+            total: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.VALIDATION_COMMIT }}
+          persist-credentials: false
+      - name: Verify source revision and Docker
+        run: |
+          test "$(git rev-parse HEAD)" = "$VALIDATION_COMMIT"
+          docker info
+          free -h
+          df -h
+          sysctl vm.max_map_count
+      - uses: ./.github/actions/setup-env
+        with:
+          gradle-cache-enabled: true
+          gradle-cache-read-only: true
+      - name: Run requested test stripe
+        env:
+          TEST_MODULE: ${{ matrix.module }}
+          STRIPE_INDEX: ${{ matrix.index }}
+          STRIPE_TOTAL: ${{ matrix.total }}
+        shell: bash
+        run: |
+          set -o pipefail
+          tasks=(":${TEST_MODULE}:isolatedTest")
+          if [[ "$TEST_MODULE" == "DocumentsFromSnapshotMigration" ]]; then
+            tasks+=(":${TEST_MODULE}:test")
+          fi
+          ./gradlew "${tasks[@]}" \
+            --no-daemon --max-workers 2 --console=plain \
+            -Dtest.striping.total="$STRIPE_TOTAL" \
+            -Dtest.striping.index="$STRIPE_INDEX" \
+            -x spotlessCheck --stacktrace --continue 2>&1 | tee validation-gradle.log
+      - name: Upload test reports and build log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: isolated-${{ matrix.module }}-${{ matrix.index }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            validation-gradle.log
+            **/build/test-results/test/
+            **/build/test-results/isolatedTest/
+            **/build/reports/tests/
+      - name: Record runner resources
+        if: always()
+        run: |
+          df -h
+          docker system df
