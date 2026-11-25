@@ -142,17 +142,21 @@ def seatbelt(temp, java, port):
     return '\n'.join(
         [
             '(version 1)',
-            '(deny default)',
-            '(allow process-fork process-exec sysctl-read ipc-posix* ipc-sysv* system-socket)',
-            '(allow mach-lookup (global-name "com.apple.system.opendirectoryd.libinfo"))',
-            '(allow mach-lookup (global-name "com.apple.SystemConfiguration.DNSConfiguration"))',
+            # Keep platform launch/runtime operations usable, then restrict each capability that crosses
+            # the worker boundary. Recent dyld/libSystem abort at process start with blanket default deny.
+            '(allow default)',
+            '(deny file-read* file-write* file-map-executable)',
+            '(allow file-read* file-map-executable ' + ' '.join(read) + ')',
             '(allow file-read* (literal "/private/var/select/sh"))',
-            '(allow file-read* ' + ' '.join(read) + ')',
             '(allow file-read-metadata)',
             f'(allow file-write* (subpath {quote(temp)}) (literal "/dev/null") (literal "/dev/tty"))',
+            '(deny file-write-setugid)',
+            '(deny process-info* signal mach-lookup*)',
+            '(allow process-info* signal (target same-sandbox))',
+            '(allow mach-lookup (global-name "com.apple.system.opendirectoryd.libinfo"))',
+            '(allow mach-lookup (global-name "com.apple.SystemConfiguration.DNSConfiguration"))',
             '(deny network*)',
             f'(allow network-outbound (remote ip "localhost:{port}"))',
-            '(allow signal (target same-sandbox))',
             '(deny process-exec (literal "/usr/bin/sudo") (literal "/usr/bin/su"))',
         ]
     )
@@ -242,6 +246,11 @@ def fixture():
 
         baseline = execute(['/usr/bin/true'])
         if baseline.returncode:
+            predicate = ('(process == "sandboxd" OR subsystem == "com.apple.sandbox.reporting") '
+                         'AND eventMessage CONTAINS "deny"')
+            logs = subprocess.run(['/usr/bin/log', 'show', '--style', 'compact', '--last', '1m', '--predicate',
+                                   predicate], capture_output=True, text=True, timeout=15)
+            print('Seatbelt system diagnostics:', logs.stdout[-1800:], flush=True)
             raise RuntimeError(f'Seatbelt native exec failed ({baseline.returncode}): {baseline.stderr}')
         response = execute(['/usr/bin/curl', '-fsS', '--max-time', '5', f'http://127.0.0.1:{port}/fixture'])
         if response.returncode or response.stdout != 'local broker':
