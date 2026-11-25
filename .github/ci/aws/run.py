@@ -29,13 +29,17 @@ DEADLINE = ContextVar('worker_deadline', default=None)
 
 @contextmanager
 def phase(name, minutes):
-    cutoff = time.monotonic() + minutes * 60
+    start = time.monotonic()
+    cutoff = start + minutes * 60
     outer = DEADLINE.get()
     token = DEADLINE.set((cutoff, name) if outer is None or cutoff < outer[0] else outer)
+    print(f'Starting {name}', flush=True)
     try:
         yield
     finally:
         DEADLINE.reset(token)
+        elapsed = int(time.monotonic() - start)
+        print(f'Time in {name}: {elapsed // 60}m {elapsed % 60:02d}s', flush=True)
 
 
 def command(*args, cwd=None, capture=False, input=None, **kwargs):
