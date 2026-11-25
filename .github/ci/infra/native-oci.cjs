@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
+const helmCharts = require('../dependency-cache/helm-charts.json');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 const {imageReference} = require('../dependency-cache/client-routing.cjs');
@@ -17,6 +18,18 @@ function route(tool, args, endpoint) {
       const separator = source.tag.startsWith('sha256:') ? '@' : ':';
       return [args[0], `${proxy.host}/${source.prefix}${separator}${source.tag}`, ...args.slice(2)];
     }
+  }
+  if (tool === 'helm' && args[0] === 'pull' && args.includes('--repo')) {
+    const name = args[1];
+    const repoIndex = args.indexOf('--repo');
+    const versionIndex = args.indexOf('--version');
+    const chart = Object.hasOwn(helmCharts, name) && helmCharts[name];
+    if (!chart || chart.repository !== args[repoIndex + 1]?.replace(/\/$/, '') ||
+        versionIndex < 0 || args[versionIndex + 1] !== chart.version) {
+      throw new Error(`Missing pinned cache route for Helm chart ${name}`);
+    }
+    const flags = args.slice(2).filter((_, index) => ![repoIndex, repoIndex + 1].includes(index + 2));
+    return ['pull', `${proxy.origin}/helm/${name}/${name}-${chart.version}.tgz`, ...flags];
   }
   if (tool === 'helm' && args[0] === 'pull' && args[1]?.startsWith('oci://')) {
     const source = imageReference(args[1].slice('oci://'.length));

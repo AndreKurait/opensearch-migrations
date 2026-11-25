@@ -15,7 +15,14 @@ test('native mirrors record only supported upstream reads and keep private opera
     ['pull', 'oci://127.0.0.1:31234/ecrpublic/acme/one', '--plain-http', '--version', '1.2']);
   for (const [tool, args] of [['crane', ['auth', 'login', 'public.ecr.aws', '-u', 'AWS', '--password-stdin']],
     ['crane', ['digest', target]], ['crane', ['copy', target, target]], ['helm', ['push', 'chart.tgz', 'oci://' + target]],
-    ['helm', ['pull', 'chart', '--repo', 'https://charts.example']], ['helm', ['upgrade', 'migration', 'chart']]]) {
+    ['helm', ['upgrade', 'migration', 'chart']]]) {
     assert.deepEqual(route(tool, args, loopback), args);
   }
+});
+
+test('HTTP chart pulls use the pinned local archive and reject unrecognized versions', () => {
+  const args = ['pull', 'argo-workflows', '--repo', 'https://argoproj.github.io/argo-helm', '--version', '1.0.5'];
+  assert.deepEqual(route('helm', args, loopback),
+    ['pull', `${loopback}/helm/argo-workflows/argo-workflows-1.0.5.tgz`, '--version', '1.0.5']);
+  assert.throws(() => route('helm', [...args.slice(0, -1), '1.0.6'], loopback), /Missing pinned/);
 });

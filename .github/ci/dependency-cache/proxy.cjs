@@ -7,6 +7,8 @@ const {isAbsolute} = require('node:path');
 const {Readable, Transform} = require('node:stream');
 const {pipeline} = require('node:stream/promises');
 
+const helmCharts = require('./helm-charts.json');
+
 const digestPattern = /^[a-f0-9]{64}$/;
 const manifestTypes = [
   'application/vnd.oci.image.index.v1+json', 'application/vnd.docker.distribution.manifest.list.v2+json',
@@ -78,6 +80,12 @@ function parseKey(key) {
   }
   if (kind === 'maven' && parts.length >= 2) {
     return {urls: mavenOrigins.map(origin => new URL('./' + parts.slice(1).join('/'), origin)), cdn: mavenCdn};
+  }
+  if (kind === 'helm' && parts.length === 3 && Object.hasOwn(helmCharts, originId)) {
+    const chart = helmCharts[originId];
+    if (parts[2] !== `${originId}-${chart.version}.tgz`) throw new Error('Unpinned Helm chart');
+    const url = new URL(chart.url);
+    return {urls: [url], cdn: url.hostname === 'github.com' ? githubAssets : [], digest: chart.digest};
   }
   if (kind === 'raw' && Object.hasOwn(rawOrigins, originId) && parts.length >= 3) {
     const [origin, cdn] = rawOrigins[originId];

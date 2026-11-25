@@ -1,0 +1,74 @@
+{
+  "argo-workflows": {
+    "version": "1.0.5",
+    "repository": "https://argoproj.github.io/argo-helm",
+    "url": "https://github.com/argoproj/argo-helm/releases/download/argo-workflows-1.0.5/argo-workflows-1.0.5.tgz",
+    "digest": "f63c1b526c082cdd21f61965d682801f4513da1a183478a7c5c3c863958312e8"
+  },
+  "aws-mountpoint-s3-csi-driver": {
+    "version": "2.5.0",
+    "repository": "https://awslabs.github.io/mountpoint-s3-csi-driver",
+    "url": "https://github.com/awslabs/mountpoint-s3-csi-driver/releases/download/helm-chart-aws-mountpoint-s3-csi-driver-2.5.0/aws-mountpoint-s3-csi-driver-2.5.0.tgz",
+    "digest": "75ba9158c19fbe3b68a8d01be74291801810176b72cd5b7d4d2161257fb7815a"
+  },
+  "aws-privateca-issuer": {
+    "version": "v1.4.0",
+    "repository": "https://cert-manager.github.io/aws-privateca-issuer",
+    "url": "https://cert-manager.github.io/aws-privateca-issuer/aws-privateca-issuer-v1.4.0.tgz",
+    "digest": "fc76cae64eae86ef5059283a39644d741e6202ae733997c95c8720c423a719ca"
+  },
+  "cert-manager": {
+    "version": "1.17.2",
+    "repository": "https://charts.jetstack.io",
+    "url": "https://charts.jetstack.io/charts/cert-manager-v1.17.2.tgz",
+    "digest": "9f8eaada785a870112c7b1874952b7e8776fd066608361c83ecee859314393ad"
+  },
+  "fluent-bit": {
+    "version": "0.51.0",
+    "repository": "https://fluent.github.io/helm-charts",
+    "url": "https://github.com/fluent/helm-charts/releases/download/fluent-bit-0.51.0/fluent-bit-0.51.0.tgz",
+    "digest": "6adf076a079d01552ed0a72e4009b494765356d0e9031a3256f8b53761c18f9d"
+  },
+  "grafana": {
+    "version": "8.15.0",
+    "repository": "https://grafana.github.io/helm-charts",
+    "url": "https://github.com/grafana/helm-charts/releases/download/grafana-8.15.0/grafana-8.15.0.tgz",
+    "digest": "6c0e8435a5b3192caa76e56e144908dced3be5e03cab1de9efb7f83b91886b9b"
+  },
+  "jaeger": {
+    "version": "3.2.0",
+    "repository": "https://jaegertracing.github.io/helm-charts",
+    "url": "https://github.com/jaegertracing/helm-charts/releases/download/jaeger-3.2.0/jaeger-3.2.0.tgz",
+    "digest": "f1d6275441920568706ed8500607269ee39edf02f0b3c2fdc90e4e2275eef1e3"
+  },
+  "kube-prometheus-stack": {
+    "version": "72.0.0",
+    "repository": "https://prometheus-community.github.io/helm-charts",
+    "url": "https://github.com/prometheus-community/helm-charts/releases/download/kube-prometheus-stack-72.0.0/kube-prometheus-stack-72.0.0.tgz",
+    "digest": "23fe509b9e5e9c27935d0e01839f66b079ccb454b2031917a9a455edc5a7a189"
+  },
+  "kyverno": {
+    "version": "3.7.1",
+    "repository": "https://kyverno.github.io/kyverno",
+    "url": "https://kyverno.github.io/kyverno/kyverno-3.7.1.tgz",
+    "digest": "b0d74512ea707e7612a36886a8ac1369d3ed5df71bc8cd64ba2b1abe98865325"
+  },
+  "localstack": {
+    "version": "0.6.23",
+    "repository": "https://localstack.github.io/helm-charts",
+    "url": "https://github.com/localstack/helm-charts/releases/download/localstack-0.6.23/localstack-0.6.23.tgz",
+    "digest": "38127117958bf76d8e8b08ac8cf5da85138589cd3c55b1ca9ed73f0bf84c2062"
+  },
+  "opentelemetry-operator": {
+    "version": "0.86.4",
+    "repository": "https://open-telemetry.github.io/opentelemetry-helm-charts",
+    "url": "https://github.com/open-telemetry/opentelemetry-helm-charts/releases/download/opentelemetry-operator-0.86.4/opentelemetry-operator-0.86.4.tgz",
+    "digest": "6322db13485f1b0c07c82d634e3a4488ee3b52d65ed55a8b11420b9794a42e73"
+  },
+  "strimzi-kafka-operator": {
+    "version": "0.50.1",
+    "repository": "https://strimzi.io/charts",
+    "url": "https://github.com/strimzi/strimzi-kafka-operator/releases/download/0.50.1/strimzi-kafka-operator-helm-3-chart-0.50.1.tgz",
+    "digest": "570b882d8302899f1584fa87c09761c7c073f27ef09d5adcfa944647f642e8e0"
+  }
+}

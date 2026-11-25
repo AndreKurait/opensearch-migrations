@@ -39,6 +39,7 @@ function readReceipt(text, now = Date.now()) {
 
 function immutablePublicKey(key) {
   if (/^\/v2\/.+\/(?:manifests|blobs)\/sha256:[0-9a-f]{64}$/.test(key)) return true;
+  if (key.startsWith('/helm/')) return true;
   if (key.startsWith('/maven/')) return !/(?:-SNAPSHOT\/|\/maven-metadata[^/]*\.xml)/i.test(key);
   if (/^\/npm\/.+\/-\/.+\.tgz$/.test(key) || key.startsWith('/pypi/packages/')) return true;
   return /^\/raw\/(?:gradle\/gradle-[\d.]+-(?:bin|all)\.zip|corretto\/resources\/[\d.]+\/|(?:k3s|kind|argo|crane)\/v[\d.]+|kubectl\/release\/v[\d.]+\/|helm\/helm-v[\d.]+-)/.test(key);
