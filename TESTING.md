@@ -67,6 +67,7 @@ gh workflow run aws-integration.yml --ref main \
 - The two suites that read pre-existing S3 snapshots, `byos` and `aoss` (including its two aliases), are paused until the fixture bucket moves or grants the test account read access. The worker and controller both enforce this. `cdc-aoss` creates its own data and remains enabled.
 - `cdc-tests` selects the three CDC suites. Use a comma-separated selection such as `cfn-import,cdc-tests` on a PR comment or manual dispatch to queue several suites in one run. Each selected suite runs once. Set `release` to a published numeric version such as `3.4.2` to exercise the release source and assets. The k6 canary builds its images from the release source. All seven enabled suites run on pushes to `main` when automatic runs are enabled. Scheduled groups and the six-hour release canary are in [.github/ci/controller/plan.py](.github/ci/controller/plan.py).
 - The PR commit receives one `aws-integration/<suite>` status per suite. Open **Details** for the GitHub Actions run. The watch job streams CodeBuild logs to the Actions log and lists case outcomes in its job summary. Download `aws-<suite>-<attempt>` for the JUnit report and machine-readable summary. A long job hands its CloudWatch cursor to the next GitHub runner.
+- Cancelling an approved run marks each suite still pending for that attempt as cancelled. When you rerun failed jobs, the suite’s **Details** link points to the attempt that produced the new result.
 
 ### AWS identity and runner setup
 
