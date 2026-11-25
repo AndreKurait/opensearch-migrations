@@ -39,7 +39,7 @@ jobs:
             --ref main
 
   deploy:
-    if: github.event_name != 'release'
+    if: github.event_name != 'release' && (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch')
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
     environment:

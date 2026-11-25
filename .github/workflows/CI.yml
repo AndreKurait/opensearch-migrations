@@ -6,6 +6,7 @@ on:
       - main
   pull_request:
   merge_group:
+  workflow_dispatch:
 
 env:
   python-version: '3.11'
@@ -21,6 +22,7 @@ concurrency:
 
 jobs:
   gradle-extended-check:
+    if: &run_ci github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -39,6 +41,7 @@ jobs:
           OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
 
   gradle-build-macos:
+    if: *run_ci
     runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +54,7 @@ jobs:
           OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
 
   python-lint:
+    if: *run_ci
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,6 +68,7 @@ jobs:
           flake8 $(git ls-files '*.py')
 
   python-tests:
+    if: *run_ci
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -135,6 +140,7 @@ jobs:
           docker image list --format '{{ if ne .Repository "<none>" }}{{ .Repository }}{{ if ne .Tag "<none>" }}:{{ .Tag }}{{ end }}{{ else }}{{ .ID }}{{ end }}'
 
   kind-setup-script-tests:
+    if: *run_ci
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -142,6 +148,7 @@ jobs:
         run: ./.github/scripts/tests/configureKindClusterTest.sh
 
   aws-controller-tests:
+    if: *run_ci
     runs-on: ubuntu-24.04
     permissions: {contents: read}
     steps:
@@ -151,6 +158,7 @@ jobs:
       - run: python3 -m unittest discover -s .github/ci/aws -v
 
   gradle-repository-tests:
+    if: *run_ci
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -161,6 +169,7 @@ jobs:
         run: python3 -m unittest discover -s gradle/tests -v
 
   generate-test-matrix:
+    if: *run_ci
     runs-on: ubuntu-22.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -175,6 +184,7 @@ jobs:
           echo "matrix=$(IFS=,; echo "[${indices[*]}]")" >> $GITHUB_OUTPUT
 
   seed-gradle-test-docker-cache:
+    if: *run_ci
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -291,6 +301,7 @@ jobs:
           docker system df -v
 
   node-tests:
+    if: *run_ci
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -327,6 +338,7 @@ jobs:
           verbose: true
 
   mountable-transforms-k8s-test:
+    if: *run_ci
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:
@@ -347,6 +359,7 @@ jobs:
         run: deployment/k8s/tests/mountableTransformsImageVolumeTest.sh
 
   link-checker:
+    if: *run_ci
     runs-on: ubuntu-24.04
 
     steps:
@@ -370,6 +383,7 @@ jobs:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
   gcp-terraform-test:
+    if: *run_ci
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -384,6 +398,7 @@ jobs:
           terraform test
 
   aws-terraform-test:
+    if: *run_ci
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -398,6 +413,7 @@ jobs:
           terraform test
 
   codeql-analyze:
+    if: *run_ci
     name: CodeQL (${{ matrix.language }})
     runs-on: ubuntu-22.04
     permissions:
@@ -421,6 +437,7 @@ jobs:
         category: "/language:${{matrix.language}}"
 
   sonarqube-analysis:
+    if: *run_ci
     name: SonarQube Analysis
     runs-on: ubuntu-22.04
     services:
@@ -548,7 +565,7 @@ jobs:
       - sonarqube-analysis
       - gcp-terraform-test
       - aws-terraform-test
-    if: always()
+    if: always() && (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-22.04
     steps:
       - if: ${{ contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'failure') }}

@@ -23,6 +23,7 @@ on:
 
 jobs:
   generate-cache-key:
+    if: github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     outputs:
       docker_cache_key: ${{ steps.generate_docker_cache_key.outputs.key }}

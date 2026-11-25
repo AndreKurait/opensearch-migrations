@@ -19,14 +19,16 @@ QUOTAS = {
     'igws': ('vpc', 'L-A4707A72'), 'egws': ('vpc', 'L-45FE3B85'), 'nat_per_az': ('vpc', 'L-FE5A380F'),
     'enis': ('vpc', 'L-DF5E4CA3'), 'vcpus': ('ec2', 'L-1216C47A'),
 }
-# CloudFormation fixes network counts. ENIs and vCPUs reserve capacity for autoscaled nodes and workloads.
-# The isolated test temporarily has two clusters and imports a second VPC.
+# Every source suite runs native amd64 and arm64 BuildKit pods requesting 4 CPUs each. A four-vCPU
+# host cannot fit one after kubelet reservations. Allow for two eight-vCPU hosts, system nodes and
+# the console; CDC's independent workload pools and the overlapping isolated clusters need more.
+# Use the same conservative reservation for release canaries and previously approved candidate code.
 RESERVATIONS = {
     suite: dict(zip(QUOTAS, values)) for suite, values in {
-        'isolated': (1, 4, 2, 2, 1, 2, 128, 24), 'cfn-import': (1, 1, 1, 1, 0, 1, 32, 8),
-        'cdc-k6': (1, 3, 1, 1, 1, 1, 128, 24), 'cdc-aoss': (1, 3, 1, 1, 1, 1, 96, 24),
-        'cdc': (1, 3, 1, 1, 1, 1, 96, 24), 'eks': (1, 3, 1, 1, 1, 1, 64, 16),
-        'cfn-create': (1, 3, 1, 1, 1, 1, 64, 8),
+        'isolated': (1, 4, 2, 2, 1, 2, 128, 32), 'cfn-import': (1, 1, 1, 1, 0, 1, 64, 24),
+        'cdc-k6': (1, 3, 1, 1, 1, 1, 128, 32), 'cdc-aoss': (1, 3, 1, 1, 1, 1, 96, 32),
+        'cdc': (1, 3, 1, 1, 1, 1, 96, 32), 'eks': (1, 3, 1, 1, 1, 1, 64, 24),
+        'cfn-create': (1, 3, 1, 1, 1, 1, 64, 24),
     }.items()
 }
 

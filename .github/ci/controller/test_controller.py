@@ -110,7 +110,7 @@ class ApprovalTests(unittest.TestCase):
 
 class ObservationTests(unittest.TestCase):
     def test_start_uses_bounded_timeout_and_identity(self):
-        env = dict(GITHUB_RUN_ID='1', GITHUB_REPOSITORY=REPO, GITHUB_RUN_ATTEMPT='1')
+        env = dict(GITHUB_RUN_ID='123', GITHUB_REPOSITORY=REPO, GITHUB_RUN_ATTEMPT='2')
         with patch.dict(os.environ, env), patch.object(build, 'summary'), patch.object(build, 'output'), \
                 patch.object(build, 'aws', return_value={'build': {'id': BUILD}}) as api:
             build.start('cdc', SHA, 'refs/pull/12/head', '', '{"SPEEDUP_FACTOR":8}')
@@ -118,6 +118,7 @@ class ObservationTests(unittest.TestCase):
             self.assertEqual('300', args[args.index('--timeout-in-minutes-override') + 1])
             overrides = {i['name']: i['value'] for i in json.loads(args[-1])}
             self.assertEqual(('8', SHA), (overrides['SPEEDUP_FACTOR'], overrides['CI_GIT_SHA']))
+            self.assertEqual(('123', '2'), (overrides['CI_GH_RUN_ID'], overrides['CI_GH_RUN_ATTEMPT']))
             self.assertRegex(overrides['CI_STAGE'], r'^ci-[a-f0-9]{12}$')
 
     def test_empty_next_page_and_delayed_stream(self):
@@ -177,12 +178,33 @@ class CapacityTests(unittest.TestCase):
         room = dict(builds=12, vpcs=4, igws=4, egws=5, eips=5, nat_per_az=5, vcpus=32, enis=5000)
         lanes = capacity.lanes(room)
         self.assertEqual(set(plan.ALL), set(lanes))
-        self.assertEqual(2, len(set(lanes.values())))
+        self.assertEqual(1, len(set(lanes.values())))
+        self.assertEqual(2, len(set(capacity.lanes(dict(room, vcpus=56)).values())))
         for key in room:
             self.assertLessEqual(sum(max(capacity.RESERVATIONS[s][key] for s, n in lanes.items() if n == lane)
                                      for lane in set(lanes.values())), room[key])
         for key in ('vpcs', 'eips', 'builds', 'enis', 'vcpus'):
             self.assertEqual({}, capacity.lanes(dict(room, **{key: 0})))
+
+    def test_compute_in_a_stopped_build_vpc_is_still_counted_until_it_terminates(self):
+        stage = 'ci-' + 'a' * 12
+        vpc = {'VpcId': 'vpc-1', 'Tags': [
+            {'Key': 'MigrationCI', 'Value': 'github'}, {'Key': 'MATestStage', 'Value': stage},
+        ]}
+        items = [{'VpcId': 'vpc-1', 'InstanceType': 'm6g.2xlarge', 'State': {'Name': state}}
+                 for state in ('pending', 'running', 'terminated')]
+        rows = {
+            'describe-vpcs': {'Vpcs': [vpc]}, 'describe-instances': {'Reservations': [{'Instances': items}]},
+            'describe-instance-types': {'InstanceTypes': [{'InstanceType': 'm6g.2xlarge',
+                                                           'VCpuInfo': {'DefaultVCpus': 8}}]},
+            'describe-internet-gateways': {'InternetGateways': []},
+            'describe-egress-only-internet-gateways': {'EgressOnlyInternetGateways': []},
+            'describe-addresses': {'Addresses': []}, 'describe-network-interfaces': {'NetworkInterfaces': []},
+            'describe-nat-gateways': {'NatGateways': []}, 'describe-subnets': {'Subnets': []},
+        }
+        with patch.object(capacity, 'active_builds', return_value=[]):
+            used = capacity.usage(lambda service, operation, *args: rows[operation])
+        self.assertEqual(16, used['vcpus'])
 
     def test_occupied_capacity_prevents_launch(self):
         room = dict.fromkeys(capacity.QUOTAS, 100)

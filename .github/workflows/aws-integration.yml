@@ -35,6 +35,8 @@ jobs:
   select:
     if: >-
       github.ref == 'refs/heads/main' &&
+      (vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' ||
+      (github.event_name != 'push' && github.event_name != 'schedule')) &&
       (github.event_name != 'issue_comment' ||
       (github.event.issue.pull_request && startsWith(github.event.comment.body, '/aws-test ')))
     environment:
@@ -89,6 +91,8 @@ jobs:
       id-token: write
       statuses: write
     uses: ./.github/workflows/aws-suite.yml
+    secrets:
+      AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}
     with:
       sha: ${{ needs.select.outputs.sha }}
       ref: ${{ needs.select.outputs.ref }}
