@@ -149,7 +149,7 @@
     ]
   },
   "jobs": {
-    "CI.yml/gradle-extended-check": {
+    "ci-jobs.yml/gradle-extended-check": {
       "purposes": [
         "github",
         "bootstrap",
@@ -160,7 +160,7 @@
       "nativePrivileges": true,
       "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true'"
     },
-    "CI.yml/gradle-build-macos": {
+    "ci-jobs.yml/gradle-build-macos": {
       "platform": "macos",
       "candidate": "seatbelt",
       "purposes": [
@@ -169,7 +169,7 @@
         "package"
       ]
     },
-    "CI.yml/python-lint": {
+    "ci-jobs.yml/python-lint": {
       "purposes": [
         "github",
         "bootstrap",
@@ -180,7 +180,7 @@
       "nativePrivileges": true,
       "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true'"
     },
-    "CI.yml/python-tests": {
+    "ci-jobs.yml/python-tests": {
       "purposes": [
         "github",
         "bootstrap",
@@ -194,19 +194,19 @@
       "nativePrivileges": true,
       "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.py-project != 'migrationConsole/lib/console_link'"
     },
-    "CI.yml/kind-setup-script-tests": {
+    "ci-jobs.yml/kind-setup-script-tests": {
       "purposes": [
         "github"
       ],
       "nativePrivileges": false
     },
-    "CI.yml/aws-controller-tests": {
+    "ci-jobs.yml/aws-controller-tests": {
       "purposes": [
         "github"
       ],
       "nativePrivileges": false
     },
-    "CI.yml/gradle-repository-tests": {
+    "ci-jobs.yml/gradle-repository-tests": {
       "purposes": [
         "github",
         "bootstrap",
@@ -217,13 +217,13 @@
       "nativePrivileges": true,
       "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true'"
     },
-    "CI.yml/generate-test-matrix": {
+    "ci-jobs.yml/generate-test-matrix": {
       "purposes": [
         "github"
       ],
       "nativePrivileges": false
     },
-    "CI.yml/seed-gradle-test-docker-cache": {
+    "ci-jobs.yml/seed-gradle-test-docker-cache": {
       "purposes": [
         "github",
         "oci"
@@ -231,7 +231,7 @@
       "nativePrivileges": true,
       "unreviewedForkSandbox": "false"
     },
-    "CI.yml/gradle-tests": {
+    "ci-jobs.yml/gradle-tests": {
       "purposes": [
         "github",
         "bootstrap",
@@ -243,7 +243,7 @@
       "nativePrivileges": true,
       "unreviewedForkSandbox": "false"
     },
-    "CI.yml/node-tests": {
+    "ci-jobs.yml/node-tests": {
       "purposes": [
         "github",
         "bootstrap",
@@ -257,7 +257,7 @@
       "nativePrivileges": true,
       "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs'"
     },
-    "CI.yml/mountable-transforms-k8s-test": {
+    "ci-jobs.yml/mountable-transforms-k8s-test": {
       "purposes": [
         "github",
         "bootstrap",
@@ -268,7 +268,7 @@
       "nativePrivileges": true,
       "unreviewedForkSandbox": "false"
     },
-    "CI.yml/link-checker": {
+    "ci-jobs.yml/link-checker": {
       "purposes": [
         "github",
         "bootstrap",
@@ -276,7 +276,7 @@
       ],
       "nativePrivileges": false
     },
-    "CI.yml/gcp-terraform-test": {
+    "ci-jobs.yml/gcp-terraform-test": {
       "purposes": [
         "github",
         "bootstrap",
@@ -284,7 +284,7 @@
       ],
       "nativePrivileges": false
     },
-    "CI.yml/aws-terraform-test": {
+    "ci-jobs.yml/aws-terraform-test": {
       "purposes": [
         "github",
         "bootstrap",
@@ -292,7 +292,7 @@
       ],
       "nativePrivileges": false
     },
-    "CI.yml/codeql-analyze": {
+    "ci-jobs.yml/codeql-analyze": {
       "purposes": [
         "github",
         "bootstrap",
@@ -301,7 +301,7 @@
       ],
       "nativePrivileges": false
     },
-    "CI.yml/sonarqube-analysis": {
+    "ci-jobs.yml/sonarqube-analysis": {
       "purposes": [
         "github",
         "bootstrap",
@@ -311,6 +311,12 @@
       ],
       "nativePrivileges": true,
       "unreviewedForkSandbox": "false"
+    },
+    "CI.yml/checks": {
+      "delegates": "./.github/workflows/ci-jobs.yml"
+    },
+    "CI.yml/main": {
+      "delegates": "./.github/workflows/ci-jobs.yml"
     },
     "CI.yml/all-ci-checks-pass": {
       "purposes": [
@@ -392,6 +398,17 @@
       ],
       "nativePrivileges": true
     },
+    "dependency-cache-check.yml/record": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "ubuntu",
+        "package",
+        "oci",
+        "kubernetes"
+      ],
+      "nativePrivileges": true
+    },
     "dependency-cache-observe.yml/observe": {
       "purposes": [
         "github"
@@ -457,16 +474,16 @@
       "nativePrivileges": true,
       "unreviewedForkSandbox": "false"
     },
-    "local-integ-tests.yml/select-tests": {
+    "local-integ-jobs.yml/select-tests": {
       "purposes": [
         "github"
       ],
       "nativePrivileges": false
     },
-    "local-integ-tests.yml/k8s-local-test": {
+    "local-integ-jobs.yml/k8s-local-test": {
       "delegates": "./.github/workflows/k8s-local-test.yml"
     },
-    "local-integ-tests.yml/docker-compose-e2e-test": {
+    "local-integ-jobs.yml/docker-compose-e2e-test": {
       "purposes": [
         "github",
         "bootstrap",
@@ -476,6 +493,12 @@
       ],
       "nativePrivileges": true,
       "unreviewedForkSandbox": "false"
+    },
+    "local-integ-tests.yml/checks": {
+      "delegates": "./.github/workflows/local-integ-jobs.yml"
+    },
+    "local-integ-tests.yml/main": {
+      "delegates": "./.github/workflows/local-integ-jobs.yml"
     },
     "local-integ-tests.yml/all-local-integ-checks-pass": {
       "purposes": [

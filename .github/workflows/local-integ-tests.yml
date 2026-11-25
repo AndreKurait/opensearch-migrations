@@ -39,26 +39,44 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.schedule || github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The caller grants cache writes only to a main job on a recording trigger.
+cache-mode: read
+
 jobs:
-  select-tests:
-    if: github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch'
+  checks:
+    if: github.ref != 'refs/heads/main' || !contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)
+    cache-mode: read
+    uses: ./.github/workflows/local-integ-jobs.yml
+    with:
+      suite: ${{ inputs.suite || 'standard' }}
+      source: ${{ inputs.source || 'all' }}
+      target: ${{ inputs.target || 'all' }}
+      test-ids: ${{ inputs.test-ids || '' }}
+
+  main:
+    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)
+    cache-mode: write
+    uses: ./.github/workflows/local-integ-jobs.yml
+    with:
+      suite: ${{ inputs.suite || 'standard' }}
+      source: ${{ inputs.source || 'all' }}
+      target: ${{ inputs.target || 'all' }}
+      test-ids: ${{ inputs.test-ids || '' }}
+
+  all-local-integ-checks-pass:
+    needs: [checks, main]
+    if: always() && (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
-    outputs:
-      matrix: ${{ steps.select.outputs.matrix }}
-      release-ref: ${{ steps.release.outputs.ref }}
-      release-repo: ${{ steps.release.outputs.repo }}
     steps:
       # BEGIN generated network guard
-      - &network_1
-        name: Restrict runner and container egress
+      - name: Restrict runner and container egress
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           disable-telemetry: true
           allowed-endpoints: >-
             api.github.com:443 github.com:443 raw.githubusercontent.com:443
-      - &enforce_unprivileged
-        name: Enforce Linux network policy before candidate checkout
+      - name: Enforce Linux network policy before candidate checkout
         shell: bash
         working-directory: ${{ runner.temp }}
         env:
@@ -74,183 +92,6 @@ jobs:
           sudo /usr/bin/python3 "$guard" lock-down
           if sudo -n true >/dev/null 2>&1 || docker info >/dev/null 2>&1; then exit 1; fi
       # END generated network guard
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Resolve release canary ref
-        id: release
-        if: github.event.schedule == '47 */6 * * *'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OVERRIDE: ${{ vars.LOCAL_INTEG_CANARY_REF }}
-        run: |
-          if [[ -n "$OVERRIDE" ]]; then
-            ref=$OVERRIDE
-            repo=$GITHUB_REPOSITORY
-          else
-            repo=opensearch-project/opensearch-migrations
-            ref=$(gh api "repos/$repo/releases/latest" | jq -er 'select(any(.assets[]; .name == "aws-bootstrap.sh")) | .tag_name')
-          fi
-          git check-ref-format "refs/tags/$ref"
-          echo "repo=$repo" >> "$GITHUB_OUTPUT"
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-          echo "Testing $repo at $ref" >> "$GITHUB_STEP_SUMMARY"
-      - name: Select migrations
-        id: select
-        env:
-          MODE: ${{ inputs.suite || 'standard' }}
-          SCHEDULE: ${{ github.event.schedule }}
-          SOURCE: ${{ inputs.source || 'all' }}
-          TARGET: ${{ inputs.target || 'all' }}
-          IDS: ${{ inputs.test-ids }}
-        run: |
-          case "$SCHEDULE" in
-            '17 * * * *') MODE=hourly ;;
-            '31 */6 * * *') MODE=solr ;;
-            '47 */6 * * *') MODE=canary ;;
-          esac
-          matrix=$(python3 .github/scripts/local-integ-matrix.py --mode "$MODE" \
-            --source "$SOURCE" --target "$TARGET" --test-ids "$IDS")
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          jq -r '.include[] | "- \(.source) → \(.target) · \(.ids)"' <<< "$matrix" >> "$GITHUB_STEP_SUMMARY"
-
-  k8s-local-test:
-    needs: select-tests
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.select-tests.outputs.matrix) }}
-    uses: ./.github/workflows/k8s-local-test.yml
-    with:
-      source-version: ${{ matrix.source }}
-      target-version: ${{ matrix.target }}
-      test-ids: ${{ matrix.ids }}
-      release-ref: ${{ needs.select-tests.outputs.release-ref }}
-      release-repo: ${{ needs.select-tests.outputs.release-repo }}
-      save-registry-cache: ${{ matrix.source == 'ES_7.10' && matrix.target == 'OS_3.1' }}
-
-  docker-compose-e2e-test:
-    if: github.event_name != 'schedule' && inputs.suite != 'matrix' && (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      # BEGIN generated network guard
-      - name: Restrict runner and container egress
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: block
-          disable-telemetry: true
-          allowed-endpoints: >-
-            api.github.com:443 github.com:443 raw.githubusercontent.com:443
-            objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
-            repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
-            auth.docker.io:443 registry-1.docker.io:443 production.cloudflare.docker.com:443 production.cloudfront.docker.com:443 docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443 quay.io:443 cdn01.quay.io:443 cdn02.quay.io:443 cdn03.quay.io:443 cdn04.quay.io:443 public.ecr.aws:443 d2glxqk2uabbnd.cloudfront.net:443 registry.k8s.io:443 us-west1-docker.pkg.dev:443 us-central1-docker.pkg.dev:443 us-east1-docker.pkg.dev:443 mirror.gcr.io:443 storage.googleapis.com:443
-            dl.k8s.io:443 get.helm.sh:443 artifacts.elastic.co:443 download.elastic.co:443 charts.bitnami.com:443 kubernetes-sigs.github.io:443 prometheus-community.github.io:443 strimzi.io:443 argoproj.github.io:443 helm.min.io:443 opensearch-project.github.io:443
-      - name: Enforce Linux network policy before candidate checkout
-        shell: bash
-        working-directory: ${{ runner.temp }}
-        env:
-          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
-        run: |
-          set -euo pipefail
-          guard="$RUNNER_TEMP/linux_guard.py"
-          curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/linux_guard.py" -o "$guard"
-          expected=cbe9fcb83fbc2c55d5734c9640f58696755156d3f9b68467f3672c35e2a6aec5
-          test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
-          sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install
-          /usr/bin/python3 "$guard" probe
-      - name: Require isolated execution for external fork code
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(false)
-        shell: bash
-        working-directory: ${{ runner.temp }}
-        run: |
-          echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."
-          exit 1
-      # END generated network guard
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-env
-        with:
-          gradle-cache-enabled: true
-          gradle-cache-read-only: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
-          dependency-proxy-docker: 'true'
-
-      - name: Get registry cache key
-        id: registry-cache-key
-        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
-        # Must match k8s-local-test.yml, which saves the cache.
-        run: echo "key=local-integ-registry-cache-v1-$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
-      - name: Restore registry cache
-        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
-        with:
-          path: ${{ runner.temp }}/registry-cache
-          key: ${{ steps.registry-cache-key.outputs.key }}
-      - name: Start registry cache
-        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
-        run: ./.github/scripts/registry-cache.sh start
-
-      - name: Build Docker images
-        timeout-minutes: 30
-        env:
-          DOCKER_BUILD_RETRIES: 3
-        run: ./buildImages/buildDockerImages.sh
-
-      - name: Docker compose up
-        timeout-minutes: 10
-        run: |
-          KAFKA_TRAFFIC_TOPIC="logging-traffic-topic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-          KAFKA_TRAFFIC_GROUP_ID="logging-group-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            ./gradlew -p TrafficCapture dockerSolution:composeUp -PciCompose -x test -x spotlessCheck --stacktrace
-          docker ps
-
-      - name: Run E2E tests
-        timeout-minutes: 15
-        run: |
-          docker exec "$(docker ps --filter "name=migration-console" -q)" \
-            pipenv run pytest /root/lib/integ_test/integ_test/replayer_tests.py --unique_id="testindex" -s \
-              --junitxml=/tmp/replayer-tests.xml
-
-      - name: Collect container logs
-        if: always()
-        run: |
-          mkdir -p logs/docker logs/reports
-          console=$(docker ps -aq --filter 'name=migration-console' | head -1)
-          if [[ -n "$console" ]]; then
-            docker cp "$console:/tmp/replayer-tests.xml" logs/reports/replayer-tests.xml || true
-          fi
-          for container in $(docker ps -aq); do
-            container_name="$(docker inspect --format '{{.Name}}' "$container" | sed 's/\///')"
-            docker logs "$container" > "logs/docker/${container_name}_logs.txt" 2>&1 || true
-          done
-      - name: Upload Compose logs and test report
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: docker-compose-e2e-logs
-          if-no-files-found: warn
-          path: logs/
-          retention-days: 30
-      - name: Stop registry cache
-        if: always() && vars.DEPENDENCY_PROXY_ENABLED != 'true'
-        run: ./.github/scripts/registry-cache.sh stop
-
-  all-local-integ-checks-pass:
-    needs:
-      - select-tests
-      - k8s-local-test
-      - docker-compose-e2e-test
-    if: always() && (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-24.04
-    steps:
-      # BEGIN generated network guard
-      - *network_1
-      - *enforce_unprivileged
-      # END generated network guard
-
       - name: Download test reports
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -269,7 +110,7 @@ jobs:
               jq -r '.summary | "| \(.source_version) | \(.target_version) | \(.passed) | \(.failed) |"' "$report"
             done
           } >> "$GITHUB_STEP_SUMMARY"
-      - if: ${{ contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'failure') }}
+      - if: ${{ !contains(needs.*.result, 'success') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'failure') }}
         run: |
           echo "One or more job cancelled or failed" && exit 1
       - run: |
