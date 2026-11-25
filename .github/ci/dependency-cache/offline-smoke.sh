@@ -26,10 +26,20 @@ staging=$(mktemp -d)
 trap 'rm -rf -- "$staging"' EXIT
 mkdir "$staging/source"
 git -C "$source_dir" ls-files --cached -z | tar -C "$source_dir" --null --verbatim-files-from --no-recursion -T - -cf - | tar -C "$staging/source" -xf -
+workdir=${CI_HERMETIC_WORKDIR:-.}
+[[ "$workdir" != /* && "/$workdir/" != */../* && "$workdir" =~ ^[a-zA-Z0-9_./-]+$ ]] || { echo 'Invalid relative candidate working directory' >&2; exit 1; }
+[[ -d "$staging/source/$workdir" ]] || { echo 'Missing candidate working directory' >&2; exit 1; }
 # The trusted standalone harness can be run and tested before it has been added to a developer checkout.
 # Candidate suites get their own read-only /source; the default smoke itself is supplied by the trusted checkout.
 mkdir "$staging/harness"
-cp "$launcher_dir/offline-relay.cjs" "$launcher_dir/smoke.cjs" "$staging/harness/"
+cp "$launcher_dir/offline-relay.cjs" "$launcher_dir/smoke.cjs" "$launcher_dir/corretto.cjs" "$staging/harness/"
+# These trusted, public registry mappings are literal data only; the guest never obtains the outer Docker socket.
+node -e 'process.stdout.write(require(process.argv[1]).containersConfig("127.0.0.1", "__GUEST_PORT__"))' "$launcher_dir/client-routing.cjs" > "$staging/harness/registries.conf.in"
+allow=(CI PYTEST_ADDOPTS KAFKA_TRAFFIC_TOPIC KAFKA_TRAFFIC_GROUP_ID OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED)
+# Avoid arbitrary environment forwarding. Fixed independent test configuration is passed as arguments or these scalar values.
+for name in "${allow[@]}"; do
+  value=${!name-}; [[ -z "$value" || "$value" != *$'\n'* ]] || { echo "Invalid workflow value $name" >&2; exit 1; }
+done
 printf '#!/bin/sh\nexec /tools/bin/node /tools/npm/bin/npm-cli.js "$@"\n' > "$staging/npm"
 chmod 0555 "$staging/npm"
 printf '127.0.0.1 localhost\n::1 localhost\n' > "$staging/hosts"
@@ -49,7 +59,15 @@ args=(--unshare-all --unshare-user --disable-userns --die-with-parent --new-sess
   --ro-bind "$node_bin" /tools/bin/node --ro-bind "$skopeo_bin" /tools/bin/skopeo --ro-bind "$java_home" /tools/jdk
   --ro-bind "$npm_package" /tools/npm --ro-bind "$staging/npm" /tools/bin/npm
   --setenv HOME /home/worker --setenv TMPDIR /tmp --setenv GRADLE_USER_HOME /home/worker/gradle --setenv JAVA_HOME /tools/jdk
-  --setenv PATH /tools/bin:/tools/jdk/bin:/usr/bin:/bin --setenv LANG C.UTF-8 --chdir /work)
+  --setenv PATH /tools/bin:/tools/jdk/bin:/usr/bin:/bin --setenv LANG C.UTF-8 --setenv CI_HERMETIC_WORKDIR "$workdir" --chdir /work)
+for name in "${allow[@]}"; do [[ -z "${!name+x}" ]] || args+=(--setenv "$name" "${!name}"); done
+# The only writable host bind is a new empty export directory dedicated to this single invocation.
+if [[ -n "${CI_HERMETIC_OUTPUT_DIR:-}" ]]; then
+  output=$(realpath -m -- "$CI_HERMETIC_OUTPUT_DIR")
+  [[ ! -e "$output" && ! -L "$CI_HERMETIC_OUTPUT_DIR" ]] || { echo 'Hermetic output must be a new dedicated directory' >&2; exit 1; }
+  mkdir -m 700 -- "$output"
+  args+=(--bind "$output" /export --setenv CI_HERMETIC_OUTPUT_DIR /export)
+fi
 if [[ "$python_prefix" != /usr ]]; then
   # Bind only the Python installation, never the hosted runner's HOME or credential/config directories.
   args+=(--ro-bind "$python_prefix" /tools/python --symlink /tools/python/bin/python3 /tools/bin/python3)
@@ -65,10 +83,34 @@ if [[ -n "${GRADLE_BIN:-}" ]]; then
   args+=(--ro-bind "$gradle_dir" /tools/gradle --setenv GRADLE_BIN /tools/gradle/bin/gradle)
 fi
 if (($# == 0)); then set -- /tools/bin/node /harness/smoke.cjs; fi
-# On Ubuntu GitHub-hosted runners, AppArmor may prevent the ordinary user from creating namespaces.
-# Root may create these namespaces, but the smoke command MUST run under the original runner's UID with zero capabilities.
-if ! bwrap --unshare-user --unshare-net --ro-bind / / -- /bin/true 2>/dev/null; then
-  command -v sudo >/dev/null || { echo 'User namespaces are unavailable' >&2; exit 1; }
-  launch=(sudo -n -- "$(command -v bwrap)" --uid "$(id -u)" --gid "$(id -g)")
-else launch=(bwrap); fi
-"${launch[@]}" "${args[@]}" -- /tools/bin/node /harness/offline-relay.cjs "$@"
+# Ubuntu's AppArmor may deny unprivileged namespace creation. Avoid running the test tree as root:
+# temporarily grant this exact root-owned bwrap executable permission to create a user namespace.
+# All capability and mount restrictions are still installed by bwrap while running as the original runner UID.
+profile=''
+cleanup_host() {
+  if [[ -n "$profile" ]]; then sudo -n apparmor_parser -R "$profile" >&2 || true; fi
+  rm -rf -- "$staging"
+}
+trap cleanup_host EXIT
+bubblewrap=$(realpath "$(command -v bwrap)")
+probe_namespace() { "$bubblewrap" --unshare-all --unshare-user --disable-userns --ro-bind / / -- /bin/true 2>/dev/null; }
+if ! probe_namespace; then
+  if [[ "$(stat -c '%u' "$bubblewrap")" != 0 || -w "$bubblewrap" || ! -r /sys/module/apparmor/parameters/enabled ]] ||
+      ! command -v apparmor_parser >/dev/null || ! command -v sudo >/dev/null; then
+    echo 'Cannot create an isolated user namespace as the runner account; verify the bwrap AppArmor profile' >&2; exit 1
+  fi
+  [[ "$bubblewrap" == /usr/bin/bwrap ]] || { echo 'Only the packaged /usr/bin/bwrap can receive CI AppArmor configuration' >&2; exit 1; }
+  profile="$staging/bwrap.apparmor"
+  name="migrations_bwrap_$(basename "$staging" | tr -cd '[:alnum:]')"
+  printf 'abi <abi/4.0>,\ninclude <tunables/global>\nprofile %s %s flags=(unconfined) {\n  userns,\n  include if exists <local/%s>\n}\n' "$name" "$bubblewrap" "$name" > "$profile"
+  sudo -n apparmor_parser -a "$profile"
+  probe_namespace || { echo 'The packaged runner bwrap could not enter its user namespace after profile installation' >&2; exit 1; }
+fi
+launch=("$bubblewrap")
+result=0
+"${launch[@]}" "${args[@]}" -- /tools/bin/node /harness/offline-relay.cjs "$@" || result=$?
+if [[ -n "${output:-}" ]]; then
+  # Artifact uploaders must not follow a candidate-supplied link into the runner filesystem.
+  find -P "$output" -xdev -mindepth 1 ! -type f ! -type d -delete
+fi
+exit "$result"

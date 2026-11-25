@@ -5,6 +5,7 @@ const http = require('node:http');
 const net = require('node:net');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
+const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 
 async function rejectEgress() {
@@ -49,6 +50,15 @@ async function run() {
     const env = {...process.env, CI_DEPENDENCY_PROXY_URL:url, CI_DEPENDENCY_CACHE_URL:url, MAVEN_REPOSITORY_URL:url+'/maven/',
       npm_config_registry:url+'/npm/', npm_config_audit:'false', npm_config_update_notifier:'false', PIP_INDEX_URL:url+'/pypi/simple/',
       PIP_EXTRA_INDEX_URL:'',PIPENV_PYPI_MIRROR:url+'/pypi/simple/',PIP_DISABLE_PIP_VERSION_CHECK:'1',SKOPEO_BIN:'/tools/bin/skopeo'};
+    const nativeBin = '/home/worker/bin';
+    await fs.mkdir(nativeBin, {recursive:true});
+    const registries = '/home/worker/registries.conf';
+    await fs.writeFile(registries, (await fs.readFile('/harness/registries.conf.in', 'utf8')).replaceAll('__GUEST_PORT__', String(proxy.address().port)));
+    const skopeo = nativeBin + '/skopeo';
+    await fs.writeFile(skopeo, '#!/bin/sh\nexec /tools/bin/skopeo --registries-conf /home/worker/registries.conf "$@"\n', {mode:0o700});
+    env.SKOPEO_BIN = skopeo;
+    env.PATH = nativeBin + ':' + env.PATH;
+    env.CONTAINERS_REGISTRIES_CONF = registries;
     const wrapperDir = '/home/worker/wrapper/gradle/wrapper';
     await fs.mkdir(wrapperDir, {recursive:true});
     const source = '/source/gradle/wrapper/gradle-wrapper';
@@ -61,14 +71,16 @@ async function run() {
     env.CI_DEPENDENCY_GRADLE_WRAPPER_JAR = target+'.jar';
     if (!env.GRADLE_BIN) {
       const launcher = '/home/worker/wrapper/gradle-run';
-      await fs.writeFile(launcher,'#!/bin/sh\nexec /tools/jdk/bin/java -classpath "$CI_DEPENDENCY_GRADLE_WRAPPER_JAR" org.gradle.wrapper.GradleWrapperMain "$@"\n',{mode:0o700});
+      await fs.writeFile(launcher,'#!/bin/sh\nexec "$JAVA_HOME/bin/java" -classpath "$CI_DEPENDENCY_GRADLE_WRAPPER_JAR" org.gradle.wrapper.GradleWrapperMain "$@"\n',{mode:0o700});
       env.GRADLE_BIN = launcher;
     }
     // Build inputs are read-only. Tests that generate build outputs may use their writable snapshot in /work.
     await fs.cp('/source','/work/source',{recursive:true,verbatimSymlinks:true});
     const [command,...args] = process.argv.slice(2);
+    const cwd = await fs.realpath(path.join('/work/source', process.env.CI_HERMETIC_WORKDIR || '.'));
+    if (cwd !== '/work/source' && !cwd.startsWith('/work/source/')) throw new Error('Working directory escaped candidate checkout');
     const code = await new Promise((resolve,reject) => {
-      const child=spawn(command,args,{env,cwd:'/work/source',stdio:'inherit'});child.once('error',reject);
+      const child=spawn(command,args,{env,cwd,stdio:'inherit'});child.once('error',reject);
       child.once('exit',(status,signal) => signal ? reject(new Error(`Offline command received ${signal}`)) : resolve(status));
     });
     process.exitCode=code;

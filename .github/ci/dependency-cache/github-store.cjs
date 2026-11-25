@@ -17,6 +17,9 @@ const INDEX_PATH = `${STAGING}/index.json`;
 const SMALL_BYTES = 64 * 1024;
 const PACK_BYTES = 4 * 1024 * 1024;
 const PACK_MEMBERS = 256;
+// These shares cover a publisher and up to 48 simultaneous readers (the Gradle matrix alone has 30).
+const READ_RATE = 1200;
+const PUBLISH_LOOKUP_RATE = 240;
 const sha = () => createHash('sha256');
 const hash = value => sha().update(value).digest('hex');
 const byName = (a, b) => a < b ? -1 : a > b ? 1 : 0;
@@ -128,11 +131,14 @@ function budget(name, fallback) {
   return value;
 }
 function toolkitStore(toolkit, options = {}) {
-  const read = options.read || paced(1440, budget('DEPENDENCY_CACHE_READER_JOBS', 16));
+  const read = options.read || paced(READ_RATE, budget('DEPENDENCY_CACHE_READER_JOBS', 48));
+  const publishRead = options.read || paced(PUBLISH_LOOKUP_RATE, budget('DEPENDENCY_CACHE_WRITER_JOBS', 1));
   const write = options.write || paced(180, budget('DEPENDENCY_CACHE_WRITER_JOBS', 1));
   const restore = (file, key, prefixes = [], lookupOnly = false) =>
     read(() => toolkit.restoreCache([file], key, prefixes, { lookupOnly }));
-  const exists = async (file, key) => (await restore(file, key, [], true)) === key;
+  const publicationRestore = (file, key, prefixes = [], lookupOnly = false) =>
+    publishRead(() => toolkit.restoreCache([file], key, prefixes, { lookupOnly }));
+  const exists = async (file, key) => (await publicationRestore(file, key, [], true)) === key;
   async function save(file, key) {
     let error;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -146,7 +152,7 @@ function toolkitStore(toolkit, options = {}) {
     }
     throw new Error(`GitHub cache publication failed for ${key}`, { cause: error });
   }
-  return { restore, exists, save };
+  return { restore, publicationRestore, exists, save };
 }
 
 async function verified(file, entry) {
@@ -217,7 +223,7 @@ function createStore(toolkit, options = {}) {
     try {
       await fs.rm(INDEX_PATH, { force: true });
       // A published generation is immutable. A retry must agree on its contents.
-      const previous = await store.restore(INDEX_PATH, indexKey, [`${INDEX}${generation}-`]);
+      const previous = await store.publicationRestore(INDEX_PATH, indexKey, [`${INDEX}${generation}-`]);
       if (previous && (previous !== indexKey || await fs.readFile(INDEX_PATH, 'utf8') !== index)) {
         throw new Error(`Generation ${generation} already has a different index`);
       }

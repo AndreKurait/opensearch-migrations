@@ -2,9 +2,10 @@
 
 const {spawn} = require('node:child_process');
 const {createHash} = require('node:crypto');
-const {access, mkdtemp: temporaryDirectory, readdir, readFile, rm, writeFile} = require('node:fs/promises');
+const {access, mkdir, mkdtemp: temporaryDirectory, readdir, readFile, rm, writeFile} = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const {fetchJdk} = require('./corretto.cjs');
 
 const repository = path.resolve(__dirname, '../../..');
 const imageDigest = 'sha256:1e4c05b897a751332ce85c7e9449da2d93514ea2dea6dbb0e2753c9e949b2bfa';
@@ -57,6 +58,13 @@ async function smoke() {
   }
   const dir = await temporaryDirectory(path.join(os.tmpdir(), 'dependency-cache-smoke-'));
   try {
+    const archive = await fetchJdk(proxy, dir);
+    const jdk = path.join(dir, 'jdk');
+    await mkdir(jdk);
+    await run('tar', ['-xzf', archive, '--strip-components=1', '-C', jdk], {cwd: dir});
+    const javaHome = process.platform === 'darwin' ? path.join(jdk, 'Contents', 'Home') : jdk;
+    const javaEnv = {...process.env, JAVA_HOME: javaHome, PATH: path.join(javaHome, 'bin') + path.delimiter + process.env.PATH};
+    await run(path.join(javaHome, 'bin', 'java'), ['-version'], {cwd: dir, env: javaEnv});
     await writeFile(path.join(dir, 'settings.gradle'), "rootProject.name = 'cache-protocol-smoke'\n");
     await writeFile(path.join(dir, 'build.gradle'), `
 repositories {
@@ -76,7 +84,7 @@ tasks.register('checkArtifacts') {
 }
 `);
     await run(await installedGradle(), ['--no-daemon', '--gradle-user-home', path.join(dir, '.gradle-user'),
-      '--project-dir', dir, 'checkArtifacts'], {cwd: dir});
+      '--project-dir', dir, 'checkArtifacts'], {cwd: dir, env: javaEnv});
 
     // Fresh client caches and independently pinned file checksums exercise metadata and package downloads.
     const env = {...process.env, npm_config_registry: new URL('/npm/', proxy).href, npm_config_audit: 'false',
@@ -107,7 +115,7 @@ tasks.register('checkArtifacts') {
     if (createHash('sha256').update(bytes).digest('hex') !== rawDigest || !/^[a-f0-9]{64}$/.test(bytes.toString())) {
       throw new Error('kubectl checksum fixture differs from its approved digest');
     }
-    console.log('Verified Gradle transitive dependencies, npm and Python packages, OCI image layers, and the kubectl checksum through the proxy.');
+    console.log('Verified the pinned Corretto JDK, Gradle transitive dependencies, npm and Python packages, OCI image layers, and the kubectl checksum through the proxy.');
   } finally {
     await rm(dir, {recursive: true, force: true});
   }

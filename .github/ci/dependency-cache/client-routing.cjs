@@ -52,6 +52,15 @@ function buildkitConfig(host, port) {
     `\n[registry."${host}:${port}"]\n  http = true\n`;
 }
 
+// K3s uses a separate embedded containerd. A Docker daemon mirror cannot affect workload pulls.
+function k3sConfig(host, port) {
+  const mirrors = Object.fromEntries(originEntries.map(([origin, id]) => [origin, {
+    endpoint: [`http://${host}:${port}`], rewrite: {'^(.*)$': `${id}/$1`},
+  }]));
+  // JSON is valid YAML and quotes the regexp and its substitution exactly.
+  return JSON.stringify({mirrors}, null, 2);
+}
+
 function containersConfig(host, port) {
   return 'unqualified-search-registries = ["docker.io"]\n\n' + originEntries.map(([origin, id]) =>
     `[[registry]]\nprefix = "${origin}"\nlocation = "${host}:${port}/${id}"\ninsecure = true\n`).join('\n');
@@ -103,9 +112,9 @@ function daemonCall(socket, method, requestPath, headers = {}) {
 }
 
 // Many clients use the daemon's image-create endpoint (Docker CLI, Compose, Testcontainers).
-// This socket is ONLY for already trusted main-side clients on a disposable runner. Other
+// This socket is for disposable native Docker jobs which already control their own daemon. Other
 // Engine APIs remain native, including streams upgraded for exec/buildx. It is not a sandbox.
-async function engineAdapter(socket, listener, endpoint) {
+async function engineAdapter(socket, listener, endpoint, k3sRegistryFile) {
   const server = http.createServer(async (req, res) => {
     const requestURL = new URL(req.url, 'http://localhost');
     const create = /^((?:\/v[\d.]+)?)\/images\/create$/.exec(requestURL.pathname);
@@ -119,13 +128,24 @@ async function engineAdapter(socket, listener, endpoint) {
           const alias = digestAlias(decodeURIComponent(inspect[2]));
           if (alias) targetPath = inspect[1] + encodeURIComponent(alias) + (inspect[3] || '') + requestURL.search;
         }
-        if (req.method === 'POST' && /\/containers\/create$/.test(requestURL.pathname) && aliases.size) {
+        if (req.method === 'POST' && /\/containers\/create$/.test(requestURL.pathname) && (aliases.size || k3sRegistryFile)) {
           let collected = '';
           for await (const chunk of req) {
             collected += chunk;
             if (Buffer.byteLength(collected) > 4 * 1024 * 1024) throw new Error('Container configuration too large');
           }
           const config = JSON.parse(collected);
+          if (k3sRegistryFile && typeof config.Image === 'string' && /^(?:(?:docker\.io|index\.docker\.io|registry-1\.docker\.io)\/)?rancher\/k3s(?:[:@]|$)/.test(config.Image) &&
+              Array.isArray(config.Cmd) && ['server', 'agent'].includes(config.Cmd[0])) {
+            config.HostConfig ||= {};
+            const destination = '/etc/rancher/k3s/registries.yaml';
+            const preconfigured = (config.HostConfig.Binds || []).some(bind => bind.split(':')[1] === destination) ||
+              (config.HostConfig.Mounts || []).some(mount => mount.Target === destination);
+            if (!preconfigured) {
+              config.HostConfig.Binds = [...(config.HostConfig.Binds || []), `${k3sRegistryFile}:${destination}:ro`];
+              if (!config.Cmd.includes('--disable-default-registry-endpoint')) config.Cmd.push('--disable-default-registry-endpoint');
+            }
+          }
           const alias = digestAlias(config.Image);
           if (alias) config.Image = alias;
           body = Buffer.from(JSON.stringify(config));
@@ -272,11 +292,13 @@ async function setupClients({ url, mode, repository = process.cwd() }) {
       env.BUILDKIT_EXTRA_CONFIG = buildkit;
       env.CI_DEPENDENCY_REGISTRY_ENDPOINT = `${bridge}:${relay.port}`;
       const listener = path.join(temp, 'docker.sock');
-      const adapter = await engineAdapter(original.slice('unix://'.length), listener, upstream.host);
+      const k3s = path.join(temp, 'k3s-registries.yaml');
+      await fs.writeFile(k3s, k3sConfig(bridge, relay.port), {mode:0o644});
+      const adapter = await engineAdapter(original.slice('unix://'.length), listener, upstream.host, k3s);
       cleanup.push(adapter.close);
       env.DOCKER_HOST = `unix://${listener}`;
     }
     return { env, close };
   } catch (error) { await close(); throw error; }
 }
-module.exports = { setupClients, buildkitConfig, containersConfig, imageReference, bridgeRelay, engineAdapter };
+module.exports = { setupClients, buildkitConfig, k3sConfig, containersConfig, imageReference, bridgeRelay, engineAdapter };

@@ -17,19 +17,13 @@ inputs:
     description: 'Route Docker clients on disposable jobs that already use their own Docker daemon'
     required: false
     default: 'false'
+  java-required:
+    description: 'Provision Corretto and configure Gradle for jobs that run Java when dependency caching is enabled'
+    required: false
+    default: 'true'
 runs:
   using: "composite"
   steps:
-    - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
-      with:
-        java-version: 21
-        distribution: "corretto"
-
-    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
-      with:
-        cache-disabled: ${{ inputs.gradle-cache-enabled != 'true' || inputs.dependency-proxy-enabled == 'true' }}
-        cache-read-only: ${{ inputs.gradle-cache-read-only }}
-
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
       with:
         python-version: 3.11
@@ -50,7 +44,28 @@ runs:
       env:
         CI_CACHE_TRUSTED_DOCKER: ${{ inputs.dependency-proxy-docker == 'true' && '1' || '0' }}
       with:
+        catalog-token: ${{ github.token }}
         mode: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && 'record' || 'read' }}
+
+    - name: Fetch the pinned Corretto JDK for this runner
+      id: corretto
+      if: inputs.dependency-proxy-enabled == 'true' && inputs.java-required == 'true'
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: node .github/ci/dependency-cache/corretto.cjs
+
+    - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+      if: inputs.dependency-proxy-enabled != 'true' || inputs.java-required == 'true'
+      with:
+        distribution: ${{ inputs.dependency-proxy-enabled == 'true' && 'jdkfile' || 'corretto' }}
+        java-version: ${{ steps.corretto.outputs.java-version || '21' }}
+        jdkFile: ${{ steps.corretto.outputs.archive }}
+
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      if: inputs.dependency-proxy-enabled != 'true' || inputs.java-required == 'true'
+      with:
+        cache-disabled: ${{ inputs.gradle-cache-enabled != 'true' || inputs.dependency-proxy-enabled == 'true' }}
+        cache-read-only: ${{ inputs.gradle-cache-read-only }}
 
     - name: Install pipenv globally
       run: |

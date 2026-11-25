@@ -34,6 +34,7 @@ const rawOrigins = {
   corretto: ['https://corretto.aws/downloads/', []],
   k3s: ['https://github.com/k3s-io/k3s/releases/download/', githubAssets],
   kind: ['https://github.com/kubernetes-sigs/kind/releases/download/', githubAssets],
+  crane: ['https://github.com/google/go-containerregistry/releases/download/', githubAssets],
   argo: ['https://github.com/argoproj/argo-workflows/releases/download/', githubAssets],
   kubectl: ['https://dl.k8s.io/', ['cdn.dl.k8s.io']],
   helm: ['https://get.helm.sh/', []],

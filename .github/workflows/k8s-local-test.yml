@@ -38,6 +38,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   KIND_VERSION: 'v0.31.0'

@@ -7,7 +7,7 @@ const os = require('node:os');
 const http = require('node:http');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
-const { setupClients, engineAdapter, bridgeRelay, imageReference, containersConfig, buildkitConfig } = require('./client-routing.cjs');
+const { setupClients, engineAdapter, bridgeRelay, imageReference, containersConfig, buildkitConfig, k3sConfig } = require('./client-routing.cjs');
 const exec = promisify(execFile);
 
 async function serve(server, ...args) {
@@ -84,7 +84,8 @@ test('a real Docker CLI talks solely to an isolated Unix-socket fixture and pres
     res.setHeader('content-type','application/json');res.end('[]');
   });
   t.after(await serve(fixture,daemon));
-  const adapter = await engineAdapter(daemon, listener, '127.0.0.1:9876'); t.after(adapter.close);
+  const k3sFile = path.join(dir, 'k3s-registries.yaml');
+  const adapter = await engineAdapter(daemon, listener, '127.0.0.1:9876', k3sFile); t.after(adapter.close);
   const env = {...process.env,DOCKER_HOST:`unix://${listener}`,DOCKER_API_VERSION:'1.44',DOCKER_CONFIG:dir};
   for (const img of ['ghcr.io/repo/image:test','public.ecr.aws/team/repo:cached']) {
     const p = await exec('docker',['pull',img],{env}); assert.match(p.stdout,/pulled/);
@@ -100,6 +101,14 @@ test('a real Docker CLI talks solely to an isolated Unix-socket fixture and pres
   assert.equal(JSON.parse(body).Image,'127.0.0.1:9876/dockerhub/kindest/node@'+hash);
   await get({socketPath:listener,path:'/v1.44/images/'+encodeURIComponent('kindest/node@'+hash)+'/json'});
   assert.match(decodeURIComponent(seen.at(-1)[1].pathname),/127\.0\.0\.1:9876\/dockerhub\/kindest\/node@sha256/);
+  const k3s = {Image:'rancher/k3s:v1.31.6-k3s1',Cmd:['server','--disable=traefik'],HostConfig:{Binds:['/tmp/work:/work:ro']}};
+  const opts = {socketPath:listener,method:'POST',path:'/v1.44/containers/create'};
+  const actual = JSON.parse((await get(opts,JSON.stringify(k3s)))[1]);
+  assert.deepEqual(actual.Cmd, [...k3s.Cmd,'--disable-default-registry-endpoint']);
+  assert.deepEqual(actual.HostConfig.Binds, [...k3s.HostConfig.Binds,`${k3sFile}:/etc/rancher/k3s/registries.yaml:ro`]);
+  assert.deepEqual(JSON.parse((await get(opts, JSON.stringify(actual)))[1]),actual);
+  const mirrors=JSON.parse(k3sConfig('172.17.0.1',12345)).mirrors;
+  assert.deepEqual(mirrors['quay.io'],{endpoint:['http://172.17.0.1:12345'],rewrite:{'^(.*)$':'quay/$1'}});
 });
 
 

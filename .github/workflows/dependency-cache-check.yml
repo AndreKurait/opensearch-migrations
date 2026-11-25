@@ -8,7 +8,7 @@ on:
       - '.github/ci/dependency-cache/**'
       - '.github/actions/dependency-cache/**'
       - '.github/workflows/dependency-cache-*.yml'
-permissions: {contents: read}
+permissions: {contents: read, actions: read}
 jobs:
   protocol:
     if: github.repository == 'AndreKurait/opensearch-migrations' && vars.DEPENDENCY_PROXY_ENABLED == 'true'
@@ -27,6 +27,7 @@ jobs:
           npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-fund --no-audit
       - uses: ./.github/actions/dependency-cache
         with:
+          catalog-token: ${{ github.token }}
           mode: ${{ github.event_name == 'workflow_dispatch' && inputs.record && github.ref == 'refs/heads/main' && 'record' || 'read' }}
       - name: Run real dependency clients inside the offline sandbox
         env:

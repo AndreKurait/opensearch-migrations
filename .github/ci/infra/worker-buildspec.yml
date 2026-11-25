@@ -35,37 +35,64 @@ phases:
             echo "Release $CI_RELEASE_VERSION at $(git -C "$CODEBUILD_SRC_DIR/release" rev-parse HEAD)"
           fi
         fi
+        if [[ "${CI_MODE:-}" != cleanup ]] && ! command -v skopeo >/dev/null; then
+          apt-get update -qq
+          apt-get install -y -qq skopeo
+        fi
+        cat > /tmp/migrations-native-suite.sh <<'WORKER'
+        #!/usr/bin/env bash
+        set -euo pipefail
+        harness="$CODEBUILD_SRC_DIR/harness"
+        tool_dir=$(mktemp -d)
+        trap 'rm -rf "$tool_dir"' EXIT
+        fetch_tool() {
+          local key=$1 origin=$2 checksum=$3 filename=$4
+          local source="$origin"
+          if [[ -n "${CI_DEPENDENCY_PROXY_URL:-}" ]]; then source="${CI_DEPENDENCY_PROXY_URL%/}/$key"; fi
+          curl --fail --silent --show-error --location -o "$filename" "$source"
+          printf '%s  %s\n' "$checksum" "$filename" | sha256sum -c -
+        }
         python3 -m pip install --disable-pip-version-check pipenv==2026.5.0
         if [[ "${CI_MODE:-}" != cleanup ]]; then
-          apt-get update -qq && apt-get install -y -qq skopeo
-          curl --fail --silent --show-error --location -o /tmp/crane.tgz https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz
-          echo '0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0  /tmp/crane.tgz' | sha256sum -c -
-          tar -xzf /tmp/crane.tgz -C /tmp crane
-          install -m 0755 /tmp/crane /usr/local/bin/crane
+          crane_file=go-containerregistry_Linux_x86_64.tar.gz
+          fetch_tool "raw/crane/v0.22.1/$crane_file" \
+            "https://github.com/google/go-containerregistry/releases/download/v0.22.1/$crane_file" \
+            0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0 "$tool_dir/crane.tgz"
+          tar -xzf "$tool_dir/crane.tgz" -C "$tool_dir" crane
+          install -m 0755 "$tool_dir/crane" /usr/local/bin/crane
         fi
-        curl --fail --silent --show-error --location -o /tmp/kubectl https://dl.k8s.io/release/v1.35.0/bin/linux/amd64/kubectl
-        echo "a2e984a18a0c063279d692533031c1eff93a262afcc0afdc517375432d060989  /tmp/kubectl" | sha256sum -c -
-        install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
-        curl --fail --silent --show-error --location -o /tmp/helm.tgz https://get.helm.sh/helm-v3.19.2-linux-amd64.tar.gz
-        echo "2114c9dea2844dce6d0ee2d792a9aae846be8cf53d5b19dc2988b5a0e8fec26e  /tmp/helm.tgz" | sha256sum -c -
-        tar -xzf /tmp/helm.tgz -C /tmp linux-amd64/helm
-        install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+        kubectl_path=release/v1.35.0/bin/linux/amd64/kubectl
+        fetch_tool "raw/kubectl/$kubectl_path" "https://dl.k8s.io/$kubectl_path" \
+          a2e984a18a0c063279d692533031c1eff93a262afcc0afdc517375432d060989 "$tool_dir/kubectl"
+        install -m 0755 "$tool_dir/kubectl" /usr/local/bin/kubectl
+        helm_file=helm-v3.19.2-linux-amd64.tar.gz
+        fetch_tool "raw/helm/$helm_file" "https://get.helm.sh/$helm_file" \
+          2114c9dea2844dce6d0ee2d792a9aae846be8cf53d5b19dc2988b5a0e8fec26e "$tool_dir/helm.tgz"
+        tar -xzf "$tool_dir/helm.tgz" -C "$tool_dir" linux-amd64/helm
+        install -m 0755 "$tool_dir/linux-amd64/helm" /usr/local/bin/helm
+        if [[ -n "${CI_DEPENDENCY_PROXY_URL:-}" && -x "$harness/.github/ci/infra/native-oci.cjs" ]]; then
+          mkdir "$tool_dir/record"
+          for tool in crane helm; do ln -s "$harness/.github/ci/infra/native-oci.cjs" "$tool_dir/record/$tool"; done
+          export PATH="$tool_dir/record:$PATH"
+        fi
         command -v jq && docker buildx version && docker info >/dev/null
+        command="$CI_SUITE"
+        if [[ "${CI_MODE:-}" == cleanup ]]; then command=cleanup; fi
+        python3 -u "$harness/.github/ci/aws/run.py" "$command"
+        WORKER
   build:
     commands:
       - |
         set -euo pipefail
         cd "$CODEBUILD_SRC_DIR/harness"
         if [[ -n "${CI_RELEASE_VERSION:-}" ]]; then cd "$CODEBUILD_SRC_DIR/release"; fi
-        command="$CI_SUITE"
-        if [[ "${CI_MODE:-}" == cleanup ]]; then command=cleanup; fi
-        runner=("$CODEBUILD_SRC_DIR/harness/.github/ci/aws/run.py" "$command")
         recorder="$CODEBUILD_SRC_DIR/harness/.github/ci/dependency-cache/cli.cjs"
         if [[ "${CI_MODE:-}" != cleanup && "${CI_GIT_REF:-}" == refs/heads/main && -f "$recorder" ]]; then
           export CI_DEPENDENCY_RECEIPT="$CODEBUILD_SRC_DIR/ci-results/dependency-requests.json"
-          node "$recorder" record-worker -- python3 -u "${runner[@]}"
+          export CI_CACHE_TRUSTED_DOCKER=1
+          node "$recorder" record-worker -- bash /tmp/migrations-native-suite.sh
         else
-          python3 -u "${runner[@]}"
+          bash /tmp/migrations-native-suite.sh
         fi
 artifacts:
   base-directory: ci-results
