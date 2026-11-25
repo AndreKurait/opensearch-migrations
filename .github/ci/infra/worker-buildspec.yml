@@ -90,7 +90,13 @@ phases:
         if [[ "${CI_MODE:-}" != cleanup && -f "$recorder" ]]; then
           export CI_DEPENDENCY_RECEIPT="$CODEBUILD_SRC_DIR/ci-results/dependency-requests.json"
           export CI_CACHE_TRUSTED_DOCKER=1
-          node "$recorder" native-worker -- bash /tmp/migrations-native-suite.sh
+          if grep -q "args\[0\] === 'native-worker'" "$recorder"; then
+            node "$recorder" native-worker -- bash /tmp/migrations-native-suite.sh
+          elif [[ "$CI_GIT_REF" == refs/heads/main ]]; then
+            node "$recorder" record-worker -- bash /tmp/migrations-native-suite.sh
+          else
+            bash /tmp/migrations-native-suite.sh
+          fi
         else
           bash /tmp/migrations-native-suite.sh
         fi
