@@ -47,11 +47,6 @@ jobs:
       - name: Compile and execute Java with the repository wrapper in Seatbelt
         env: {CI_DEPENDENCY_TEST_SOURCE: '${{ github.workspace }}'}
         run: /usr/bin/python3 "$RUNNER_TEMP/darwin_guard.py" gradle-fixture
-      - name: Show sanitized cache backend diagnostics
-        if: failure() && env.CI_DEPENDENCY_PROXY_SOCKET != ''
-        run: |
-          log="$(dirname "$CI_DEPENDENCY_PROXY_SOCKET")/service.log"
-          grep -E '^Cache archive at [a-zA-Z0-9.-]+ failed \([a-zA-Z0-9_, ]+\)\.$' "$log" || true
       - name: Release the fixture firewall after candidate execution
         if: always()
         run: sudo -n /sbin/pfctl -a com.apple/migrations-egress -F rules

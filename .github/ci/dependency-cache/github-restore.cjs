@@ -7,6 +7,7 @@ const path = require('node:path');
 const {Readable, Transform} = require('node:stream');
 const {pipeline} = require('node:stream/promises');
 const {pathToFileURL} = require('node:url');
+const {onHostedMac, requestGitHub} = require('./darwin-cache-transport.cjs');
 
 const INDEX_BYTES = 32 * 1024 * 1024;
 const MAX_OBJECT_BYTES = 5_000_000_000;
@@ -78,26 +79,52 @@ async function cacheDownload(paths, key, restoreKeys) {
   // v6.3.0 exposes save/restore but no safe download-only API. Use its version calculation and authenticated v2 metadata client, pinned by package-lock.
   const lib = path.join(__dirname, 'node_modules', '@actions', 'cache');
   toolkitInternals ||= Promise.all(
-    ['cacheUtils.js', 'shared/cacheTwirpClient.js', 'config.js'].map(
+    ['cacheUtils.js', 'shared/cacheTwirpClient.js', 'config.js', '../generated/results/api/v1/cache.twirp-client.js'].map(
       (file) => import(pathToFileURL(path.join(lib, 'lib/internal', file)).href),
     ),
   );
-  const [utils, twirp, config] = await toolkitInternals;
+  const [utils, twirp, config, generated] = await toolkitInternals;
   if (!config.isCacheReadable(config.getCacheMode())) return {ok: false};
   if (config.getCacheServiceVersion() !== 'v2') throw new Error('GitHub dependency caches require cache service v2');
   const compression = await utils.getCompressionMethod();
   if (!['zstd', 'zstd-without-long'].includes(compression))
     throw new Error('GitHub dependency caches require zstd');
-  return twirp
-    .internalCacheTwirpClient()
-    .GetCacheEntryDownloadURL({key, restoreKeys, version: utils.getCacheVersion(paths, compression, false)});
+  const serviceURL = new URL(config.getCacheServiceURL());
+  try {
+    let client = twirp.internalCacheTwirpClient();
+    if (onHostedMac()) {
+      client = new generated.CacheServiceClientJSON({
+        async request(service, method, contentType, data) {
+          const endpoint = new URL(`/twirp/${service}/${method}`, serviceURL);
+          const response = await requestGitHub(endpoint, 'metadata', {
+            method: 'POST', headers: {'Content-Type': contentType, Authorization: `Bearer ${utils.getRuntimeToken()}`},
+            body: JSON.stringify(data), signal: AbortSignal.timeout(45_000),
+          });
+          if (!response.ok) throw Object.assign(new Error('Cache metadata HTTP error'), {code:`HTTP_${response.status}`});
+          return response.json();
+        },
+      });
+    }
+    return await client.GetCacheEntryDownloadURL({key, restoreKeys, version: utils.getCacheVersion(paths, compression, false)});
+  } catch (error) {
+    throw safeFailure(serviceURL.hostname, 'metadata', error);
+  }
 }
+
+function safeFailure(host, phase, error) {
+  const codes = [error?.cause?.code, error?.code, error?.name].filter(value => typeof value === 'string' && /^[a-z0-9_]{1,40}$/i.test(value));
+  const reason = `Cache ${phase} at ${host} failed (${codes.join(',') || 'rejected'}).`;
+  console.warn(reason);
+  return new Error(reason);
+}
+
+const downloadArchive = (url, options) => onHostedMac() ? requestGitHub(url, 'archive', options) : fetch(url, options);
 
 async function safeRestore(
   paths,
   primaryKey,
   restoreKeys = [],
-  {lookupOnly = false, maxBytes = INDEX_BYTES, destination, download = cacheDownload, request = fetch} = {},
+  {lookupOnly = false, maxBytes = INDEX_BYTES, destination, download = cacheDownload, request = downloadArchive} = {},
 ) {
   if (paths.length !== 1 || !validMember(paths[0]))
     throw new Error('Expected a single relative cache member');
@@ -113,14 +140,10 @@ async function safeRestore(
   if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Invalid cache archive URL');
   try {
     const data = await request(url, {redirect: 'error', signal: AbortSignal.timeout(15 * 60 * 1000)});
-    if (!data.ok || !data.body) throw new Error(`GitHub cache archive download failed (HTTP ${data.status})`);
+    if (!data.ok || !data.body) throw Object.assign(new Error('Cache archive HTTP error'), {code:`HTTP_${data.status}`});
     await extractOne(Readable.fromWeb(data.body), paths[0], destination || path.resolve(paths[0]), maxBytes);
   } catch (error) {
-    // The hostname and system error code are sufficient to diagnose blocked cache backends without
-    // exporting the signed URL (which grants temporary access), headers, or caller-controlled strings.
-    const values = [error?.cause?.code, error?.code, error?.name].filter(x => typeof x === 'string' && /^[a-z0-9_]+$/i.test(x));
-    console.warn(`Cache archive at ${url.hostname} failed (${values.join(',') || 'archive rejected'}).`);
-    throw error;
+    throw safeFailure(url.hostname, 'archive', error);
   }
   return response.matchedKey;
 }

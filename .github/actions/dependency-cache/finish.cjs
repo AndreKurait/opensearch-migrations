@@ -41,6 +41,11 @@ async function finish() {
       if (await cache.saveCache([receiptPath], key) < 0) throw new Error('Could not save main worker observations');
       console.log(`Saved ${observations.length} main worker observations.`);
     } finally { await fs.rm(receiptPath, {force: true}); }
-  } finally { await fs.rm(dir, {recursive: true, force: true}); }
+  } finally {
+    const log = await fs.readFile(path.join(dir, 'service.log'), 'utf8').catch(() => '');
+    const failures = log.match(/^Cache (?:archive|metadata) at [a-z0-9.-]+ failed \([a-z0-9_, ]{1,120}\)\.$/gim) || [];
+    for (const reason of new Set(failures.slice(-10))) console.warn(reason);
+    await fs.rm(dir, {recursive: true, force: true});
+  }
 }
 finish().catch(error => { console.error(error.message); process.exitCode = 1; });
