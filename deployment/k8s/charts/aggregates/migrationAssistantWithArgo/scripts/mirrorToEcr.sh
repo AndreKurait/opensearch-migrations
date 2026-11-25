@@ -146,6 +146,13 @@ copy_image() {
   echo "  ❌ $image" >&2; return 1
 }
 
+login_to_public_ecr_if_available() {
+  local token
+  if token=$(aws ecr-public get-login-password --region us-east-1 2>/dev/null) && [[ -n "$token" ]]; then
+    printf '%s\n' "$token" | "$@" public.ecr.aws -u AWS --password-stdin 2>/dev/null || true
+  fi
+}
+
 prepare_image_mirror_auth() {
   local ecr_host="$1" region="$2"
 
@@ -156,8 +163,7 @@ prepare_image_mirror_auth() {
   ecr_pass=$(aws ecr get-login-password --region "$region")
   echo "$ecr_pass" | crane auth login "$ecr_host" -u AWS --password-stdin
 
-  aws ecr-public get-login-password --region us-east-1 2>/dev/null | \
-    crane auth login public.ecr.aws -u AWS --password-stdin 2>/dev/null || true
+  login_to_public_ecr_if_available crane auth login
 
   if [[ -n "${ECR_PULL_THROUGH_ENDPOINT:-}" ]]; then
     echo "ECR pull-through cache enabled: $ECR_PULL_THROUGH_ENDPOINT"
@@ -220,8 +226,7 @@ mirror_charts_to_ecr() {
   # (e.g. aws-controllers-k8s/acmpca-chart) don't stall on anonymous
   # rate-limits / credential prompts. Best-effort — anonymous pulls
   # usually work, but authenticated pulls are more reliable.
-  aws ecr-public get-login-password --region us-east-1 2>/dev/null | \
-    helm registry login public.ecr.aws -u AWS --password-stdin 2>/dev/null || true
+  login_to_public_ecr_if_available helm registry login
 
   echo ""
   echo "=== Mirroring Helm charts ==="

@@ -98,6 +98,21 @@ class TestCloudWorker(unittest.TestCase):
             worker.remove_mirrors(worker.stage)
         self.assertEqual([call.args[3] for call in aws.call_args_list[1:]], names[:2])
 
+    def test_released_mirror_skips_all_legacy_empty_token_logins(self):
+        source = self.temp / 'release-bootstrap.sh'
+        repo = Path(__file__).resolve().parents[3]
+        subprocess.run([repo / 'deployment/k8s/aws/assemble-bootstrap.sh', '--output', source],
+                       stdout=subprocess.DEVNULL, check=True)
+        # 3.4.2 embeds these pipelines in the image mirror, chart mirror and release-image loop.
+        with source.open('a') as script:
+            for login, indent in [('crane auth login', 4), ('helm registry login', 4), ('crane auth login', 12)]:
+                script.write('aws ecr-public get-login-password --region us-east-1 2>/dev/null | \\\n'
+                             f'{" " * indent}{login} public.ecr.aws -u AWS --password-stdin 2>/dev/null || true\n')
+        scoped = stage_bootstrap(source, self.temp / 'stage-bootstrap.sh', 'ci-a123')
+        self.assertNotIn('get-login-password --region us-east-1 2>/dev/null |', scoped.read_text())
+        self.assertIn('login_to_public_ecr_if_available helm registry login', scoped.read_text())
+        subprocess.run(['bash', '-n', scoped], check=True)
+
     def test_phase_timeout_kills_background_writer_before_cleanup_can_run(self):
         marker = self.temp / 'late-write'
         with self.assertRaisesRegex(TimeoutError, 'bootstrap'), phase('bootstrap', 0.001):
