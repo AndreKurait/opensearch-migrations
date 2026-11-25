@@ -8,7 +8,6 @@ from datetime import datetime, timedelta, timezone
 from urllib.error import URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-import boto3
 
 FAILED = {'FAILED', 'FAULT', 'STOPPED', 'TIMED_OUT'}
 
@@ -85,6 +84,8 @@ def stop_cancelled_attempts(client, builds, project):
 
 
 def handler(event, context):
+    import boto3
+
     project = os.environ['PROJECT']
     client = boto3.client('codebuild')
     past = list(recent_builds(client, project))

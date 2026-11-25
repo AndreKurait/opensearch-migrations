@@ -156,6 +156,7 @@ jobs:
         with: {persist-credentials: false}
       - run: python3 -m unittest discover -s .github/ci/controller -v
       - run: python3 -m unittest discover -s .github/ci/aws -v
+      - run: python3 -m unittest discover -s .github/ci/infra -v
 
   gradle-repository-tests:
     if: *run_ci

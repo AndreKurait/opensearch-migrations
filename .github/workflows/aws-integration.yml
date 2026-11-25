@@ -13,10 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        type: choice
-        description: Integration suite or group
+        type: string
+        description: Suite, group, or comma-separated selections (see TESTING.md)
         default: all
-        options: [all, eks, cdc, cdc-aoss, cdc-k6, cfn-create, cfn-import, isolated, cdc-tests]
       release:
         type: string
         description: Optional published Migration Assistant release version (default builds from source)

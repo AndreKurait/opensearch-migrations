@@ -32,6 +32,8 @@ def api(path):
 
 
 def select(group):
+    if ',' in group:
+        return tuple(dict.fromkeys(suite for name in group.split(',') for suite in select(name)))
     if group in GROUPS:
         enabled = tuple(suite for suite in GROUPS[group] if suite not in DISABLED_SUITES)
         if enabled:
@@ -63,7 +65,7 @@ def plan(event_name, event, repository, sha, ref, authenticate=api):
     if event_name == 'issue_comment':
         if 'pull_request' not in event['issue']:
             raise ValueError('AWS tests must be requested on a pull request')
-        command = re.fullmatch(rf'/aws-test\s+({SHA})(?:\s+([a-z0-9-]+))?', event['comment']['body'].strip())
+        command = re.fullmatch(rf'/aws-test\s+({SHA})(?:\s+([a-z0-9,-]+))?', event['comment']['body'].strip())
         if not command:
             raise ValueError('Expected /aws-test <full lowercase commit SHA> [suite or group]')
         sha, group = command.groups()

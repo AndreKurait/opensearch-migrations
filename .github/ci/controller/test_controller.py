@@ -98,6 +98,14 @@ class ApprovalTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'paused'):
             self.select()
 
+    def test_select_several_suites_on_one_approval(self):
+        self.event['comment']['body'] = f'/aws-test {SHA} cfn-import,cdc-tests,cdc'
+        result = self.select()
+        self.assertEqual(['cfn-import', 'cdc', 'cdc-aoss', 'cdc-k6'], json.loads(result['matrix']))
+        for selection in ('cdc,unknown', 'cdc,', 'cdc,byos'):
+            with self.subTest(selection=selection), self.assertRaises(ValueError):
+                plan.select(selection)
+
     def test_only_supported_inputs_for_each_suite(self):
         self.assertEqual({'TEST_IDS': '0040,0042'}, parameters(['cdc'], '{"TEST_IDS":"0040,0042"}'))
         for suites, opts in [(['cdc'], {'CI_ROLE_BOUNDARY_ARN': 'other'}), (['eks'], {'TEST_IDS': '42\nX='}),
