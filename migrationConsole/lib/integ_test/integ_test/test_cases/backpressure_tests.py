@@ -75,15 +75,15 @@ class Test0011RfsBackpressure(MATestBase):
                     # Smaller than the 10 MiB default so a contended round trip takes seconds, not tens of seconds,
                     # and the in-flight limit gets many rounds in a few minutes.
                     "documentsSizePerBulkRequest": BULK_BYTES,
-                    # The fixture has one large shard of about 1.7GB. RFS reserves 2.5x this bound.
-                    "maxShardSizeBytes": 2 * 1024**3,
+                    # The 1.7M-document shard occupies about 3.03 GB on disk. RFS reserves 2.5x this bound.
+                    "maxShardSizeBytes": 4 * 1024**3,
                     "failedDocumentStream": {
                         "type": "s3",
                         "bucket": self._deployment_default_s3_bucket(),
                     },
                     "resources": {
-                        "requests": {"cpu": "500m", "memory": "1Gi", "ephemeral-storage": "5Gi"},
-                        "limits": {"cpu": "1000m", "memory": "2Gi", "ephemeral-storage": "5Gi"},
+                        "requests": {"cpu": "500m", "memory": "1Gi", "ephemeral-storage": "10Gi"},
+                        "limits": {"cpu": "1000m", "memory": "2Gi", "ephemeral-storage": "10Gi"},
                     },
                 },
             }]
