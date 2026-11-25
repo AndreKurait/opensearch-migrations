@@ -214,7 +214,7 @@ connect_cluster_to_registry_network() {
   fi
   # On a trusted recorder, route cluster pull and resolve requests through the same public dependency proxy as BuildKit.
   if [[ -n "${CI_DEPENDENCY_REGISTRY_ENDPOINT:-}" ]]; then
-    local routing_script="${MIGRATIONS_REPO_ROOT_DIR}/.github/scripts/registry-cache.sh"
+    local routing_script="${CI_DEPENDENCY_REGISTRY_HELPER:-${MIGRATIONS_REPO_ROOT_DIR}/.github/scripts/registry-cache.sh}"
     "${routing_script}" configure-dependency-nodes "$@"
   fi
   local registry_dir="/etc/containerd/certs.d/${EXTERNAL_REGISTRY_NAME}:${EXTERNAL_REGISTRY_PORT}"

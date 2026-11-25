@@ -4,6 +4,9 @@ inputs:
   mode:
     required: true
     description: read, record, or launch the private main publisher
+  catalog-token:
+    required: false
+    description: Optional actions-read token for public default-branch cache metadata
 runs:
   using: node24
   main: start.cjs

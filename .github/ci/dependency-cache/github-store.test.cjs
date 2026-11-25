@@ -6,7 +6,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { createStore, selectRecent } = require('./github-store.cjs');
+const { createStore, selectRecent, discoverPublicIndex } = require('./github-store.cjs');
 
 const digest = data => createHash('sha256').update(data).digest('hex');
 const make = (key, data, accessed) => ({ key, digest: digest(data), size: Buffer.byteLength(data), type: 'application/octet-stream', accessed });
@@ -133,4 +133,25 @@ test('publication fails closed, can resume, and a retried generation cannot desc
   let materialized = false;
   await store.publish({ entries: [entry], generation, materialize: async (...args) => { materialized = true; await correct(...args); } });
   assert.equal(materialized, true);
+});
+
+
+test('reader pins a default-branch generation and rejects a PR-shadowed index', async t => {
+  const { store, backend } = await fixture(t);
+  await store.publish({ entries: [], generation, materialize: async () => {} });
+  const key = [...backend.keys()][0];
+  const shadow = key.replace(/-[a-f0-9]{64}$/, '-' + 'a'.repeat(64));
+  const selected = await discoverPublicIndex({ repository:'public/repo', branch:'refs/heads/main', request:async (url, options) => {
+    assert.equal(url.hostname,'api.github.com');
+    assert.equal(url.searchParams.get('ref'),'refs/heads/main');
+    assert.equal(options.headers.Authorization,undefined);
+    return {ok:true,json:async()=>({actions_caches:[{ref:'refs/pull/4/merge',key:shadow},{ref:'refs/heads/main',key}]})};
+  }});
+  assert.equal(selected,key);
+  const real = backend.get(key);
+  backend.set(key,{...real,data:Buffer.from(real.data.toString().replace('"entries":[]','"entries":[{}]'))});
+  await assert.rejects(store.openReader({indexKey:selected}), /Invalid dependency cache index/);
+  backend.delete(key);
+  backend.set(shadow,real);
+  await assert.rejects(store.openReader({indexKey:selected}), {code:'CACHE_MISS'});
 });

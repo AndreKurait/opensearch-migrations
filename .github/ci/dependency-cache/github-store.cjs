@@ -1,6 +1,8 @@
 'use strict';
 
 const { createHash } = require('node:crypto');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const { createReadStream, createWriteStream, promises: fs } = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -183,20 +185,41 @@ async function stageDirectory() {
   return fs.mkdtemp(path.join(os.tmpdir(), 'migrations-public-deps-'));
 }
 
+const validIndexKey = key => typeof key === 'string' && key.startsWith(INDEX) && /^[0-9]{1,40}-[a-f0-9]{64}$/.test(key.slice(INDEX.length));
+
+async function discoverPublicIndex({ repository, branch, token, request = fetch }) {
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) || typeof branch !== 'string' || !branch.startsWith('refs/heads/')) {
+    throw new Error('Expected a base-branch ref and public GitHub repository for cache discovery');
+  }
+  const url = new URL(`https://api.github.com/repos/${repository}/actions/caches`);
+  url.search = new URLSearchParams({ref: branch, key: INDEX, per_page:'100', sort:'created_at', direction:'desc'}).toString();
+  const headers = {Accept:'application/vnd.github+json', 'User-Agent':'migration-assistant-dependency-cache'};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await request(url, {headers, redirect:'error', signal:AbortSignal.timeout(15000)});
+  if (!response.ok) throw new Error(`Cannot discover ${branch} dependency index from GitHub cache metadata (HTTP ${response.status})`);
+  const records = (await response.json()).actions_caches;
+  if (!Array.isArray(records)) throw new Error('GitHub cache metadata did not return cache entries');
+  const index = records.find(row => row.ref === branch && validIndexKey(row.key));
+  if (!index) throw missingCache(`No digest-bound dependency index published on ${branch}; run the trusted cache publisher`);
+  return index.key;
+}
+
 function createStore(toolkit, options = {}) {
   const store = toolkitStore(toolkit, options);
   async function publish({ entries, materialize, generation, maxBytes = DEFAULT_BYTES }) {
     if (typeof generation !== 'string' || !/^[0-9]{1,40}$/.test(generation)) throw new Error('Invalid cache generation');
     const chosen = selectRecent(entries, maxBytes);
     const { blobs } = layout(chosen);
-    const indexKey = INDEX + generation;
     const index = JSON.stringify({ version: 1, generation, entries: chosen });
+    const indexDigest = hash(index);
+    const indexKey = `${INDEX}${generation}-${indexDigest}`;
     const temp = await stageDirectory();
     try {
       await fs.rm(INDEX_PATH, { force: true });
       // A published generation is immutable. A retry must agree on its contents.
-      if (await store.restore(INDEX_PATH, indexKey) === indexKey) {
-        if (await fs.readFile(INDEX_PATH, 'utf8') !== index) throw new Error(`Generation ${generation} already has a different index`);
+      const previous = await store.restore(INDEX_PATH, indexKey, [`${INDEX}${generation}-`]);
+      if (previous && (previous !== indexKey || await fs.readFile(INDEX_PATH, 'utf8') !== index)) {
+        throw new Error(`Generation ${generation} already has a different index`);
       }
       let next = 0;
       let failure;
@@ -225,15 +248,17 @@ function createStore(toolkit, options = {}) {
     }
   }
 
-  async function openReader() {
+  async function openReader({ indexKey } = {}) {
     const temp = await stageDirectory();
     let index;
     try {
       await fs.rm(INDEX_PATH, { force: true });
-      const key = await store.restore(INDEX_PATH, `${INDEX}latest`, [INDEX]);
-      if (!key?.startsWith(INDEX)) throw missingCache('No published dependency index accessible to this pull request; run the trusted cache publisher');
-      index = JSON.parse(await fs.readFile(INDEX_PATH, 'utf8'));
-      if (index.version !== 1 || key !== INDEX + index.generation || !Array.isArray(index.entries)) {
+      if (indexKey && !validIndexKey(indexKey)) throw new Error('Invalid base branch dependency index key');
+      const key = await store.restore(INDEX_PATH, indexKey || `${INDEX}latest`, indexKey ? [] : [INDEX]);
+      if (!validIndexKey(key) || (indexKey && key !== indexKey)) throw missingCache('No verified dependency index accessible to this pull request; run the trusted cache publisher');
+      const data = await fs.readFile(INDEX_PATH, 'utf8');
+      index = JSON.parse(data);
+      if (index.version !== 1 || key !== `${INDEX}${index.generation}-${hash(data)}` || !Array.isArray(index.entries)) {
         throw new Error(`Invalid dependency cache index ${key}`);
       }
       index.entries = index.entries.map(prepareEntry);
@@ -300,13 +325,30 @@ function createStore(toolkit, options = {}) {
   return { publish, openReader };
 }
 
+let toolkitPromise;
+async function loadToolkit() {
+  // The toolkit includes the compressor in its cache version. Force both Linux runners to
+  // use zstd so a publisher falling back to gzip cannot apparently succeed with an unreadable index.
+  toolkitPromise ||= (async () => {
+    try { await promisify(execFile)('zstd', ['--quiet', '--version']); }
+    catch (error) { throw new Error('Install zstd on the dependency cache publisher and reader', { cause: error }); }
+    return import('@actions/cache');
+  })();
+  return toolkitPromise;
+}
 let defaultStore;
 async function storeForRunner() {
-  defaultStore ||= import('@actions/cache').then(createStore);
+  defaultStore ||= loadToolkit().then(createStore);
   return defaultStore;
 }
 module.exports = {
-  createStore, selectRecent,
+  createStore, selectRecent, loadToolkit, discoverPublicIndex,
   publish: async options => (await storeForRunner()).publish(options),
-  openReader: async () => (await storeForRunner()).openReader(),
+  openReader: async ({ indexKey } = {}) => {
+    if (!indexKey && process.env.GITHUB_ACTIONS === 'true') {
+      indexKey = await discoverPublicIndex({ repository:process.env.GITHUB_REPOSITORY,
+        branch:`refs/heads/${process.env.CI_DEPENDENCY_BASE_BRANCH || 'main'}`, token:process.env.INPUT_CATALOG_TOKEN });
+    }
+    return (await storeForRunner()).openReader({indexKey});
+  },
 };

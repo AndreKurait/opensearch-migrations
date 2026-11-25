@@ -34,6 +34,7 @@ const rawOrigins = {
   corretto: ['https://corretto.aws/downloads/', []],
   k3s: ['https://github.com/k3s-io/k3s/releases/download/', githubAssets],
   kind: ['https://github.com/kubernetes-sigs/kind/releases/download/', githubAssets],
+  argo: ['https://github.com/argoproj/argo-workflows/releases/download/', githubAssets],
   kubectl: ['https://dl.k8s.io/', ['cdn.dl.k8s.io']],
   helm: ['https://get.helm.sh/', []],
   gradle: ['https://services.gradle.org/distributions/', ['downloads.gradle.org', 'github.com', ...githubAssets]],
@@ -290,8 +291,9 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve}) {
           if (size > 32 * 1024 * 1024) throw new Error('Invalid npm index size');
           const metadata = JSON.parse(await readFile(file, 'utf8'));
           // The offline sandbox has a separate loopback port and forwards that authority through its Unix socket.
-          const destination = /^(?:127\.0\.0\.1|localhost|\[::1\]):\d{1,5}$/.test(req.headers.host) ?
-            req.headers.host : `${host.includes(':') ? `[${host}]` : host}:${server.address().port}`;
+          const authority = /^(?:127\.0\.0\.1|localhost|\[::1\]):([1-9]\d{0,4})$/.exec(req.headers.host);
+          const destination = authority && Number(authority[1]) <= 65535 ? req.headers.host :
+            `${host.includes(':') ? `[${host}]` : host}:${server.address().port}`;
           for (const version of Object.values(metadata.versions || {})) {
             if (version.dist?.tarball) {
               const tarball = version.dist.tarball;

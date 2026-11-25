@@ -174,7 +174,8 @@ test('npm and Python metadata route package bytes locally and reject off-origin 
   t.after(replay.close);
   assert.equal(JSON.parse((await get(replay.url, '/npm/@org/item')).body).versions['1.0.0'].dist.tarball,
     replay.url + '/npm/@org/item/-/item-1.0.0.tgz');
-  for (const [authority, expected] of [['127.0.0.1:42801', 'http://127.0.0.1:42801'], ['unrelated.invalid', replay.url]]) {
+  for (const [authority, expected] of [['127.0.0.1:42801', 'http://127.0.0.1:42801'],
+    ['127.0.0.1:99999', replay.url], ['unrelated.invalid', replay.url]]) {
     const response = await get(replay.url, '/npm/@org/item', 'GET', {host: authority});
     assert.equal(JSON.parse(response.body).versions['1.0.0'].dist.tarball, expected + '/npm/@org/item/-/item-1.0.0.tgz');
   }

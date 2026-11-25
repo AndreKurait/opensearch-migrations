@@ -26,7 +26,7 @@ async function finish() {
     const text = await fs.readFile(path.join(dir, 'receipt.json'));
     const observations = readReceipt(text);
     if (!observations.length) return;
-    const cache = await import(require.resolve('@actions/cache', {paths: [path.resolve(__dirname, '../../ci/dependency-cache')]}));
+    const cache = await require('../../ci/dependency-cache/github-store.cjs').loadToolkit();
     const key = `migrations-main-requests-v1-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-${randomUUID()}`;
     await fs.mkdir(path.dirname(receiptPath), {recursive: true});
     await fs.writeFile(receiptPath, text, {mode: 0o600});

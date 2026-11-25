@@ -9,7 +9,9 @@ CLUSTER_NAME="${WORKFLOW_TEST_KIND_CLUSTER_NAME:-console-link-test}"
 EXPECTED_CONTEXT="${WORKFLOW_TEST_KUBE_CONTEXT:-kind-${CLUSTER_NAME}}"
 ARGO_VERSION="${WORKFLOW_TEST_ARGO_VERSION:-v3.7.3}"
 ARGO_NAMESPACE="${WORKFLOW_TEST_ARGO_NAMESPACE:-argo}"
-ARGO_MANIFEST_URL="https://github.com/argoproj/argo-workflows/releases/download/${ARGO_VERSION}/quick-start-minimal.yaml"
+argo_releases="https://github.com/argoproj/argo-workflows/releases/download"
+if [[ -n "${CI_DEPENDENCY_PROXY_URL:-}" ]]; then argo_releases="${CI_DEPENDENCY_PROXY_URL%/}/raw/argo"; fi
+ARGO_MANIFEST_URL="${argo_releases}/${ARGO_VERSION}/quick-start-minimal.yaml"
 
 # Argo's quick-start manifest bundles MinIO as the S3 artifact store. MinIO revoked
 # anonymous image pulls (quay.io/Docker Hub now return HTTP 401), so that Deployment

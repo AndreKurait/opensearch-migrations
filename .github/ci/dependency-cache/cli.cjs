@@ -78,7 +78,7 @@ async function nativeReceipt(buildId) {
 
 async function githubReceipt(key) {
   if (!receiptPattern.test(key)) throw new Error('Invalid main worker receipt key');
-  const cache = await import('@actions/cache');
+  const cache = await require('./github-store.cjs').loadToolkit();
   try {
     await fs.rm(receiptPath, {force: true});
     if (await cache.restoreCache([receiptPath], key, []) !== key) throw new Error('Main worker receipt has expired');

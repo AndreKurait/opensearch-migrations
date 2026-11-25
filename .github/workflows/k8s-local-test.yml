@@ -128,6 +128,7 @@ jobs:
         run: |
           set -eu
           kubectl config unset current-context || true
+          export CI_DEPENDENCY_REGISTRY_HELPER="$RUNNER_TEMP/local-integ-scripts/registry-cache.sh"
           . "$RUNNER_TEMP/local-integ-scripts/dockerHostedBuildkit.sh"
           KUBE_CONTEXT="kind-${KIND_CLUSTER_NAME}" setup_build_backend
           kind_nodes=()
