@@ -168,7 +168,7 @@ def local_ipc():
         if existing.returncode != 1:
             raise RuntimeError('Expected an unused non-administrative UID for the worker')
         rules = (f'pass out quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{ports[-1]} no state\n'
-                 f'block drop in quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{ports[-1]} '
+                 f'block return-rst in quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{ports[-1]} '
                  f'user != {GUEST_UID}\n')
         command(['/usr/bin/sudo', '-n', PF, '-a', anchor, '-f', '-'], input=rules)
         yield ports
@@ -283,9 +283,9 @@ def build(ipc, command_line=None):
             env['CI_GRADLE_BUILD_CACHE_URL'] = f'{proxy.geturl().rstrip("/")}/gradle-build-cache/'
             env['CI_GRADLE_BUILD_CACHE_PUSH'] = 'false'
         prefix += [json.dumps(env), str(profile)]
-        command(prefix + ['/usr/bin/nc', '-z', '-w', '3', '127.0.0.1', str(proxy.port)], env=env, cwd=work)
+        command(prefix + ['/usr/bin/nc', '-z', '-G', '3', '127.0.0.1', str(proxy.port)], env=env, cwd=work)
         for target in ('1.1.1.1', '2606:4700:4700::1111'):
-            result = subprocess.run(prefix + ['/usr/bin/nc', '-z', '-w', '2', target, '443'], env=env, cwd=work)
+            result = subprocess.run(prefix + ['/usr/bin/nc', '-z', '-G', '2', target, '443'], env=env, cwd=work)
             if result.returncode == 0:
                 raise RuntimeError('Seatbelt allowed direct external traffic')
         # Match Gradle's client/daemon JVM arguments so --no-daemon can execute entirely inside one JVM.
@@ -360,7 +360,7 @@ def fixture(ipc):
         with socket.socket() as host_after:
             host_after.bind(('127.0.0.1', ipc[0]))
             host_after.listen()
-            if execute(['/usr/bin/nc', '-z', '-w', '2', '127.0.0.1', str(ipc[0])]).returncode == 0:
+            if execute(['/usr/bin/nc', '-z', '-G', '2', '127.0.0.1', str(ipc[0])]).returncode == 0:
                 raise RuntimeError('Candidate connected to a later host-owned listener inside its IPC range')
         response = execute(['/usr/bin/curl', '-fsS', '--max-time', '5', f'http://127.0.0.1:{port}/fixture'])
         if response.returncode or response.stdout != 'local broker':
@@ -403,8 +403,8 @@ int main(int argc, char **argv) {
                 pass
         github = next(iter(addresses('api.github.com')))
         for argv in [
-            ['/usr/bin/nc', '-z', '-w', '2', github, '443'],
-            ['/usr/bin/nc', '-z', '-w', '2', '127.0.0.1', str(private_tcp.getsockname()[1])],
+            ['/usr/bin/nc', '-z', '-G', '2', github, '443'],
+            ['/usr/bin/nc', '-z', '-G', '2', '127.0.0.1', str(private_tcp.getsockname()[1])],
             ['/bin/cat', private.name],
             ['/usr/bin/sudo', '-n', 'true'],
         ]:
