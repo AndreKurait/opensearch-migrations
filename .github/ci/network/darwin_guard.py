@@ -168,7 +168,8 @@ def seatbelt(temp, java, port):
     )
 
 
-def build():
+def build(command_line=None):
+    command_line = command_line or ['build']
     if sys.platform != 'darwin' or not shutil.which('sandbox-exec'):
         raise RuntimeError('Hosted macOS Seatbelt is required')
     proxy = urllib.parse.urlsplit(os.environ['CI_DEPENDENCY_PROXY_URL'])
@@ -217,11 +218,13 @@ def build():
             if result.returncode == 0:
                 raise RuntimeError('Seatbelt allowed direct external traffic')
         # Match Gradle's client/daemon JVM arguments so --no-daemon can execute entirely inside one JVM.
-        command(
-            prefix + [str(work / 'gradlew'), '--no-daemon', '-Dorg.gradle.jvmargs=', 'build'],
-            env=env,
-            cwd=work,
-        )
+        command(prefix + [str(work / 'gradlew'), '--no-daemon', '-Dorg.gradle.jvmargs=', *command_line],
+                env=env, cwd=work)
+        if command_line != ['build']:
+            result = work / '.github/ci/network/gradle-fixture/build/classes/java/main/network/Probe.class'
+            if not result.is_file() or result.read_bytes()[:4] != bytes.fromhex('cafebabe'):
+                raise RuntimeError('Expected a compiled Java class from the clean Seatbelt build')
+            print('Compiled a Java class using the repository wrapper, Corretto and brokered JUnit dependencies.')
 
 
 def fixture():
@@ -278,4 +281,7 @@ def fixture():
 
 
 if __name__ == '__main__':
-    {'install': install, 'build': build, 'fixture': fixture}[sys.argv[1]]()
+    if sys.argv[1:] == ['gradle-fixture']:
+        build(['--project-dir', '.github/ci/network/gradle-fixture', 'build', '--info', '--stacktrace'])
+    else:
+        {'install': install, 'build': build, 'fixture': fixture}[sys.argv[1]]()

@@ -1,0 +1,11 @@
+plugins { id 'application' }
+
+repositories {
+    maven {
+        url = uri(System.getenv('MAVEN_REPOSITORY_URL'))
+        allowInsecureProtocol = true
+    }
+}
+dependencies { implementation 'junit:junit:4.13.2' }
+application { mainClass = 'network.Probe' }
+tasks.named('check') { dependsOn tasks.named('run') }

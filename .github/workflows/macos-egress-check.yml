@@ -1,11 +1,11 @@
 name: Verify macOS workflow network policy
 on: [workflow_dispatch]
-permissions: {contents: read}
+permissions: {contents: read, actions: read}
 jobs:
   seatbelt:
     if: github.ref == 'refs/heads/main'
     runs-on: macos-15
-    timeout-minutes: 6
+    timeout-minutes: 15
     steps:
       # BEGIN generated network guard
       - name: Enforce macOS network policy before candidate checkout
@@ -14,17 +14,36 @@ jobs:
         env:
           POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
           GITHUB_META_TOKEN: ${{ github.token }}
-          PUBLIC_ENDPOINTS: api.github.com:443 github.com:443 raw.githubusercontent.com:443
+          PUBLIC_ENDPOINTS: api.github.com:443 github.com:443 raw.githubusercontent.com:443 objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443 repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
         run: |
           set -euo pipefail
           guard="$RUNNER_TEMP/darwin_guard.py"
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/darwin_guard.py" -o "$guard"
-          expected=aa85f8f8b2227aa686f4eee3c548bf79543aa95a21abbc17b172542d308cbbba
+          expected=e42c7cb1b7193c6aeaca91d5041dd059fe02dc7cd7bdd699b26d88d99798ae07
           test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
           /usr/bin/python3 "$guard" install
       # END generated network guard
       - name: Verify candidate network, filesystem, and process boundaries
         run: /usr/bin/python3 "$RUNNER_TEMP/darwin_guard.py" fixture
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.workflow_sha }}', persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22.x'}
+      - name: Install trusted dependency broker client
+        run: npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund
+      - uses: ./.github/actions/dependency-cache
+        with: {mode: record, catalog-token: '${{ github.token }}'}
+      - name: Fetch and verify the pinned macOS Corretto JDK through the broker
+        id: corretto
+        run: node .github/ci/dependency-cache/corretto.cjs
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
+        with:
+          distribution: jdkfile
+          java-version: ${{ steps.corretto.outputs.java-version }}
+          jdkFile: ${{ steps.corretto.outputs.archive }}
+      - name: Compile and execute Java with the repository wrapper in Seatbelt
+        env: {CI_DEPENDENCY_TEST_SOURCE: '${{ github.workspace }}'}
+        run: /usr/bin/python3 "$RUNNER_TEMP/darwin_guard.py" gradle-fixture
       - name: Release the fixture firewall after candidate execution
         if: always()
         run: sudo -n /sbin/pfctl -a com.apple/migrations-egress -F rules
