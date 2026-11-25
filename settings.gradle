@@ -18,6 +18,8 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0'
 }
 
+apply from: new File(settingsDir, 'gradle/remote-cache.gradle')
+
 void addSubProjects(String path, File dir) {
     if (!dir.isDirectory()) {
         return

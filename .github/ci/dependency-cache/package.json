@@ -2,6 +2,12 @@
   "name": "migration-assistant-dependency-cache",
   "version": "1.0.0",
   "private": true,
-  "engines": { "node": ">=22" },
-  "dependencies": { "@actions/cache": "6.3.0" }
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@actions/cache": "6.3.0",
+    "@smithy/core": "3.41.1",
+    "@smithy/signature-v4": "5.7.5"
+  }
 }

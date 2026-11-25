@@ -43,6 +43,7 @@ runs:
       uses: ./.github/actions/dependency-cache
       env:
         CI_CACHE_TRUSTED_DOCKER: ${{ inputs.dependency-proxy-docker == 'true' && '1' || '0' }}
+        CI_GRADLE_REMOTE_CACHE: ${{ inputs.java-required == 'true' && 'true' || 'false' }}
       with:
         catalog-token: ${{ github.token }}
         mode: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && 'record' || 'read' }}

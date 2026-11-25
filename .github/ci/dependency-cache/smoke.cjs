@@ -65,8 +65,10 @@ async function smoke() {
     const javaHome = process.platform === 'darwin' ? path.join(jdk, 'Contents', 'Home') : jdk;
     const javaEnv = {...process.env, JAVA_HOME: javaHome, PATH: path.join(javaHome, 'bin') + path.delimiter + process.env.PATH};
     await run(path.join(javaHome, 'bin', 'java'), ['-version'], {cwd: dir, env: javaEnv});
-    await writeFile(path.join(dir, 'settings.gradle'), "rootProject.name = 'cache-protocol-smoke'\n");
+    const cacheScript = JSON.stringify(path.join(repository, 'gradle/remote-cache.gradle'));
+    await writeFile(path.join(dir, 'settings.gradle'), `rootProject.name = 'cache-protocol-smoke'\napply from: ${cacheScript}\n`);
     await writeFile(path.join(dir, 'build.gradle'), `
+plugins { id 'java' }
 repositories {
     maven {
         url = uri(System.getenv('MAVEN_REPOSITORY_URL'))
@@ -83,8 +85,16 @@ tasks.register('checkArtifacts') {
     }
 }
 `);
-    await run(await installedGradle(), ['--no-daemon', '--gradle-user-home', path.join(dir, '.gradle-user'),
-      '--project-dir', dir, 'checkArtifacts'], {cwd: dir, env: javaEnv});
+    const sourceDir = path.join(dir, 'src/main/java');
+    await mkdir(sourceDir, {recursive:true});
+    await writeFile(path.join(sourceDir, 'PublicCacheCheck.java'), 'public class PublicCacheCheck { public static int value() { return 42; } }\n');
+    const requireCacheHit = process.env.CI_GRADLE_BUILD_CACHE_PUSH === 'false';
+    // A cold compile must fail this check in read mode. Both jobs use fresh Gradle homes and clean outputs.
+    if (requireCacheHit) await writeFile(path.join(dir,'require-hit.init.gradle'),
+      `gradle.taskGraph.afterTask { task, state -> if (task.path == ':compileJava' && state.skipMessage != 'FROM-CACHE') throw new GradleException("Expected remote FROM-CACHE for compileJava") }\n`);
+    const cacheCheck = requireCacheHit ? ['--init-script', path.join(dir,'require-hit.init.gradle')] : [];
+    await run(await installedGradle(), ['--no-daemon','--build-cache', ...cacheCheck, '--gradle-user-home', path.join(dir, '.gradle-user'),
+      '--project-dir', dir, 'checkArtifacts','compileJava'], {cwd: dir, env: javaEnv});
 
     // Fresh client caches and independently pinned file checksums exercise metadata and package downloads.
     const env = {...process.env, npm_config_registry: new URL('/npm/', proxy).href, npm_config_audit: 'false',

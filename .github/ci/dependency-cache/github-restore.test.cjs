@@ -1,0 +1,83 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const {execFile} = require('node:child_process');
+const {createReadStream} = require('node:fs');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const {promisify} = require('node:util');
+const test = require('node:test');
+const {extractOne, safeRestore} = require('./github-restore.cjs');
+const run = promisify(execFile);
+const signed = 'https://cache.example.invalid/download';
+
+async function fixture(t) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'checked-cache-archive-'));
+  t.after(() => fs.rm(dir, {recursive: true, force: true}));
+  const member = `.migrations-public-dependency-cache-v1/blobs/object-${'a'.repeat(64)}`;
+  await fs.mkdir(path.dirname(path.join(dir, member)), {recursive: true});
+  await fs.writeFile(path.join(dir, member), 'ordinary public cache bytes');
+  await fs.writeFile(path.join(dir, 'extra'), 'second regular file');
+  async function archive(names, output) {
+    await run('tar', ['--posix', '-C', dir, '--use-compress-program=zstd -q', '-cf', output, ...names]);
+  }
+  const source = path.join(dir, 'fixture.tar.zst');
+  await archive([member], source);
+  return {dir, member, archive, source};
+}
+
+test('stream valid GNU POSIX/zstd archives with a PAX filename into a new private file', async (t) => {
+  const {dir, member, source} = await fixture(t);
+  const dest = path.join(dir, 'public.bin');
+  const dump = await fs.readFile(source);
+  const key = 'exact-public-key';
+  let options;
+  const matched = await safeRestore([member], key, [], {
+    destination: dest,
+    maxBytes: 27,
+    download: async () => ({ok: true, matchedKey: key, signedDownloadUrl: signed}),
+    request: async (url, opts) => {
+      assert.equal(url.toString(), signed);
+      options = opts;
+      return new Response(dump);
+    },
+  });
+  assert.equal(matched, key);
+  assert.equal(options.redirect, 'error');
+  assert.equal(await fs.readFile(dest, 'utf8'), 'ordinary public cache bytes');
+  assert.equal((await fs.stat(dest)).mode & 0o777, 0o600);
+});
+
+test('reject extra members, unexpected names, links, and oversized regular files before exposing any destination', async (t) => {
+  const {dir, member, archive, source} = await fixture(t);
+  const dest = path.join(dir, 'output');
+  await assert.rejects(extractOne(createReadStream(source), member, dest, 4));
+  await assert.rejects(extractOne(createReadStream(source), 'different', dest, 100));
+  for (const names of [
+    [member, 'extra'],
+    ['extra', member],
+    [member, member],
+  ]) {
+    await archive(names, source);
+    await assert.rejects(extractOne(createReadStream(source), member, dest, 100));
+  }
+  await fs.symlink('extra', path.join(dir, 'link'));
+  await archive(['link'], source);
+  await assert.rejects(extractOne(createReadStream(source), 'link', dest, 100));
+  await assert.rejects(fs.stat(dest), {code: 'ENOENT'});
+});
+
+test('existing destination is never overwritten and mismatch/lookup-only never downloads', async (t) => {
+  const {dir, member, source} = await fixture(t);
+  const dest = path.join(dir, 'keep');
+  await fs.writeFile(dest, 'keep');
+  await assert.rejects(extractOne(createReadStream(source), member, dest, 100), {code: 'EEXIST'});
+  assert.equal(await fs.readFile(dest, 'utf8'), 'keep');
+  const lookup = {
+    download: async () => ({ok: true, matchedKey: 'other', signedDownloadUrl: signed}),
+    request: () => assert.fail('Should not fetch'),
+  };
+  assert.equal(await safeRestore([member], 'wanted', [], lookup), undefined);
+  assert.equal(await safeRestore([member], 'other', [], {...lookup, lookupOnly: true}), 'other');
+});

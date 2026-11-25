@@ -111,3 +111,24 @@ test('main observations preserve access times, reuse verified mappings and rejec
   assert.equal((await stale.close()).length, 0);
   assert.equal((await openPublisher({storage, proxy: fetch})).entries[0].accessed, 200);
 });
+
+
+test('later main runs reuse digest-addressed OCI blobs and refresh tag-addressed manifests', async () => {
+  const {storage} = fixture();
+  const data = 'public registry manifest';
+  const digest = createHash('sha256').update(data).digest('hex');
+  const pinned = '/v2/dockerhub/library/hello-world/manifests/sha256:' + digest;
+  const tag = '/v2/dockerhub/library/hello-world/manifests/latest';
+  const first = await openRecorder({storage, proxy: origin(data)});
+  await Promise.all([first.resolve(pinned), first.resolve(tag)]);
+  await first.close();
+  const changed = origin('new public registry manifest');
+  const second = await openRecorder({storage, proxy: changed});
+  const cached = await second.resolve(pinned);
+  assert.equal(await fs.readFile(cached.path, 'utf8'), data);
+  assert.equal(changed.hits, 0);
+  const current = await second.resolve(tag);
+  assert.equal(await fs.readFile(current.path, 'utf8'), 'new public registry manifest');
+  assert.equal(changed.hits, 1);
+  await second.close();
+});

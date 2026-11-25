@@ -13,11 +13,34 @@ jobs:
     if: >-
       github.repository == 'AndreKurait/opensearch-migrations' && vars.DEPENDENCY_PROXY_ENABLED == 'true' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event.workflow_run.event)
+      contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event.workflow_run.event) &&
+      (vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event.workflow_run.event == 'workflow_dispatch') &&
+      github.event.workflow_run.conclusion != 'skipped'
     runs-on: ubuntu-24.04
     timeout-minutes: 355
     permissions: {actions: write, contents: read}
     steps:
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443
+      - name: Verify outbound blocking before checkout
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import socket, sys
+          for family, target in [(socket.AF_INET, ("1.1.1.1", 443)), (socket.AF_INET6, ("2606:4700:4700::1111", 443, 0, 0))]:
+              with socket.socket(family) as sock:
+                  sock.settimeout(3)
+                  try: sock.connect(target)
+                  except OSError: continue
+                  sys.exit("Runner egress guard allowed a direct external connection")
+          PY
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {ref: '${{ github.workflow_sha }}', persist-credentials: false}
       - name: Publish newly completed main workers

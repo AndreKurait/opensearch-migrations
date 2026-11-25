@@ -33,14 +33,17 @@ async function run() {
   await rejectEgress();
   const broker = '/run/dependency-cache/cache.sock';
   const proxy = http.createServer((req,res) => {
-    if (!['GET','HEAD'].includes(req.method) || !req.url.startsWith('/') || req.url.startsWith('//')) { res.writeHead(400).end(); return; }
+    const outputWrite = req.method === 'PUT' && /^\/gradle-build-cache\/[0-9a-f]{32,64}$/.test(req.url);
+    if ((!['GET','HEAD'].includes(req.method) && !outputWrite) || !req.url.startsWith('/') || req.url.startsWith('//')) { res.writeHead(400).end(); return; }
     // Registry metadata must point at this guest's loopback port, never the host broker port.
     const headers = { host: `127.0.0.1:${proxy.address().port}` };
     for (const h of ['accept','range','if-range','if-none-match']) if (req.headers[h]) headers[h] = req.headers[h];
     const peer = http.request({socketPath:broker,path:req.url,method:req.method,headers}, async p => {
       try { res.writeHead(p.statusCode,p.headers); await pipeline(p,res); } catch { res.destroy(); }
     });
-    peer.on('error', () => res.writeHead(502).end()); req.on('aborted', () => peer.destroy()); peer.end();
+    peer.on('error', () => { if (res.headersSent) res.destroy(); else res.writeHead(502).end(); });
+    req.on('aborted', () => peer.destroy());
+    if (outputWrite) req.pipe(peer); else peer.end();
   });
   await new Promise((resolve,reject) => { proxy.once('error',reject); proxy.listen(0,'127.0.0.1',resolve); });
   const url = `http://127.0.0.1:${proxy.address().port}`;
@@ -51,6 +54,7 @@ async function run() {
       npm_config_registry:url+'/npm/', npm_config_audit:'false', npm_config_update_notifier:'false', PIP_INDEX_URL:url+'/pypi/simple/',
       PIP_EXTRA_INDEX_URL:'',PIPENV_PYPI_MIRROR:url+'/pypi/simple/',PIP_DISABLE_PIP_VERSION_CHECK:'1',SKOPEO_BIN:'/tools/bin/skopeo'};
     const nativeBin = '/home/worker/bin';
+    if (Object.hasOwn(process.env,'CI_GRADLE_BUILD_CACHE_PUSH')) env.CI_GRADLE_BUILD_CACHE_URL = url + '/gradle-build-cache/';
     await fs.mkdir(nativeBin, {recursive:true});
     const registries = '/home/worker/registries.conf';
     await fs.writeFile(registries, (await fs.readFile('/harness/registries.conf.in', 'utf8')).replaceAll('__GUEST_PORT__', String(proxy.address().port)));

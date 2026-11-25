@@ -41,15 +41,32 @@ async function run(command, args, env = process.env) {
   } finally { process.off('SIGTERM', stop); }
 }
 
-async function serve(store, mode, body) {
+async function serve(store, mode, body, packageTransport) {
   let proxy;
   let clients;
+  let buildCache;
   try {
-    proxy = await startProxy({resolve: key => store.resolve(key)});
+    if (process.env.GITHUB_ACTIONS === 'true' && process.env.CI_GRADLE_REMOTE_CACHE === 'true') {
+      buildCache = await require('./gradle-build-cache.cjs').openBuildCache({
+        mode, toolkit: await require('./github-store.cjs').loadToolkit(),
+      });
+    }
+    proxy = await startProxy({resolve: key => store.resolve(key), packageTransport, buildCache});
     clients = await setupClients({url: proxy.url, mode});
+    if (buildCache) {
+      clients.env.CI_GRADLE_BUILD_CACHE_URL = `${proxy.url}/gradle-build-cache/`;
+      clients.env.CI_GRADLE_BUILD_CACHE_PUSH = String(buildCache.write);
+    }
     await body(clients.env);
   } finally {
-    try { await clients?.close(); } finally { try { await proxy?.close(); } finally { await store.close(); } }
+    try { await clients?.close(); } finally {
+      try { await proxy?.close(); } finally {
+        try {
+          if (buildCache) console.log(`Gradle remote cache ${JSON.stringify(buildCache.metrics)}`);
+          await buildCache?.close();
+        } finally { await store.close(); }
+      }
+    }
   }
 }
 
@@ -79,11 +96,12 @@ async function nativeReceipt(buildId) {
 async function githubReceipt(key) {
   if (!receiptPattern.test(key)) throw new Error('Invalid main worker receipt key');
   const cache = await require('./github-store.cjs').loadToolkit();
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'main-github-receipt-'));
   try {
-    await fs.rm(receiptPath, {force: true});
-    if (await cache.restoreCache([receiptPath], key, []) !== key) throw new Error('Main worker receipt has expired');
-    return readReceipt(await fs.readFile(receiptPath));
-  } finally { await fs.rm(receiptPath, {force: true}); }
+    const destination = path.join(dir, 'requests.json');
+    if (await cache.restoreCache([receiptPath], key, [], {destination, maxBytes: 2 * 1024 ** 2}) !== key) throw new Error('Main worker receipt has expired');
+    return readReceipt(await fs.readFile(destination));
+  } finally { await fs.rm(dir, {force: true, recursive: true}); }
 }
 
 async function importMain(observations) {

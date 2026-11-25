@@ -1,0 +1,18 @@
+import org.gradle.caching.http.HttpBuildCache
+
+def cacheEndpoint = System.getenv('CI_GRADLE_BUILD_CACHE_URL')
+if (cacheEndpoint) {
+    def endpoint = new URI(cacheEndpoint)
+    if (endpoint.scheme != 'http' || endpoint.host != '127.0.0.1' ||
+            endpoint.port <= 0 || endpoint.path != '/gradle-build-cache/' ||
+            endpoint.userInfo || endpoint.query || endpoint.fragment) {
+        throw new GradleException('CI remote build cache must use the job-local dependency broker')
+    }
+    buildCache {
+        remote(HttpBuildCache) {
+            url = endpoint
+            allowInsecureProtocol = true
+            push = System.getenv('CI_GRADLE_BUILD_CACHE_PUSH') == 'true'
+        }
+    }
+}

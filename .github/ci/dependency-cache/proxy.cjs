@@ -180,7 +180,7 @@ async function packageIndex(route, response) {
   return Buffer.from(JSON.stringify(data));
 }
 
-async function fetchPublic(key, destination) {
+async function fetchPublic(key, destination, {maxBytes = Infinity} = {}) {
   const route = parseKey(key);
   const headers = {};
   if (route.manifest) headers.accept = manifestTypes.join(', ');
@@ -215,9 +215,14 @@ async function fetchPublic(key, destination) {
     let size = 0;
     const meter = new Transform({transform(chunk, encoding, callback) {
       size += chunk.length;
+      if (size > maxBytes) { callback(new Error('Cold dependency exceeds the job download limit')); return; }
       hash.update(chunk);
       callback(null, chunk);
     }});
+    if (Number.isFinite(maxBytes) && length !== null && BigInt(length) > BigInt(maxBytes)) {
+      await response.body.cancel();
+      throw new Error('Cold dependency exceeds the job download limit');
+    }
     // The recorder supplies a fresh temporary path. Do not truncate a pre-existing object.
     let file;
     try {
@@ -256,12 +261,13 @@ function errorResponse(res, status, code, message) {
   res.end(body);
 }
 
-async function startProxy({host = '127.0.0.1', port = 0, resolve}) {
+async function startProxy({host = '127.0.0.1', port = 0, resolve, packageTransport, buildCache}) {
   if (typeof resolve !== 'function') throw new Error('An artifact resolver is required');
   // A resolver may return a restored file. Check digest-addressed OCI content before serving even a range.
   const verified = new Map();
   const server = http.createServer(async (req, res) => {
     try {
+      if (buildCache && req.url.startsWith('/gradle-build-cache/') && await buildCache.handle(req,res)) return;
       if (!['GET', 'HEAD'].includes(req.method)) {
         res.setHeader('allow', 'GET, HEAD');
         return errorResponse(res, 405, 'UNSUPPORTED', 'Read-only artifact proxy');
@@ -275,6 +281,7 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve}) {
       }
       let route;
       try { route = parseKey(key); } catch { return errorResponse(res, 400, 'NAME_INVALID', 'Invalid artifact path'); }
+      if (packageTransport && await packageTransport(req, res, key)) return;
       const item = await resolve(key);
       if (!item) return errorResponse(res, 404, route.manifest ? 'MANIFEST_UNKNOWN' : 'BLOB_UNKNOWN', 'Artifact not found');
       if (!isAbsolute(item.path) || !digestPattern.test(item.digest) || !Number.isSafeInteger(item.size) || item.size < 0 ||

@@ -134,10 +134,10 @@ function toolkitStore(toolkit, options = {}) {
   const read = options.read || paced(READ_RATE, budget('DEPENDENCY_CACHE_READER_JOBS', 48));
   const publishRead = options.read || paced(PUBLISH_LOOKUP_RATE, budget('DEPENDENCY_CACHE_WRITER_JOBS', 1));
   const write = options.write || paced(180, budget('DEPENDENCY_CACHE_WRITER_JOBS', 1));
-  const restore = (file, key, prefixes = [], lookupOnly = false) =>
-    read(() => toolkit.restoreCache([file], key, prefixes, { lookupOnly }));
-  const publicationRestore = (file, key, prefixes = [], lookupOnly = false) =>
-    publishRead(() => toolkit.restoreCache([file], key, prefixes, { lookupOnly }));
+  const restore = (file, key, prefixes = [], lookupOnly = false, bounds = {}) =>
+    read(() => toolkit.restoreCache([file], key, prefixes, { lookupOnly, ...bounds }));
+  const publicationRestore = (file, key, prefixes = [], lookupOnly = false, bounds = {}) =>
+    publishRead(() => toolkit.restoreCache([file], key, prefixes, { lookupOnly, ...bounds }));
   const exists = async (file, key) => (await publicationRestore(file, key, [], true)) === key;
   async function save(file, key) {
     let error;
@@ -183,11 +183,11 @@ async function makeBlob(blob, file, materialize, temp) {
   } finally { await destination.close(); }
 }
 
-async function stageDirectory() {
+async function stageDirectory(publisher = false) {
   if (process.env.GITHUB_WORKSPACE && path.resolve(process.env.GITHUB_WORKSPACE) !== process.cwd()) {
     throw new Error('Run the dependency cache action with its working directory set to GITHUB_WORKSPACE');
   }
-  await fs.mkdir(`${STAGING}/blobs`, { recursive: true, mode: 0o700 });
+  if (publisher) await fs.mkdir(`${STAGING}/blobs`, { recursive: true, mode: 0o700 });
   return fs.mkdtemp(path.join(os.tmpdir(), 'migrations-public-deps-'));
 }
 
@@ -219,7 +219,7 @@ function createStore(toolkit, options = {}) {
     const index = JSON.stringify({ version: 1, generation, entries: chosen });
     const indexDigest = hash(index);
     const indexKey = `${INDEX}${generation}-${indexDigest}`;
-    const temp = await stageDirectory();
+    const temp = await stageDirectory(true);
     try {
       await fs.rm(INDEX_PATH, { force: true });
       // A published generation is immutable. A retry must agree on its contents.
@@ -258,11 +258,11 @@ function createStore(toolkit, options = {}) {
     const temp = await stageDirectory();
     let index;
     try {
-      await fs.rm(INDEX_PATH, { force: true });
+      const destination = path.join(temp, 'index.json');
       if (indexKey && !validIndexKey(indexKey)) throw new Error('Invalid base branch dependency index key');
-      const key = await store.restore(INDEX_PATH, indexKey || `${INDEX}latest`, indexKey ? [] : [INDEX]);
+      const key = await store.restore(INDEX_PATH, indexKey || `${INDEX}latest`, indexKey ? [] : [INDEX], false, {destination});
       if (!validIndexKey(key) || (indexKey && key !== indexKey)) throw missingCache('No verified dependency index accessible to this pull request; run the trusted cache publisher');
-      const data = await fs.readFile(INDEX_PATH, 'utf8');
+      const data = await fs.readFile(destination, 'utf8');
       index = JSON.parse(data);
       if (index.version !== 1 || key !== `${INDEX}${index.generation}-${hash(data)}` || !Array.isArray(index.entries)) {
         throw new Error(`Invalid dependency cache index ${key}`);
@@ -271,7 +271,7 @@ function createStore(toolkit, options = {}) {
     } catch (error) {
       await fs.rm(temp, { recursive: true, force: true });
       throw error;
-    } finally { await fs.rm(INDEX_PATH, { force: true }); }
+    }
     const entries = new Map(index.entries.map(e => [e.key, e]));
     const { blobs, locations } = layout(index.entries);
     const blobMap = new Map(blobs.map(blob => [blob.id, blob]));
@@ -279,11 +279,12 @@ function createStore(toolkit, options = {}) {
     const limit = limiter(4);
     let closed = false;
     async function download(blob) {
-      const file = relativeBlobPath(blob.id);
+      const member = relativeBlobPath(blob.id);
+      const file = path.join(temp, blob.id);
       try {
         const key = blobKey(blob.id);
         await fs.rm(file, { force: true });
-        if (await store.restore(file, key) !== key) throw missingCache(`Dependency cache entry ${blob.id} was evicted or inaccessible; re-run the trusted cache publisher`);
+        if (await store.restore(member, key, [], false, {destination:file, maxBytes:blob.size}) !== key) throw missingCache(`Dependency cache entry ${blob.id} was evicted or inaccessible; re-run the trusted cache publisher`);
         const stat = await fs.lstat(file);
         if (!stat.isFile() || stat.size !== blob.size) throw new Error(`Invalid dependency cache blob length for ${blob.id}`);
         for (const entry of blob.members) {
@@ -308,6 +309,8 @@ function createStore(toolkit, options = {}) {
       } finally { await fs.rm(file, { force: true }); }
     }
     return {
+      generation: index.generation,
+      entries: [...entries.values()].map(entry => ({...entry})),
       async resolve(key) {
         if (closed) throw new Error('Dependency cache reader is closed');
         const entry = entries.get(key);
@@ -338,7 +341,9 @@ async function loadToolkit() {
   toolkitPromise ||= (async () => {
     try { await promisify(execFile)('zstd', ['--quiet', '--version']); }
     catch (error) { throw new Error('Install zstd on the dependency cache publisher and reader', { cause: error }); }
-    return import('@actions/cache');
+    const toolkit = await import('@actions/cache');
+    const {safeRestore} = require('./github-restore.cjs');
+    return {saveCache: toolkit.saveCache, restoreCache: safeRestore};
   })();
   return toolkitPromise;
 }

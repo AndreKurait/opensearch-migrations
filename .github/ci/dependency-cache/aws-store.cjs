@@ -160,8 +160,10 @@ async function openRecorder(options = {}) {
     }
     const known = catalog.get(shardKey(key))?.entries.get(key);
     let state;
-    if (known && isDigest(observation?.digest) && known.digest === observation.digest) {
-      // This exact key/digest mapping was already verified by a trusted upstream fetch. A touch needs no blob I/O.
+    const pinned = key.startsWith('/v2/') ? /\/(?:blobs|manifests)\/sha256:([a-f0-9]{64})$/.exec(key)?.[1] : undefined;
+    const expected = observation ? observation.digest : pinned;
+    if (known && isDigest(expected) && known.digest === expected) {
+      // Trusted key/digest observations and digest-addressed OCI URLs can use the same verified mapping.
       state = {entry: known};
     } else {
       const identity = JSON.stringify([key, observation?.digest || null, Boolean(observation?.missing)]);

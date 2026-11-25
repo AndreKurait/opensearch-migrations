@@ -28,11 +28,11 @@ async function fixture(t) {
   const backend = new Map();
   const events = [];
   const toolkit = {
-    async restoreCache([file], key, prefixes, { lookupOnly }) {
+    async restoreCache([file], key, prefixes, { lookupOnly, destination }) {
       events.push({ op: lookupOnly ? 'lookup' : 'restore', key });
       const matched = backend.has(key) ? key : [...backend.keys()].reverse().find(k => prefixes.some(prefix => k.startsWith(prefix)));
       if (!matched || backend.get(matched).file !== file) return undefined;
-      if (!lookupOnly) await fs.writeFile(file, backend.get(matched).data);
+      if (!lookupOnly) await fs.writeFile(destination || file, backend.get(matched).data);
       return matched;
     },
     async saveCache([file], key) {
@@ -73,6 +73,7 @@ test('a reader restores the index first, rejects unknowns, and fetches requested
   events.length = 0;
   const reader = await store.openReader();
   assert.equal(events.length, 1);
+  assert.deepEqual(reader.entries.map(e => e.key).sort(), entries.map(e => e.key).sort());
   assert.equal(await reader.resolve('/maven/probe'), null);
   await assert.rejects(reader.resolve('/raw/unknown'), { code: 'CACHE_MISS' });
   const [kind, other] = await Promise.all([reader.resolve('/raw/kind'), reader.resolve('/raw/alias')]);

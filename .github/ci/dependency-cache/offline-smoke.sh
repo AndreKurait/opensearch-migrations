@@ -35,7 +35,7 @@ mkdir "$staging/harness"
 cp "$launcher_dir/offline-relay.cjs" "$launcher_dir/smoke.cjs" "$launcher_dir/corretto.cjs" "$staging/harness/"
 # These trusted, public registry mappings are literal data only; the guest never obtains the outer Docker socket.
 node -e 'process.stdout.write(require(process.argv[1]).containersConfig("127.0.0.1", "__GUEST_PORT__"))' "$launcher_dir/client-routing.cjs" > "$staging/harness/registries.conf.in"
-allow=(CI PYTEST_ADDOPTS KAFKA_TRAFFIC_TOPIC KAFKA_TRAFFIC_GROUP_ID OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED)
+allow=(CI PYTEST_ADDOPTS KAFKA_TRAFFIC_TOPIC KAFKA_TRAFFIC_GROUP_ID OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED CI_GRADLE_BUILD_CACHE_PUSH)
 # Avoid arbitrary environment forwarding. Fixed independent test configuration is passed as arguments or these scalar values.
 for name in "${allow[@]}"; do
   value=${!name-}; [[ -z "$value" || "$value" != *$'\n'* ]] || { echo "Invalid workflow value $name" >&2; exit 1; }
@@ -93,6 +93,9 @@ cleanup_host() {
 }
 trap cleanup_host EXIT
 bubblewrap=$(realpath "$(command -v bwrap)")
+if ! "$bubblewrap" --help | grep -q -- '--disable-userns'; then
+  echo 'Hermetic jobs require bubblewrap 0.8+ (for example Ubuntu 24.04) to disable nested user namespaces' >&2; exit 1
+fi
 probe_namespace() { "$bubblewrap" --unshare-all --unshare-user --disable-userns --ro-bind / / -- /bin/true 2>/dev/null; }
 if ! probe_namespace; then
   if [[ "$(stat -c '%u' "$bubblewrap")" != 0 || -w "$bubblewrap" || ! -r /sys/module/apparmor/parameters/enabled ]] ||
