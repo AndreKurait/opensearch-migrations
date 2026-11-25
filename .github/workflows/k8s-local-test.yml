@@ -121,12 +121,10 @@ jobs:
           path: release-candidate
           persist-credentials: false
 
-      - name: Restore BuildKit registry layers
-        id: build-layers
+      - name: Configure on-demand BuildKit cache
         if: inputs.cache-only || vars.DEPENDENCY_PROXY_ENABLED == 'true'
         uses: ./.github/actions/local-build-cache
         with:
-          suite: kind
           cache-only: ${{ inputs.cache-only }}
 
       - name: Get registry cache key
@@ -217,12 +215,8 @@ jobs:
       - name: Publish BuildKit registry layers
         if: >-
           !inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED == 'true' && github.ref == 'refs/heads/main' &&
-          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) &&
-          steps.build-layers.outputs.cache-hit != 'true' && inputs.save-registry-cache && !inputs.release-ref
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: ${{ runner.temp }}/buildkit-registry
-          key: ${{ steps.build-layers.outputs.key }}
+          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && inputs.save-registry-cache && !inputs.release-ref
+        uses: ./.github/actions/publish-buildkit-cache
 
       - name: Run E2E tests
         shell: test-shell.sh {0}

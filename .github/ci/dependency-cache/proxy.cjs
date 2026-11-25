@@ -272,12 +272,13 @@ function errorResponse(res, status, code, message) {
   res.end(body);
 }
 
-async function startProxy({host = '127.0.0.1', port = 0, resolve, packageTransport, buildCache}) {
+async function startProxy({host = '127.0.0.1', port = 0, resolve, packageTransport, buildCache, buildkitCache}) {
   if (typeof resolve !== 'function') throw new Error('An artifact resolver is required');
   // A resolver may return a restored file. Check digest-addressed OCI content before serving even a range.
   const verified = new Map();
   const server = http.createServer(async (req, res) => {
     try {
+      if (buildkitCache && req.url.startsWith('/v2/buildkit-cache/') && await buildkitCache(req,res)) return;
       if (buildCache && req.url.startsWith('/gradle-build-cache/') && await buildCache.handle(req,res)) return;
       if (!['GET', 'HEAD'].includes(req.method)) {
         res.setHeader('allow', 'GET, HEAD');

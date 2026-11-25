@@ -1,30 +1,15 @@
-name: Restore local image build layers
-description: Restore the disposable registry used for BuildKit cache imports and exports.
+name: Configure on-demand BuildKit cache
+description: Serve remote cache manifests and layers as the builder requests them.
 inputs:
-  suite:
-    required: true
-    description: Image build suite
   cache-only:
     required: true
     description: Require cache-only image build steps
-outputs:
-  cache-hit:
-    value: ${{ steps.layers.outputs.cache-hit }}
-    description: Whether this exact commit was already published
-  key:
-    value: ${{ steps.layers.outputs.cache-primary-key }}
-    description: Cache key for the current build
 runs:
   using: composite
   steps:
-    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-      id: layers
-      with:
-        path: ${{ runner.temp }}/buildkit-registry
-        key: migrations-buildkit-registry-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.suite }}-${{ github.sha }}
-        restore-keys: migrations-buildkit-registry-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.suite }}-
     - shell: bash
       run: |
+        echo "CI_BUILDKIT_CACHE_ENDPOINT=$CI_DEPENDENCY_REGISTRY_ENDPOINT/buildkit-cache" >> "$GITHUB_ENV"
         mkdir -p "$RUNNER_TEMP/buildkit-registry"
         echo "EXTERNAL_REGISTRY_VOLUME=$RUNNER_TEMP/buildkit-registry" >> "$GITHUB_ENV"
     - if: inputs.cache-only == 'true'

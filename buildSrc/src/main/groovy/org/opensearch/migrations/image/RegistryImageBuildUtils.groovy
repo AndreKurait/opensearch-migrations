@@ -9,6 +9,11 @@ import org.opensearch.migrations.common.CommonUtils
 class RegistryImageBuildUtils {
     private static boolean builderWarningShown = false
 
+    private static List<String> remoteCacheImports(List<String> refs) {
+        def endpoint = System.getenv('CI_BUILDKIT_CACHE_ENDPOINT')
+        return endpoint ? refs.collect { "type=registry,ref=${endpoint}/${it.substring(it.indexOf('/') + 1)}".toString() } : []
+    }
+
     static class Registry { // Helper object
         final String hostUrl      // For Jib, which runs in the JVM directly (e.g., localhost:5001)
         final String containerUrl // For BuildKit, which runs in a container (e.g., docker-registry:5000)
@@ -562,6 +567,7 @@ class RegistryImageBuildUtils {
                                 "--cache-to=type=registry,ref=${cacheDestination}${suffix},mode=max,ignore-error=true",
                                 "--cache-from=type=registry,ref=${cacheDestination}${suffix}"
                         ]
+                        remoteCacheImports(["${cacheDestination}${suffix}"]).each { fullArgs.add("--cache-from=${it}") }
                         staticBuildArgFlags.each { fullArgs.add(it) }
                         resolveIntermediateArgs(suffix).each { fullArgs.add(it) }
                         fullArgs.add("\"${contextPath}\"")
@@ -601,6 +607,7 @@ class RegistryImageBuildUtils {
                             "--cache-from=type=registry,ref=${cacheDestination}_arm64"
                     ]
                     staticBuildArgFlags.each { fullArgs.add(it) }
+                    remoteCacheImports([cacheDestination, "${cacheDestination}_amd64", "${cacheDestination}_arm64"]).each { fullArgs.add("--cache-from=${it}") }
                     resolveIntermediateArgs("").each { fullArgs.add(it) }
                     fullArgs.add("\"${contextPath}\"")
                     commandLine 'sh', '-c', fullArgs.join(" ")
@@ -750,6 +757,7 @@ class RegistryImageBuildUtils {
                             cacheFrom.add("type=registry,ref=${cacheDestination}_arm64".toString())
                         }
 
+                        cacheFrom.addAll(remoteCacheImports(cacheFrom.collect { it.substring('type=registry,ref='.length()) }))
                         def targetName = cfg.serviceName.toString()
                         targetsForPhase << targetName
                         serviceToPhase[targetName] = phaseName

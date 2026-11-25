@@ -1,0 +1,5 @@
+name: Publish BuildKit OCI cache
+description: Publish immutable cache layers and then update their manifest references.
+runs:
+  using: node24
+  main: publish.cjs

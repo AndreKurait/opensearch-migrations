@@ -44,14 +44,18 @@ async function run(command, args, env = process.env) {
 async function serve(store, mode, body, packageTransport) {
   let proxy;
   let clients;
-  let buildCache;
+  let buildCache, buildkitDir, buildkitCache;
   try {
     if (process.env.GITHUB_ACTIONS === 'true' && process.env.CI_GRADLE_REMOTE_CACHE === 'true') {
       buildCache = await require('./gradle-build-cache.cjs').openBuildCache({
         mode, toolkit: await require('./github-store.cjs').loadToolkit(),
       });
     }
-    proxy = await startProxy({resolve: key => store.resolve(key), packageTransport, buildCache});
+    if (process.env.GITHUB_ACTIONS === 'true' && process.env.CI_CACHE_TRUSTED_DOCKER === '1') {
+      buildkitDir = await fs.mkdtemp(path.join(os.tmpdir(), 'buildkit-cache-'));
+      buildkitCache = require('./buildkit-cache.cjs').reader({directory:buildkitDir, toolkit:await require('./github-store.cjs').loadToolkit()});
+    }
+    proxy = await startProxy({resolve: key => store.resolve(key), packageTransport, buildCache, buildkitCache});
     clients = await setupClients({url: proxy.url, mode});
     if (buildCache) {
       clients.env.CI_GRADLE_BUILD_CACHE_URL = `${proxy.url}/gradle-build-cache/`;
@@ -64,6 +68,7 @@ async function serve(store, mode, body, packageTransport) {
         try {
           if (buildCache) console.log(`Gradle remote cache ${JSON.stringify(buildCache.metrics)}`);
           await buildCache?.close();
+          if (buildkitDir) await fs.rm(buildkitDir, {recursive:true, force:true});
         } finally { await store.close(); }
       }
     }
