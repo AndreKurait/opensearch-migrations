@@ -28,12 +28,34 @@ jobs:
     permissions:
       id-token: write
       contents: write
-    services:
-      registry:
-        image: registry:2
-        ports:
-          - 127.0.0.1:5000:5000
     steps:
+      # BEGIN generated network guard
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
+            repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
+            auth.docker.io:443 registry-1.docker.io:443 production.cloudflare.docker.com:443 production.cloudfront.docker.com:443 docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443 quay.io:443 cdn01.quay.io:443 cdn02.quay.io:443 cdn03.quay.io:443 cdn04.quay.io:443 public.ecr.aws:443 registry.k8s.io:443 us-west1-docker.pkg.dev:443 us-central1-docker.pkg.dev:443 us-east1-docker.pkg.dev:443 mirror.gcr.io:443 storage.googleapis.com:443
+            dl.k8s.io:443 get.helm.sh:443 artifacts.elastic.co:443 download.elastic.co:443 charts.bitnami.com:443 kubernetes-sigs.github.io:443 prometheus-community.github.io:443 strimzi.io:443 argoproj.github.io:443 helm.min.io:443 opensearch-project.github.io:443
+      - name: Enforce Linux network policy before candidate checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          guard="$RUNNER_TEMP/linux_guard.py"
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/linux_guard.py" -o "$guard"
+          expected=147c831165a485bd0ac53d4c0caff7414122d5e99c7677afeef451993d427afd
+          test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
+          sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install
+          /usr/bin/python3 "$guard" probe
+      # END generated network guard
+
       - name: Validate release settings
         run: |
           [[ "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]
@@ -43,6 +65,8 @@ jobs:
           echo "127.0.0.1 docker-registry" | sudo tee -a /etc/hosts
           getent hosts docker-registry
           curl -sS http://docker-registry:5000/v2/ || true
+      - name: Start the local image registry after enforcing egress
+        run: docker run -d --name ci-registry --publish 127.0.0.1:5000:5000 registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

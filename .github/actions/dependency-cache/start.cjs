@@ -13,7 +13,11 @@ async function start() {
       !['push', 'schedule', 'workflow_dispatch'].includes(process.env.GITHUB_EVENT_NAME))) throw new Error('Only main workers record cache receipts');
   const dir = await fs.mkdtemp(path.join(process.env.RUNNER_TEMP, 'dependency-proxy-'));
   const log = await fs.open(path.join(dir, 'service.log'), 'wx', 0o600);
-  const child = spawn(process.execPath, [path.join(root, 'service.cjs'), mode, dir], {detached: true, stdio: ['ignore', log.fd, log.fd]});
+  const child = spawn(process.execPath, [path.join(root, 'service.cjs'), mode, dir], {
+    detached: true,
+    stdio: ['ignore', log.fd, log.fd],
+    env: {...process.env, INPUT_CATALOG_TOKEN: process.env['INPUT_CATALOG-TOKEN'] || process.env.INPUT_CATALOG_TOKEN || ''},
+  });
   child.unref();
   await log.close();
   await fs.appendFile(process.env.GITHUB_STATE, `service_dir=${dir}\nservice_pid=${child.pid}\n`);

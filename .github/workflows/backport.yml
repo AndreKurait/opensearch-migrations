@@ -7,6 +7,6 @@ on:
 jobs:
   backport:
     if: github.repository == 'opensearch-project/opensearch-migrations'
-    uses: opensearch-project/opensearch-build/.github/workflows/backport-pr.yml@main
+    uses: opensearch-project/opensearch-build/.github/workflows/backport-pr.yml@be3c490f863e26ba1ed4377c142a3b8c1859567f
     secrets:
       OPENSEARCH_CI_BOT_TOKEN: ${{ secrets.OPENSEARCH_CI_BOT_TOKEN }}

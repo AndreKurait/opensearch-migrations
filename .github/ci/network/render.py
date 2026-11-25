@@ -36,7 +36,9 @@ def bootstrap(file, native, platform):
 
 def guard(job, definitions):
     if job.get('platform') == 'macos':
-        return bootstrap('darwin_guard.py', False, 'macOS')
+        guard_step = bootstrap('darwin_guard.py', False, 'macOS')
+        endpoints = ' '.join(dict.fromkeys(host for name in job['purposes'] for host in POLICY['purposes'][name]))
+        return guard_step.replace('  run: |', '    PUBLIC_ENDPOINTS: ' + endpoints + '\n  run: |')
     purposes = job['purposes']
     hosts = set()
     groups = []
@@ -66,7 +68,14 @@ def guard(job, definitions):
         definitions[1].add(kind)
         bits = bootstrap('linux_guard.py', native, 'Linux').splitlines()
         second = '\n'.join(['- &enforce_' + kind, '  ' + bits[0][2:], *bits[1:]])
-    return '\n'.join([first, second])
+    parts = [first, second]
+    if 'unreviewedForkSandbox' in job:
+        works = job['unreviewedForkSandbox']
+        parts += ['- name: Require isolated execution for external fork code',
+                  f"  if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !({works})",
+                  '  shell: bash', '  working-directory: ${{ runner.temp }}', '  run: |',
+                  '    echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."', '    exit 1']
+    return '\n'.join(parts)
 
 
 def render(file, inventory):
@@ -87,6 +96,11 @@ def render(file, inventory):
                 raise ValueError(f'{key}: delegated workflow reference changed')
             pieces.append(chunk)
             continue
+        runner = re.search(r'^    runs-on: (.+)$', chunk, re.M)
+        labels = re.findall(r'ubuntu-(?:latest|[0-9.]+)|macos-(?:latest|[0-9.]+)', runner[1]) if runner else []
+        platform = job.get('platform', 'linux')
+        if not labels or any(('macos' if label.startswith('macos-') else 'linux') != platform for label in labels):
+            raise ValueError(f'{key}: unsupported hosted runner platform')
         if re.search(r'^    (?:container|services):', chunk, re.M):
             raise ValueError(f'{key}: job containers start before runner policy')
         has_steps = re.search(r'^    steps:\s*\n(?P<space> +)(?:#|[-])', chunk, re.M)

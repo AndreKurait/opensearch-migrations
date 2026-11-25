@@ -1,0 +1,26 @@
+name: Verify macOS workflow network policy
+on: [workflow_dispatch]
+permissions: {contents: read}
+jobs:
+  seatbelt:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 6
+    steps:
+      # BEGIN generated network guard
+      - name: Enforce macOS network policy before candidate checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
+          PUBLIC_ENDPOINTS: api.github.com:443 github.com:443 raw.githubusercontent.com:443
+        run: |
+          set -euo pipefail
+          guard="$RUNNER_TEMP/darwin_guard.py"
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/darwin_guard.py" -o "$guard"
+          expected=027807a66f724dbca258a99df248319e6ebaf8a4f99ffcce5b0bbb716e27d93c
+          test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
+          /usr/bin/python3 "$guard" install
+      # END generated network guard
+      - name: Verify candidate network, filesystem, and process boundaries
+        run: /usr/bin/python3 "$RUNNER_TEMP/darwin_guard.py" fixture

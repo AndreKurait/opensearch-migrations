@@ -24,7 +24,7 @@ jobs:
   gradle-extended-check:
     if: &run_ci github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch'
     permissions: {contents: read, actions: read}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' && 'ubuntu-24.04' || 'ubuntu-22.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -32,13 +32,64 @@ jobs:
           - spotlessCheck
           - publishToMavenLocal
     steps:
+      # BEGIN generated network guard
+      - &network_1
+        name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
+            repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
+            azure.archive.ubuntu.com:80 azure.archive.ubuntu.com:443 archive.ubuntu.com:80 archive.ubuntu.com:443 security.ubuntu.com:80 security.ubuntu.com:443 packages.microsoft.com:443 packages.cloud.google.com:443
+            auth.docker.io:443 registry-1.docker.io:443 production.cloudflare.docker.com:443 production.cloudfront.docker.com:443 docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443
+      - &enforce_native
+        name: Enforce Linux network policy before candidate checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          guard="$RUNNER_TEMP/linux_guard.py"
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/linux_guard.py" -o "$guard"
+          expected=147c831165a485bd0ac53d4c0caff7414122d5e99c7677afeef451993d427afd
+          test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
+          sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install
+          /usr/bin/python3 "$guard" probe
+      - name: Require isolated execution for external fork code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(vars.DEPENDENCY_PROXY_ENABLED == 'true')
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."
+          exit 1
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
+        with:
+          persist-credentials: false
+          ref: ${{ (vars.DEPENDENCY_PROXY_ENABLED == 'true') && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha) || github.sha }}
+      - name: Check out isolated test source
+        if: (vars.DEPENDENCY_PROXY_ENABLED == 'true') && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {ref: '${{ github.sha }}', path: candidate, persist-credentials: false}
       - uses: ./.github/actions/setup-env
         with:
           gradle-cache-enabled: true
           dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+      - name: Run repository checks in the isolated Linux worker
+        if: vars.DEPENDENCY_PROXY_ENABLED == 'true'
+        working-directory: ${{ github.workspace }}
+        env:
+          CI_DEPENDENCY_TEST_SOURCE: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/candidate', github.workspace) || github.workspace }}
+          TASK: ${{ matrix.tasks }}
+          OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
+        run: .github/ci/dependency-cache/native-checks.sh gradle-extended "${TASK}"
       - name: Run Gradle Build
+        if: ${{ !(vars.DEPENDENCY_PROXY_ENABLED == 'true') }}
         run: ./gradlew ${{matrix.tasks}}
         env:
           OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
@@ -48,40 +99,85 @@ jobs:
     permissions: {contents: read, actions: read}
     runs-on: macos-15
     steps:
+      # BEGIN generated network guard
+      - name: Enforce macOS network policy before candidate checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
+          PUBLIC_ENDPOINTS: api.github.com:443 github.com:443 raw.githubusercontent.com:443 objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443 repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
+        run: |
+          set -euo pipefail
+          guard="$RUNNER_TEMP/darwin_guard.py"
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/darwin_guard.py" -o "$guard"
+          expected=027807a66f724dbca258a99df248319e6ebaf8a4f99ffcce5b0bbb716e27d93c
+          test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
+          /usr/bin/python3 "$guard" install
+      # END generated network guard
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
+        with: {ref: '${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}', persist-credentials: false}
+      - name: Check out the candidate snapshot for Seatbelt
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.sha }}', path: candidate, persist-credentials: false}
       - uses: ./.github/actions/setup-env
         with:
           gradle-cache-enabled: false
-          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+          dependency-proxy-enabled: 'true'
       - name: Run Gradle build on macOS
-        run: ./gradlew build
+        run: /usr/bin/python3 "$RUNNER_TEMP/darwin_guard.py" build
         env:
-          OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
+          CI_DEPENDENCY_TEST_SOURCE: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/candidate', github.workspace) || github.workspace }}
 
   python-lint:
     if: *run_ci
     permissions: {contents: read, actions: read}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' && 'ubuntu-24.04' || 'ubuntu-22.04' }}
     steps:
+      # BEGIN generated network guard
+      - *network_1
+      - *enforce_native
+      - name: Require isolated execution for external fork code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(vars.DEPENDENCY_PROXY_ENABLED == 'true')
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."
+          exit 1
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
+        with:
+          persist-credentials: false
+          ref: ${{ (vars.DEPENDENCY_PROXY_ENABLED == 'true') && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha) || github.sha }}
+      - name: Check out isolated test source
+        if: (vars.DEPENDENCY_PROXY_ENABLED == 'true') && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {ref: '${{ github.sha }}', path: candidate, persist-credentials: false}
       - uses: ./.github/actions/setup-env
         with:
           dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
           java-required: 'false'
+      - name: Run repository checks in the isolated Linux worker
+        if: vars.DEPENDENCY_PROXY_ENABLED == 'true'
+        working-directory: ${{ github.workspace }}
+        env:
+          CI_DEPENDENCY_TEST_SOURCE: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/candidate', github.workspace) || github.workspace }}
+        run: .github/ci/dependency-cache/native-checks.sh python-lint
       - name: Install dependencies
+        if: ${{ !(vars.DEPENDENCY_PROXY_ENABLED == 'true') }}
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install flake8
       - name: Analysing the code with flake8
+        if: ${{ !(vars.DEPENDENCY_PROXY_ENABLED == 'true') }}
         run: |
           flake8 $(git ls-files '*.py')
 
   python-tests:
     if: *run_ci
     permissions: {contents: read, actions: read}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' && !startsWith(matrix.py-project, 'migrationConsole/') && 'ubuntu-24.04' || 'ubuntu-22.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -99,12 +195,43 @@ jobs:
       run:
         working-directory: ${{ env.WORKING_DIR }}
     steps:
+      # BEGIN generated network guard
+      - &network_2
+        name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
+            repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
+            auth.docker.io:443 registry-1.docker.io:443 production.cloudflare.docker.com:443 production.cloudfront.docker.com:443 docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443 quay.io:443 cdn01.quay.io:443 cdn02.quay.io:443 cdn03.quay.io:443 cdn04.quay.io:443 public.ecr.aws:443 registry.k8s.io:443 us-west1-docker.pkg.dev:443 us-central1-docker.pkg.dev:443 us-east1-docker.pkg.dev:443 mirror.gcr.io:443 storage.googleapis.com:443
+            dl.k8s.io:443 get.helm.sh:443 artifacts.elastic.co:443 download.elastic.co:443 charts.bitnami.com:443 kubernetes-sigs.github.io:443 prometheus-community.github.io:443 strimzi.io:443 argoproj.github.io:443 helm.min.io:443 opensearch-project.github.io:443
+            codecov.io:443 api.codecov.io:443 cli.codecov.io:443 uploader.codecov.io:443 keybase.io:443
+            azure.archive.ubuntu.com:80 azure.archive.ubuntu.com:443 archive.ubuntu.com:80 archive.ubuntu.com:443 security.ubuntu.com:80 security.ubuntu.com:443 packages.microsoft.com:443 packages.cloud.google.com:443
+      - *enforce_native
+      - name: Require isolated execution for external fork code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.py-project != 'migrationConsole/lib/console_link')
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."
+          exit 1
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
+        with:
+          persist-credentials: false
+          ref: ${{ (vars.DEPENDENCY_PROXY_ENABLED == 'true' && !startsWith(matrix.py-project, 'migrationConsole/')) && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha) || github.sha }}
+      - name: Check out isolated test source
+        if: (vars.DEPENDENCY_PROXY_ENABLED == 'true' && !startsWith(matrix.py-project, 'migrationConsole/')) && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {ref: '${{ github.sha }}', path: candidate, persist-credentials: false}
       - uses: ./.github/actions/setup-env
         with:
           dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
-          dependency-proxy-docker: ${{ matrix.py-project == 'migrationConsole/lib/console_link' }}
+          dependency-proxy-docker: ${{ startsWith(matrix.py-project, 'migrationConsole/') }}
           java-required: 'false'
 
       # Set up Kind cluster for workflow integration tests (only for console_link project)
@@ -131,13 +258,24 @@ jobs:
         if: matrix.py-project == 'migrationConsole/lib/console_link'
         run: ./scripts/setupWorkflowTestCluster.sh
 
+      - name: Run repository checks in the isolated Linux worker
+        if: vars.DEPENDENCY_PROXY_ENABLED == 'true' && !startsWith(matrix.py-project, 'migrationConsole/')
+        id: isolated_check
+        working-directory: ${{ github.workspace }}
+        env:
+          CI_DEPENDENCY_TEST_SOURCE: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/candidate', github.workspace) || github.workspace }}
+          CI_HERMETIC_WORKDIR: ${{ env.WORKING_DIR }}
+          CI_HERMETIC_OUTPUT_DIR: ${{ runner.temp }}/hermetic-report
+        run: .github/ci/dependency-cache/native-checks.sh python-tests
       - name: Install dependencies (Pipfile)
+        if: ${{ !(vars.DEPENDENCY_PROXY_ENABLED == 'true' && !startsWith(matrix.py-project, 'migrationConsole/')) }}
         run: |
           python3 -m pip install pipenv==2026.5.0
           pipenv install --deploy --dev
           pipenv graph
 
       - name: Run tests (Pipfile)
+        if: ${{ !(vars.DEPENDENCY_PROXY_ENABLED == 'true' && !startsWith(matrix.py-project, 'migrationConsole/')) }}
         run: |
           pipenv run test
           pipenv run coverage xml
@@ -147,11 +285,13 @@ jobs:
           PY_PROJECT: ${{ matrix.py-project }}
         run: echo "SANITIZED_PY_PROJECT=${PY_PROJECT//\//-}" >> $GITHUB_ENV
       - name: Upload coverage to Codecov
-        if: always() && env.HAS_CODECOV_TOKEN == 'true'
+        if: always() && env.HAS_CODECOV_TOKEN == 'true' && (vars.DEPENDENCY_PROXY_ENABLED != 'true' || startsWith(matrix.py-project, 'migrationConsole/') || steps.isolated_check.outcome == 'success')
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           fail_ci_if_error: true
           flags: python
+          files: ${{ (vars.DEPENDENCY_PROXY_ENABLED == 'true' && !startsWith(matrix.py-project, 'migrationConsole/')) && format('{0}/hermetic-report/coverage.xml', runner.temp) || '' }}
+          disable_search: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' && !startsWith(matrix.py-project, 'migrationConsole/') }}
           skip_validation: true
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
@@ -165,6 +305,33 @@ jobs:
     if: *run_ci
     runs-on: ubuntu-22.04
     steps:
+      # BEGIN generated network guard
+      - &network_3
+        name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+      - &enforce_unprivileged
+        name: Enforce Linux network policy before candidate checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          guard="$RUNNER_TEMP/linux_guard.py"
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/linux_guard.py" -o "$guard"
+          expected=147c831165a485bd0ac53d4c0caff7414122d5e99c7677afeef451993d427afd
+          test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
+          sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install
+          /usr/bin/python3 "$guard" probe
+          sudo /usr/bin/python3 "$guard" lock-down
+          if sudo -n true >/dev/null 2>&1 || docker info >/dev/null 2>&1; then exit 1; fi
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Test kind setup scripts
         run: ./.github/scripts/tests/configureKindClusterTest.sh
@@ -174,6 +341,11 @@ jobs:
     runs-on: ubuntu-24.04
     permissions: {contents: read}
     steps:
+      # BEGIN generated network guard
+      - *network_3
+      - *enforce_unprivileged
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
       - run: python3 -m unittest discover -s .github/ci/controller -v
@@ -182,13 +354,40 @@ jobs:
 
   gradle-repository-tests:
     if: *run_ci
-    runs-on: ubuntu-22.04
+    runs-on: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' && 'ubuntu-24.04' || 'ubuntu-22.04' }}
     steps:
+      # BEGIN generated network guard
+      - *network_1
+      - *enforce_native
+      - name: Require isolated execution for external fork code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(vars.DEPENDENCY_PROXY_ENABLED == 'true')
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."
+          exit 1
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ (vars.DEPENDENCY_PROXY_ENABLED == 'true') && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha) || github.sha }}
+      - name: Check out isolated test source
+        if: (vars.DEPENDENCY_PROXY_ENABLED == 'true') && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {ref: '${{ github.sha }}', path: candidate, persist-credentials: false}
       - uses: ./.github/actions/setup-env
         with:
           gradle-cache-enabled: true
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+      - name: Run repository checks in the isolated Linux worker
+        if: vars.DEPENDENCY_PROXY_ENABLED == 'true'
+        working-directory: ${{ github.workspace }}
+        env:
+          CI_DEPENDENCY_TEST_SOURCE: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/candidate', github.workspace) || github.workspace }}
+        run: .github/ci/dependency-cache/native-checks.sh gradle-repositories
       - name: Test dependency repository routing
+        if: ${{ !(vars.DEPENDENCY_PROXY_ENABLED == 'true') }}
         run: python3 -m unittest discover -s gradle/tests -v
 
   generate-test-matrix:
@@ -197,6 +396,11 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
+      # BEGIN generated network guard
+      - *network_3
+      - *enforce_unprivileged
+      # END generated network guard
+
       - id: set-matrix
         run: |
           # Generate a JSON array from 0 to gradle-test-parallelization-1
@@ -221,6 +425,25 @@ jobs:
           - name: search
             image_list: .github/gradle-test-images/search.txt
     steps:
+      # BEGIN generated network guard
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            auth.docker.io:443 registry-1.docker.io:443 production.cloudflare.docker.com:443 production.cloudfront.docker.com:443 docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443 quay.io:443 cdn01.quay.io:443 cdn02.quay.io:443 cdn03.quay.io:443 cdn04.quay.io:443 public.ecr.aws:443 registry.k8s.io:443 us-west1-docker.pkg.dev:443 us-central1-docker.pkg.dev:443 us-east1-docker.pkg.dev:443 mirror.gcr.io:443 storage.googleapis.com:443
+      - *enforce_native
+      - name: Require isolated execution for external fork code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(false)
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."
+          exit 1
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Free disk space
         run: |
@@ -252,6 +475,29 @@ jobs:
       # The secrets context is unavailable in a step `if`, so gate on this instead.
       HAS_CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN != '' }}
     steps:
+      # BEGIN generated network guard
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
+            repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
+            auth.docker.io:443 registry-1.docker.io:443 production.cloudflare.docker.com:443 production.cloudfront.docker.com:443 docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443 quay.io:443 cdn01.quay.io:443 cdn02.quay.io:443 cdn03.quay.io:443 cdn04.quay.io:443 public.ecr.aws:443 registry.k8s.io:443 us-west1-docker.pkg.dev:443 us-central1-docker.pkg.dev:443 us-east1-docker.pkg.dev:443 mirror.gcr.io:443 storage.googleapis.com:443
+            dl.k8s.io:443 get.helm.sh:443 artifacts.elastic.co:443 download.elastic.co:443 charts.bitnami.com:443 kubernetes-sigs.github.io:443 prometheus-community.github.io:443 strimzi.io:443 argoproj.github.io:443 helm.min.io:443 opensearch-project.github.io:443
+            codecov.io:443 api.codecov.io:443 cli.codecov.io:443 uploader.codecov.io:443 keybase.io:443
+      - *enforce_native
+      - name: Require isolated execution for external fork code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(false)
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."
+          exit 1
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
       - uses: ./.github/actions/setup-env
@@ -338,7 +584,7 @@ jobs:
   node-tests:
     if: *run_ci
     permissions: {contents: read, actions: read}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs' && 'ubuntu-24.04' || 'ubuntu-22.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -354,26 +600,57 @@ jobs:
       run:
         working-directory: ${{ matrix.npm-project }}
     steps:
+      # BEGIN generated network guard
+      - *network_2
+      - *enforce_native
+      - name: Require isolated execution for external fork code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs')
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."
+          exit 1
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
+        with:
+          persist-credentials: false
+          ref: ${{ (vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs') && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha) || github.sha }}
+      - name: Check out isolated test source
+        if: (vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs') && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {ref: '${{ github.sha }}', path: candidate, persist-credentials: false}
       - uses: ./.github/actions/setup-env
         with:
           dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
           dependency-proxy-docker: ${{ matrix.npm-project == './orchestrationSpecs' }}
           java-required: 'false'
+      - name: Run repository checks in the isolated Linux worker
+        if: vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs'
+        id: isolated_check
+        working-directory: ${{ github.workspace }}
+        env:
+          CI_DEPENDENCY_TEST_SOURCE: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/candidate', github.workspace) || github.workspace }}
+          CI_HERMETIC_WORKDIR: ${{ matrix.npm-project }}
+          CI_HERMETIC_OUTPUT_DIR: ${{ runner.temp }}/hermetic-report
+        run: .github/ci/dependency-cache/native-checks.sh node-tests
       - name: Install NPM dependencies
+        if: ${{ !(vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs') }}
         run: npm ci
       - name: Run CDK Jest Tests (using mocked images)
+        if: ${{ !(vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs') }}
         run: npm run test
       - name: Run orchestration CRD integration tests
         if: matrix.npm-project == './orchestrationSpecs'
         run: npm run test:integ:crds
       - name: Upload coverage to Codecov
-        if: always() && env.HAS_CODECOV_TOKEN == 'true'
+        if: always() && env.HAS_CODECOV_TOKEN == 'true' && (vars.DEPENDENCY_PROXY_ENABLED != 'true' || matrix.npm-project == './orchestrationSpecs' || steps.isolated_check.outcome == 'success')
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           fail_ci_if_error: true
           flags: node
+          files: ${{ (vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs') && format('{0}/hermetic-report/lcov.info', runner.temp) || '' }}
+          disable_search: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs' }}
           skip_validation: true
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
@@ -383,6 +660,28 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:
+      # BEGIN generated network guard
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
+            repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
+            auth.docker.io:443 registry-1.docker.io:443 production.cloudflare.docker.com:443 production.cloudfront.docker.com:443 docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443 quay.io:443 cdn01.quay.io:443 cdn02.quay.io:443 cdn03.quay.io:443 cdn04.quay.io:443 public.ecr.aws:443 registry.k8s.io:443 us-west1-docker.pkg.dev:443 us-central1-docker.pkg.dev:443 us-east1-docker.pkg.dev:443 mirror.gcr.io:443 storage.googleapis.com:443
+            dl.k8s.io:443 get.helm.sh:443 artifacts.elastic.co:443 download.elastic.co:443 charts.bitnami.com:443 kubernetes-sigs.github.io:443 prometheus-community.github.io:443 strimzi.io:443 argoproj.github.io:443 helm.min.io:443 opensearch-project.github.io:443
+      - *enforce_native
+      - name: Require isolated execution for external fork code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(false)
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."
+          exit 1
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up kind cluster
         uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
@@ -404,6 +703,19 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      # BEGIN generated network guard
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
+            docs.opensearch.org:443 opensearch.org:443 aws.amazon.com:443 docs.aws.amazon.com:443 docs.github.com:443 opensearch-project.github.io:443 www.apache.org:443
+      - *enforce_unprivileged
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: lychee Link Checker
         id: lychee
@@ -427,6 +739,20 @@ jobs:
     if: *run_ci
     runs-on: ubuntu-22.04
     steps:
+      # BEGIN generated network guard
+      - &network_8
+        name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
+            registry.terraform.io:443 releases.hashicorp.com:443 releases.hashicorp.com:80 registry.opentofu.org:443
+      - *enforce_unprivileged
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
@@ -442,6 +768,11 @@ jobs:
     if: *run_ci
     runs-on: ubuntu-22.04
     steps:
+      # BEGIN generated network guard
+      - *network_8
+      - *enforce_unprivileged
+      # END generated network guard
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
@@ -468,6 +799,20 @@ jobs:
         - language: javascript-typescript
         - language: python
     steps:
+    # BEGIN generated network guard
+    - name: Restrict runner and container egress
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: block
+        disable-telemetry: true
+        allowed-endpoints: >-
+          api.github.com:443 github.com:443 raw.githubusercontent.com:443
+          objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
+          repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
+          binaries.sonarsource.com:443 sonarcloud.io:443 uploads.github.com:443
+    - *enforce_unprivileged
+    # END generated network guard
+
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4
       with:
@@ -481,19 +826,42 @@ jobs:
     if: *run_ci
     name: SonarQube Analysis
     runs-on: ubuntu-22.04
-    services:
-      sonarqube:
-        image: sonarqube:25.10.0.114319-community
-        ports:
-          - 9000:9000
-        options: >-
-          --health-cmd="curl -s -u admin:admin http://localhost:9000/api/system/health | grep -o GREEN"
-          --health-interval=10s
-          --health-timeout=10s
-          --health-retries=60
-        env:
-          SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
     steps:
+    # BEGIN generated network guard
+    - name: Restrict runner and container egress
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: block
+        disable-telemetry: true
+        allowed-endpoints: >-
+          api.github.com:443 github.com:443 raw.githubusercontent.com:443
+          objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
+          repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
+          binaries.sonarsource.com:443 sonarcloud.io:443 uploads.github.com:443
+          auth.docker.io:443 registry-1.docker.io:443 production.cloudflare.docker.com:443 production.cloudfront.docker.com:443 docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443 quay.io:443 cdn01.quay.io:443 cdn02.quay.io:443 cdn03.quay.io:443 cdn04.quay.io:443 public.ecr.aws:443 registry.k8s.io:443 us-west1-docker.pkg.dev:443 us-central1-docker.pkg.dev:443 us-east1-docker.pkg.dev:443 mirror.gcr.io:443 storage.googleapis.com:443
+    - *enforce_native
+    - name: Require isolated execution for external fork code
+      if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(false)
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      run: |
+        echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."
+        exit 1
+    # END generated network guard
+
+    - name: Start loopback SonarQube after applying the host firewall
+      shell: bash
+      run: |
+        set -euo pipefail
+        docker run -d --name ci-sonarqube --publish 127.0.0.1:9000:9000 \
+          -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
+          sonarqube:25.10.0.114319-community@sha256:ef0290a2deabad86a2623552712033a7107a9f5b310af00519b4ddd5b348ef4e
+        for attempt in {1..60}; do
+          if curl -fsS -u admin:admin http://127.0.0.1:9000/api/system/health | jq -e '.health == "GREEN"'; then exit 0; fi
+          sleep 10
+        done
+        docker logs ci-sonarqube >&2
+        exit 1
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - uses: ./.github/actions/setup-env
       with:
@@ -609,6 +977,11 @@ jobs:
     if: always() && (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-22.04
     steps:
+      # BEGIN generated network guard
+      - *network_3
+      - *enforce_unprivileged
+      # END generated network guard
+
       - if: ${{ contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'failure') }}
         run: |
           echo "One or more job cancelled or failed" && exit 1

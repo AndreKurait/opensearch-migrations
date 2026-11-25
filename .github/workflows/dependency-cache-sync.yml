@@ -27,6 +27,31 @@ jobs:
     runs-on: ubuntu-24.04
     permissions: {actions: write}
     steps:
+      # BEGIN generated network guard
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+      - name: Enforce Linux network policy before candidate checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          guard="$RUNNER_TEMP/linux_guard.py"
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/linux_guard.py" -o "$guard"
+          expected=147c831165a485bd0ac53d4c0caff7414122d5e99c7677afeef451993d427afd
+          test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
+          sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install
+          /usr/bin/python3 "$guard" probe
+          sudo /usr/bin/python3 "$guard" lock-down
+          if sudo -n true >/dev/null 2>&1 || docker info >/dev/null 2>&1; then exit 1; fi
+      # END generated network guard
+
       - name: Retire the published receipt
         env: {GH_TOKEN: '${{ github.token }}', RECEIPT: '${{ inputs.receipt }}'}
         run: |

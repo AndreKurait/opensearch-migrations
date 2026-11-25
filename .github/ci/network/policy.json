@@ -141,6 +141,10 @@
     ],
     "ubuntu-image": [
       "cloud-images.ubuntu.com:443"
+    ],
+    "python": [
+      "pypi.org:443",
+      "files.pythonhosted.org:443"
     ]
   },
   "jobs": {
@@ -152,7 +156,8 @@
         "ubuntu",
         "openartifact"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true'"
     },
     "CI.yml/gradle-build-macos": {
       "platform": "macos",
@@ -171,7 +176,8 @@
         "ubuntu",
         "openartifact"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true'"
     },
     "CI.yml/python-tests": {
       "purposes": [
@@ -184,7 +190,8 @@
         "ubuntu",
         "openartifact"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.py-project != 'migrationConsole/lib/console_link'"
     },
     "CI.yml/kind-setup-script-tests": {
       "purposes": [
@@ -206,7 +213,8 @@
         "ubuntu",
         "openartifact"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true'"
     },
     "CI.yml/generate-test-matrix": {
       "purposes": [
@@ -219,7 +227,8 @@
         "github",
         "oci"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "false"
     },
     "CI.yml/gradle-tests": {
       "purposes": [
@@ -230,7 +239,8 @@
         "kubernetes",
         "coverage"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "false"
     },
     "CI.yml/node-tests": {
       "purposes": [
@@ -243,7 +253,8 @@
         "ubuntu",
         "openartifact"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs'"
     },
     "CI.yml/mountable-transforms-k8s-test": {
       "purposes": [
@@ -253,7 +264,8 @@
         "oci",
         "kubernetes"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "false"
     },
     "CI.yml/link-checker": {
       "purposes": [
@@ -296,7 +308,8 @@
         "analysis",
         "oci"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "false"
     },
     "CI.yml/all-ci-checks-pass": {
       "purposes": [
@@ -429,7 +442,8 @@
         "oci",
         "kubernetes"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "false"
     },
     "k8s-local-test.yml/k8s-local-test": {
       "purposes": [
@@ -439,7 +453,8 @@
         "oci",
         "kubernetes"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "false"
     },
     "local-integ-tests.yml/select-tests": {
       "purposes": [
@@ -458,7 +473,8 @@
         "oci",
         "kubernetes"
       ],
-      "nativePrivileges": true
+      "nativePrivileges": true,
+      "unreviewedForkSandbox": "false"
     },
     "local-integ-tests.yml/all-local-integ-checks-pass": {
       "purposes": [
@@ -509,9 +525,17 @@
         "github",
         "ubuntu",
         "ubuntu-image",
-        "openartifact"
+        "openartifact",
+        "python"
       ],
       "nativePrivileges": true
+    },
+    "macos-egress-check.yml/seatbelt": {
+      "platform": "macos",
+      "candidate": "seatbelt",
+      "purposes": [
+        "github"
+      ]
     }
   },
   "version": "v2.21.1"
