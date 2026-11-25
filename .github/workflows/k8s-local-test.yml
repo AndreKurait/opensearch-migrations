@@ -32,7 +32,7 @@ on:
         type: number
         default: 360
       save-registry-cache:
-        description: 'Save the pull-through registry cache (set on one matrix entry only)'
+        description: 'Publish the BuildKit cache (set on one matrix entry only)'
         required: false
         type: boolean
         default: false
@@ -126,19 +126,6 @@ jobs:
         uses: ./.github/actions/local-build-cache
         with:
           cache-only: ${{ inputs.cache-only }}
-
-      - name: Get registry cache key
-        id: registry-cache-key
-        if: (!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true')
-        # Rotates monthly so stale image layers don't accumulate in one cache entry.
-        run: echo "key=local-integ-registry-cache-v1-$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
-      - name: Restore registry cache
-        id: registry-cache
-        if: (!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true')
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
-        with:
-          path: ${{ runner.temp }}/registry-cache
-          key: ${{ steps.registry-cache-key.outputs.key }}
 
       - name: Configure kind host
         shell: test-shell.sh {0}
@@ -274,17 +261,6 @@ jobs:
       - name: Stop registry cache
         if: always() && (!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true')
         run: '"$RUNNER_TEMP/local-integ-scripts/registry-cache.sh" stop'
-      - name: Save registry cache
-        # Only one matrix entry saves, and never from PRs or the merge queue.
-        if: >-
-          !cancelled() && (!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true') && inputs.save-registry-cache &&
-          steps.registry-cache.outputs.cache-hit != 'true' &&
-          contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
-        with:
-          path: ${{ runner.temp }}/registry-cache
-          key: ${{ steps.registry-cache-key.outputs.key }}
-
       - name: Show disk usage
         if: always()
         run: |
