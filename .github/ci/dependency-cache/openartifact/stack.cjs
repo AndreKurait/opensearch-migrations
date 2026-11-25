@@ -9,10 +9,7 @@ const path = require('node:path');
 const { setTimeout: sleep } = require('node:timers/promises');
 const { repositories } = require('./repos.cjs');
 
-const openartifact =
-  'ghcr.io/openartifact/openartifact:0.25.0@sha256:f2ca2bf2d0bf83f2d7c2ba272f8fa9c17ec87de9c9fdab54c2878c7251cd0b48';
-const postgres =
-  'mirror.gcr.io/library/postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5';
+const images = require('./images.json');
 const session = () => randomBytes(32).toString('hex');
 const ref = /^[a-f0-9]{64}$/;
 const approved = new Set(repositories.filter((r) => r.repo_type === 'proxy').map((r) => r.name));
@@ -78,6 +75,10 @@ async function startStack({ mode = 'record', storage = { type: 'filesystem' }, s
   if (!['read', 'record'].includes(mode) || !['filesystem', 's3'].includes(storage.type))
     throw new Error('Invalid OpenArtifact worker configuration');
   validateRows(snapshot);
+  const bootstrap = process.env.CI_BOOTSTRAP_IMAGE_IDS;
+  const localImages = bootstrap ? JSON.parse(bootstrap) : images;
+  if (bootstrap && !Object.keys(images).every(name => /^sha256:[a-f0-9]{64}$/.test(localImages[name])))
+    throw new Error('Invalid local bootstrap image IDs');
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'openartifact-stack-'));
   const project = `oa-ci-${randomUUID().slice(0, 12)}`;
   const pg = project + '-pg',
@@ -121,6 +122,7 @@ async function startStack({ mode = 'record', storage = { type: 'filesystem' }, s
     const pgEnv = await envfile('pg.env', { POSTGRES_DB: 'openartifact', POSTGRES_PASSWORD: password });
     await docker([
       'run',
+      ...(bootstrap ? ['--pull=never'] : []),
       '-d',
       '--name',
       pg,
@@ -132,7 +134,7 @@ async function startStack({ mode = 'record', storage = { type: 'filesystem' }, s
       'no-new-privileges',
       '--env-file',
       pgEnv,
-      postgres,
+      localImages.postgres,
     ]);
     cleanup.push(() => docker(['rm', '-fv', pg]));
     await ready(async () => (await psql('SELECT 1;')) === '1', 'PostgreSQL');
@@ -199,6 +201,7 @@ async function startStack({ mode = 'record', storage = { type: 'filesystem' }, s
     const appEnv = await envfile('app.env', config);
     await docker([
       'run',
+      ...(bootstrap ? ['--pull=never'] : []),
       '-d',
       '--name',
       app,
@@ -213,7 +216,7 @@ async function startStack({ mode = 'record', storage = { type: 'filesystem' }, s
       appEnv,
       '-v',
       `${volume}:/var/lib/artifacts`,
-      openartifact,
+      localImages.openartifact,
     ]);
     cleanup.push(() => docker(['rm', '-fv', app]));
     let authority;
