@@ -58,10 +58,11 @@ def configured_hosts():
     for endpoint in hosts:
         if not re.fullmatch(r'(?:[a-z0-9-]+\.)+[a-z0-9-]+:(?:80|443)', endpoint):
             raise ValueError(f'Unexpected endpoint {endpoint}')
-    # Concrete cache/storage hosts in GitHub's platform inventory and job environment.
-    with urllib.request.urlopen(
-        'https://api.github.com/meta', context=ssl.create_default_context(), timeout=10
-    ) as result:
+    # Runners share an egress IP. Authenticate the trusted, read-only /meta request to avoid the
+    # small anonymous per-IP rate limit. No candidate process receives this environment variable.
+    token = os.environ['GITHUB_META_TOKEN']
+    request = urllib.request.Request('https://api.github.com/meta', headers={'Authorization': 'Bearer ' + token})
+    with urllib.request.urlopen(request, context=ssl.create_default_context(), timeout=10) as result:
         platform = json.load(result)['domains']['actions']
     for host in platform:
         if re.fullmatch(r'[a-z0-9.-]+', host):

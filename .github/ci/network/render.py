@@ -54,7 +54,8 @@ def guard(job, definitions):
         endpoints = ' '.join(
             dict.fromkeys(host for name in job['purposes'] for host in POLICY['purposes'][name])
         )
-        return guard_step.replace('  run: |', '    PUBLIC_ENDPOINTS: ' + endpoints + '\n  run: |')
+        return guard_step.replace('  run: |', '    GITHUB_META_TOKEN: ${{ github.token }}\n'
+                                  '    PUBLIC_ENDPOINTS: ' + endpoints + '\n  run: |')
     purposes = job['purposes']
     hosts = set()
     groups = []

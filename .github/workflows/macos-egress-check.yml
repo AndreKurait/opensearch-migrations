@@ -13,12 +13,13 @@ jobs:
         working-directory: ${{ runner.temp }}
         env:
           POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
+          GITHUB_META_TOKEN: ${{ github.token }}
           PUBLIC_ENDPOINTS: api.github.com:443 github.com:443 raw.githubusercontent.com:443
         run: |
           set -euo pipefail
           guard="$RUNNER_TEMP/darwin_guard.py"
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/darwin_guard.py" -o "$guard"
-          expected=0ab148ba614a5b0ddf3ec0d7766b21ecfb4a3b3082b1312c12cd17da55d20e50
+          expected=26a3ca2efc598d5e53ae4b418b2a70778b8297b6d11f36c8d3193a103dd0b2bc
           test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
           /usr/bin/python3 "$guard" install
       # END generated network guard
