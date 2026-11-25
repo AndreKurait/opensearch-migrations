@@ -231,8 +231,13 @@ def run_candidate(image, digest, source, socket_path, command):
                 "CI_DEPENDENCY_PROXY_URL": "http://127.0.0.1:7777",
             }
             if command == ["@smoke"]:
+                fixture = os.environ.get("CI_CONTAINER_PROBE_DIGEST", "")
+                if len(fixture) != 64 or any(c not in "abcdef0123456789" for c in fixture):
+                    raise RuntimeError("Missing trusted probe image digest")
                 with (HERE / "smoke.sh").open("rb") as script:
-                    return subprocess.run(ssh + ["bash -se"], stdin=script).returncode
+                    return subprocess.run(
+                        ssh + ["env CI_CONTAINER_PROBE_DIGEST=" + fixture + " bash -se"], stdin=script
+                    ).returncode
             result = subprocess.run(
                 ssh
                 + [

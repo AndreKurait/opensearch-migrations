@@ -8,7 +8,7 @@ Use an ephemeral Linux host with QEMU, `qemu-img`, `cloud-localds`, `ssh`, `soca
 python3 .github/ci/dependency-cache/container-worker/worker.py prepare --output "$RUNNER_TEMP/migrations-worker.qcow2"
 ```
 
-For validation, prewarm the public `dockerhub/library/busybox` amd64 manifest `sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f` and its blobs. Start the dependency broker in strict read mode and pass its Unix socket. Checkout the workflow and launcher from the protected base commit. Put the PR commit in a separate checkout and supply it only as `--source`.
+The dedicated validation workflow creates a deterministic OCI image in private temporary storage from Ubuntu’s signed `busybox-static` package. The probe broker verifies the image manifest, config and layer digests before serving them offline. It exports the manifest hex in `CI_CONTAINER_PROBE_DIGEST`. Start the broker and pass its Unix socket. Checkout the workflow and launcher from the protected base commit. Put the PR commit in a separate checkout and supply it only as `--source`.
 
 ```sh
 python3 .github/ci/dependency-cache/container-worker/worker.py run \

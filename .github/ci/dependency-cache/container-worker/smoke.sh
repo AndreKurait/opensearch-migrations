@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Prewarm this digest in the public main cache before running a strict playback job.
+# The host prepares the read-only image before the candidate guest boots.
 TESTCONTAINERS_RYUK_DISABLED=true /opt/container-worker/bin/python - <<'PY'
+import os
 from testcontainers.core.container import DockerContainer
 
-image = '10.0.2.100:7777/dockerhub/library/busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f'
+image = '10.0.2.100:7777/dockerhub/migrations/worker-probe@sha256:' + os.environ['CI_CONTAINER_PROBE_DIGEST']
 with DockerContainer(image).with_command('sleep 45') as container:
     native = container.get_wrapped_container()
     assert image in native.image.attrs['RepoDigests'], 'Testcontainers image digest mismatch'

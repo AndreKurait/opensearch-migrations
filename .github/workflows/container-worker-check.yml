@@ -55,7 +55,7 @@ jobs:
         with: {persist-credentials: false}
       - name: Install Ubuntu guest tooling
         run: |
-          bash .github/ci/dependency-cache/install-ubuntu-tools.sh qemu-system-x86 qemu-utils cloud-image-utils openssh-client socat
+          bash .github/ci/dependency-cache/install-ubuntu-tools.sh qemu-system-x86 qemu-utils cloud-image-utils openssh-client socat busybox-static
           # QEMU package installation or a later udev event can reset a one-time ACL on /dev/kvm.
           # Keep access confined to the runner account on this disposable host.
           user=$(id -un)
@@ -73,6 +73,10 @@ jobs:
           dir=$(mktemp -d "$RUNNER_TEMP/nested-docker.XXXXXX")
           release() { if [[ -n "${broker_pid:-}" ]]; then kill "$broker_pid" 2>/dev/null || true; wait "$broker_pid" || true; fi; }
           trap release EXIT
+          binary=$(command -v busybox)
+          dpkg-query -L busybox-static | grep -Fx "$(realpath -- "$binary")" >/dev/null || dpkg-query -L busybox-static | grep -Fx /bin/busybox >/dev/null
+          python3 "$backend/probe-image.py" "$dir" "$binary"
+          export CI_CONTAINER_PROBE_DIGEST=$(cat "$dir/manifest.digest")
           node "$backend/probe-broker.cjs" "$dir" & broker_pid=$!
           for n in {1..60}; do [[ ! -f "$dir/ready" ]] || break; kill -0 "$broker_pid"; sleep 1; done
           test -f "$dir/ready"
