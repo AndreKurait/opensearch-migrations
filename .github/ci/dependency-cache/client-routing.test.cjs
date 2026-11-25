@@ -33,6 +33,7 @@ test('all native origin mapping formats agree and cleanup leaves read jobs witho
     if (clients.env.CI_DEPENDENCY_GRADLE_WRAPPER_JAR) {
       const props = await fs.readFile(clients.env.CI_DEPENDENCY_GRADLE_WRAPPER_JAR.replace(/\.jar$/, '.properties'), 'utf8');
       assert.match(props, /^distributionUrl=http:\/\/127\.0\.0\.1:12345\/raw\/gradle\/gradle-[\w.+-]+\.zip$/m);
+      assert.match(props, /^networkTimeout=120000$/m);
     }
     const config = await fs.readFile(clients.env.CONTAINERS_REGISTRIES_CONF, 'utf8');
     assert.equal(config, containersConfig('127.0.0.1', '12345'));

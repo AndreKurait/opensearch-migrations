@@ -9,6 +9,7 @@ const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 const { promisify } = require('node:util');
 const { validateKey } = require('./proxy.cjs');
+const { brokerProperties } = require('./gradle-wrapper.cjs');
 
 const run = promisify(execFile);
 const origins = {
@@ -227,12 +228,10 @@ async function wrapperForProxy(repository, temp, upstream) {
   let properties;
   try { properties = await fs.readFile(path.join(wrapper, 'gradle-wrapper.properties'), 'utf8'); }
   catch (error) { if (error.code === 'ENOENT') return undefined; throw error; }
-  const distribution = /^distributionUrl=https\\?:\/\/services\.gradle\.org\/distributions\/(gradle-[a-zA-Z0-9.+-]+\.zip)$/m;
-  if (!distribution.test(properties)) throw new Error('Unsupported Gradle wrapper distribution source');
+  const updated = brokerProperties(properties, upstream.origin);
   await fs.mkdir(path.join(temp, 'gradle', 'wrapper'), { recursive: true });
   const result = path.join(temp, 'gradle', 'wrapper', 'gradle-wrapper.jar');
   await fs.copyFile(path.join(wrapper, 'gradle-wrapper.jar'), result);
-  const updated = properties.replace(distribution, `distributionUrl=${upstream.origin}/raw/gradle/$1`);
   await fs.writeFile(result.replace(/\.jar$/, '.properties'), updated);
   return result;
 }

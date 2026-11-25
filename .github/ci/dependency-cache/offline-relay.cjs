@@ -7,6 +7,7 @@ const os = require('node:os');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
+const { brokerProperties } = require('./gradle-wrapper.cjs');
 
 async function rejectEgress() {
   if (process.getuid() === 0) throw new Error('Offline candidate must use an unprivileged UID');
@@ -68,10 +69,8 @@ async function run() {
     const source = '/source/gradle/wrapper/gradle-wrapper';
     const target = wrapperDir + '/gradle-wrapper';
     const raw = await fs.readFile(source+'.properties','utf8');
-    const pattern = /^distributionUrl=https\\?:\/\/services\.gradle\.org\/distributions\/(gradle-[a-zA-Z0-9.+-]+\.zip)$/m;
-    if (!pattern.test(raw)) throw new Error('Unrecognized wrapper distribution');
     await fs.copyFile(source+'.jar',target+'.jar');
-    await fs.writeFile(target+'.properties',raw.replace(pattern,`distributionUrl=${url}/raw/gradle/$1`));
+    await fs.writeFile(target+'.properties',brokerProperties(raw, url));
     env.CI_DEPENDENCY_GRADLE_WRAPPER_JAR = target+'.jar';
     if (!env.GRADLE_BIN) {
       const launcher = '/home/worker/wrapper/gradle-run';

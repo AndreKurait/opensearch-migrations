@@ -32,7 +32,7 @@ workdir=${CI_HERMETIC_WORKDIR:-.}
 # The trusted standalone harness can be run and tested before it has been added to a developer checkout.
 # Candidate suites get their own read-only /source; the default smoke itself is supplied by the trusted checkout.
 mkdir "$staging/harness"
-cp "$launcher_dir/offline-relay.cjs" "$launcher_dir/smoke.cjs" "$launcher_dir/corretto.cjs" "$staging/harness/"
+cp "$launcher_dir/offline-relay.cjs" "$launcher_dir/smoke.cjs" "$launcher_dir/corretto.cjs" "$launcher_dir/gradle-wrapper.cjs" "$staging/harness/"
 # These trusted, public registry mappings are literal data only; the guest never obtains the outer Docker socket.
 node -e 'process.stdout.write(require(process.argv[1]).containersConfig("127.0.0.1", "__GUEST_PORT__"))' "$launcher_dir/client-routing.cjs" > "$staging/harness/registries.conf.in"
 allow=(CI PYTEST_ADDOPTS KAFKA_TRAFFIC_TOPIC KAFKA_TRAFFIC_GROUP_ID OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED CI_GRADLE_BUILD_CACHE_PUSH)
