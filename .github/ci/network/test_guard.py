@@ -3,11 +3,29 @@
 import os
 import subprocess
 import unittest
+from unittest.mock import patch
 
 import linux_guard
 
 
 class Policy(unittest.TestCase):
+    def test_initialization_waits_for_both_the_allowlist_and_reject_rule(self):
+        allow = '-A OUTPUT -o eth0 -d 93.184.215.14/32 -p tcp --dport 443 -j ACCEPT'
+        reject = '-A OUTPUT -o eth0 -j REJECT --reject-with icmp-port-unreachable'
+        states = ('', allow, reject, allow + '\n' + reject)
+        output = [subprocess.CompletedProcess([], 0, stdout=text) for text in states]
+        with patch.object(linux_guard, 'run', side_effect=output), patch.object(linux_guard.time, 'sleep') as sleep:
+            self.assertEqual(linux_guard.vendor_pairs(timeout=90), [('93.184.215.14', '443')])
+        self.assertEqual(sleep.call_count, 3)
+
+    def test_initialization_deadline_fails_closed(self):
+        with patch.object(linux_guard, 'run', return_value=subprocess.CompletedProcess([], 0, stdout='')), \
+                patch.object(linux_guard.time, 'monotonic', side_effect=[0, 90]), \
+                patch.object(linux_guard.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(RuntimeError, 'block-policy rules are missing'):
+                linux_guard.vendor_pairs(timeout=90)
+            sleep.assert_not_called()
+
     def test_only_agent_permitted_public_pairs_are_copied(self):
         rules = '''-A OUTPUT -d 8.8.8.8/32 -o eth0 -p tcp -m owner --uid-owner 0 --dport 443 -j ACCEPT
 -A OUTPUT -o eth0 -d 93.184.215.14/32 -p tcp --dport 443 -j ACCEPT

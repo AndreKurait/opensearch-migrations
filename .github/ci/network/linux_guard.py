@@ -83,12 +83,16 @@ def reconcile(pairs, ipv6=False):
                 run(cmd + ['-I', 'OUTPUT', '1', *rule])
 
 
-def vendor_pairs():
-    rules = run(['iptables', '-w', '5', '-S', 'OUTPUT'], capture_output=True).stdout
-    pairs = allowed_pairs(rules)
-    if not pairs or not re.search(r'^-A OUTPUT -o eth0 (?:-p all )?-j REJECT', rules, re.M):
-        raise RuntimeError('The pinned StepSecurity Community block-policy rules are missing')
-    return pairs
+def vendor_pairs(timeout=0):
+    deadline = time.monotonic() + timeout
+    while True:
+        rules = run(['iptables', '-w', '5', '-S', 'OUTPUT'], capture_output=True).stdout
+        pairs = allowed_pairs(rules)
+        if pairs and re.search(r'^-A OUTPUT -o eth0 (?:-p all )?-j REJECT', rules, re.M):
+            return pairs
+        if time.monotonic() >= deadline:
+            raise RuntimeError('The pinned StepSecurity Community block-policy rules are missing')
+        time.sleep(0.25)
 
 
 def sync():
@@ -108,7 +112,8 @@ def install():
     script = CONTROL / 'linux_guard.py'
     shutil.copyfile(__file__, script)
     os.chmod(script, 0o555)
-    reconcile(vendor_pairs())
+    # The upstream action can return before its asynchronous firewall install finishes.
+    reconcile(vendor_pairs(timeout=90))
     reconcile([], ipv6=True)
     run(
         [

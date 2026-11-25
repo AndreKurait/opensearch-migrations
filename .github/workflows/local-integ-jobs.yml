@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           guard="$RUNNER_TEMP/linux_guard.py"
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/linux_guard.py" -o "$guard"
-          expected=cbe9fcb83fbc2c55d5734c9640f58696755156d3f9b68467f3672c35e2a6aec5
+          expected=e4d53ca074837dac963d7a0cdc72a1a202d40b19e172559a8be525f146e0a878
           test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
           sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install
           /usr/bin/python3 "$guard" probe
@@ -125,7 +125,7 @@ jobs:
           set -euo pipefail
           guard="$RUNNER_TEMP/linux_guard.py"
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/linux_guard.py" -o "$guard"
-          expected=cbe9fcb83fbc2c55d5734c9640f58696755156d3f9b68467f3672c35e2a6aec5
+          expected=e4d53ca074837dac963d7a0cdc72a1a202d40b19e172559a8be525f146e0a878
           test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
           sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install
           /usr/bin/python3 "$guard" probe
