@@ -16,7 +16,11 @@ async function service(mode, dir) {
   process.once('SIGTERM', stop);
   process.once('SIGINT', stop);
   const receiptFile = path.join(dir, 'receipt.json');
-  const store = mode === 'record' ? await openLocalRecorder({ receiptFile }) : await openReader();
+  let seed;
+  const store =
+    mode === 'record'
+      ? await openLocalRecorder({ receiptFile, lookup: (key) => seed?.resolve(key) })
+      : await openReader();
   const misses = new Set();
   const reportMiss = (key) => {
     if (misses.size < 256) misses.add(key);
@@ -37,18 +41,17 @@ async function service(mode, dir) {
     }
   };
   let packages;
-  let seed;
   try {
-    if (hosted && process.platform === 'linux') {
-      if (mode === 'record') {
-        try {
-          seed = await openReader();
-        } catch (error) {
-          console.warn(
-            `Main is recording without a previous published dependency index (${error.code || 'index unavailable'}).`,
-          );
-        }
+    if (hosted && mode === 'record') {
+      try {
+        seed = await openReader();
+      } catch (error) {
+        console.warn(
+          `Main is recording without a previous published dependency index (${error.code || 'index unavailable'}).`,
+        );
       }
+    }
+    if (hosted && process.platform === 'linux') {
       packages = await openPackageTransport({
         mode,
         reader: mode === 'read' ? store : seed,
@@ -90,13 +93,18 @@ async function service(mode, dir) {
     );
     if (packages && mode === 'record') {
       const merged = new Map();
-      for (const row of [...readReceipt(await fs.readFile(receiptFile)), ...(await packages.observations())]) {
+      for (const row of [
+        ...readReceipt(await fs.readFile(receiptFile)),
+        ...(await packages.observations()),
+      ]) {
         if (!merged.has(row.key) || merged.get(row.key).accessed <= row.accessed) merged.set(row.key, row);
       }
       const text = JSON.stringify([...merged.values()]);
       readReceipt(text);
       await fs.writeFile(receiptFile, text, { mode: 0o600 });
     }
+    if (packages?.metrics)
+      await fs.writeFile(path.join(dir, 'openartifact-metrics.json'), JSON.stringify(packages.metrics));
   } finally {
     try {
       await packages?.close();

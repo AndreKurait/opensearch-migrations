@@ -20,6 +20,11 @@ async function finish() {
       if (i > 300) throw new Error('Timed out while finalizing dependency observations');
       await delay(200);
     }
+    const metrics = await fs.readFile(path.join(dir,'openartifact-metrics.json'),'utf8').catch(() => null);
+    if (metrics) console.log(`OpenArtifact storage ${metrics}`);
+    const serviceLog = await fs.readFile(path.join(dir, 'service.log'), 'utf8').catch(() => '');
+    const gradle = serviceLog.match(/^Gradle remote cache (\{[^\n]+\})$/m);
+    if (gradle) console.log(`Gradle remote cache ${gradle[1]}`);
     const misses = await fs.readFile(path.join(dir, 'misses.json'), 'utf8').catch(() => null);
     if (misses) console.error(`Missing published dependencies: ${JSON.parse(misses).join(', ')}`);
     if (process.env.INPUT_MODE !== 'record') return;

@@ -37,7 +37,8 @@ def pax_fields(data):
         if n <= len(length) + 3 or n > len(data) or data[n - 1:n] != b'\n':
             reject()
         key, equal, value = data[len(length) + 1:n - 1].partition(b'=')
-        if not equal or key not in {b'path', b'mtime', b'atime', b'ctime', b'uid', b'gid', b'uname', b'gname'} or key in fields:
+        allowed = {b'path', b'mtime', b'atime', b'ctime', b'uid', b'gid', b'uname', b'gname'}
+        if not equal or key not in allowed or key in fields:
             reject()
         fields[key] = value
         data = data[n:]
@@ -54,9 +55,10 @@ def extract(stream, member, output, max_bytes):
         skip_padding(stream, header.size)
         header = tarfile.TarInfo.frombuf(read_exact(stream, BLOCK), 'utf8', 'strict')
     name = fields[b'path'].decode('utf8') if b'path' in fields else header.name
-    if header.type not in {tarfile.REGTYPE, tarfile.AREGTYPE} or header.linkname or name != member or not 0 <= header.size <= max_bytes:
+    regular_member = header.type in {tarfile.REGTYPE, tarfile.AREGTYPE} and not header.linkname
+    if not regular_member or name != member or not 0 <= header.size <= max_bytes:
         reject()
-    # The caller creates this file in a newly generated private directory. No member pathname is passed to filesystem operations.
+    # The caller creates this file in a newly generated private directory. Only the caller supplies its pathname.
     left = header.size
     with open(output, 'xb') as target:
         while left:

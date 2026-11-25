@@ -1,0 +1,501 @@
+{
+  "action": "e14015d583714f6e62063499dc959a02595150a1",
+  "purposes": {
+    "github": [
+      "api.github.com:443",
+      "github.com:443",
+      "raw.githubusercontent.com:443"
+    ],
+    "bootstrap": [
+      "objects.githubusercontent.com:443",
+      "release-assets.githubusercontent.com:443",
+      "raw.githubusercontent.com:443",
+      "nodejs.org:443",
+      "registry.npmjs.org:443"
+    ],
+    "package": [
+      "repo.maven.apache.org:443",
+      "repo1.maven.org:443",
+      "plugins.gradle.org:443",
+      "plugins-artifacts.gradle.org:443",
+      "services.gradle.org:443",
+      "downloads.gradle.org:443",
+      "corretto.aws:443",
+      "cdn.amazoncorretto.com:443",
+      "pypi.org:443",
+      "files.pythonhosted.org:443",
+      "registry.npmjs.org:443"
+    ],
+    "oci": [
+      "auth.docker.io:443",
+      "registry-1.docker.io:443",
+      "production.cloudflare.docker.com:443",
+      "production.cloudfront.docker.com:443",
+      "docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443",
+      "ghcr.io:443",
+      "pkg-containers.githubusercontent.com:443",
+      "quay.io:443",
+      "cdn01.quay.io:443",
+      "cdn02.quay.io:443",
+      "cdn03.quay.io:443",
+      "cdn04.quay.io:443",
+      "public.ecr.aws:443",
+      "registry.k8s.io:443",
+      "us-west1-docker.pkg.dev:443",
+      "us-central1-docker.pkg.dev:443",
+      "us-east1-docker.pkg.dev:443",
+      "mirror.gcr.io:443",
+      "storage.googleapis.com:443"
+    ],
+    "kubernetes": [
+      "dl.k8s.io:443",
+      "get.helm.sh:443",
+      "artifacts.elastic.co:443",
+      "download.elastic.co:443",
+      "charts.bitnami.com:443",
+      "kubernetes-sigs.github.io:443",
+      "prometheus-community.github.io:443",
+      "strimzi.io:443",
+      "argoproj.github.io:443",
+      "helm.min.io:443",
+      "opensearch-project.github.io:443"
+    ],
+    "ubuntu": [
+      "azure.archive.ubuntu.com:80",
+      "azure.archive.ubuntu.com:443",
+      "archive.ubuntu.com:80",
+      "archive.ubuntu.com:443",
+      "security.ubuntu.com:80",
+      "security.ubuntu.com:443",
+      "packages.microsoft.com:443",
+      "packages.cloud.google.com:443"
+    ],
+    "coverage": [
+      "codecov.io:443",
+      "api.codecov.io:443",
+      "cli.codecov.io:443",
+      "uploader.codecov.io:443",
+      "keybase.io:443",
+      "storage.googleapis.com:443",
+      "raw.githubusercontent.com:443"
+    ],
+    "aws-launch": [
+      "sts.us-west-2.amazonaws.com:443",
+      "sts.amazonaws.com:443",
+      "codebuild.us-west-2.amazonaws.com:443",
+      "ssm.us-west-2.amazonaws.com:443"
+    ],
+    "aws-watch": [
+      "sts.us-west-2.amazonaws.com:443",
+      "sts.amazonaws.com:443",
+      "codebuild.us-west-2.amazonaws.com:443",
+      "cloudformation.us-west-2.amazonaws.com:443",
+      "logs.us-west-2.amazonaws.com:443",
+      "s3.us-west-2.amazonaws.com:443"
+    ],
+    "promote": [
+      "sts.us-east-1.amazonaws.com:443",
+      "sts.amazonaws.com:443",
+      "s3.us-east-1.amazonaws.com:443",
+      "api.ecr-public.us-east-1.amazonaws.com:443",
+      "public.ecr.aws:443",
+      "central.sonatype.com:443",
+      "artifacts.opensearch.org:443",
+      "awscli.amazonaws.com:443"
+    ],
+    "website": [
+      "pages.github.com:443",
+      "objects.githubusercontent.com:443",
+      "release-assets.githubusercontent.com:443",
+      "registry.npmjs.org:443"
+    ],
+    "providers": [
+      "registry.terraform.io:443",
+      "releases.hashicorp.com:443",
+      "releases.hashicorp.com:80",
+      "registry.opentofu.org:443"
+    ],
+    "analysis": [
+      "binaries.sonarsource.com:443",
+      "sonarcloud.io:443",
+      "uploads.github.com:443",
+      "raw.githubusercontent.com:443"
+    ],
+    "linkcheck": [
+      "docs.opensearch.org:443",
+      "opensearch.org:443",
+      "aws.amazon.com:443",
+      "docs.aws.amazon.com:443",
+      "docs.github.com:443",
+      "opensearch-project.github.io:443",
+      "www.apache.org:443"
+    ],
+    "openartifact": [
+      "auth.docker.io:443",
+      "registry-1.docker.io:443",
+      "production.cloudflare.docker.com:443",
+      "production.cloudfront.docker.com:443",
+      "docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443",
+      "ghcr.io:443",
+      "pkg-containers.githubusercontent.com:443"
+    ]
+  },
+  "jobs": {
+    "CI.yml/gradle-extended-check": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "ubuntu",
+        "openartifact"
+      ],
+      "nativePrivileges": true
+    },
+    "CI.yml/gradle-build-macos": {
+      "platform": "macos",
+      "candidate": "seatbelt-only"
+    },
+    "CI.yml/python-lint": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "ubuntu",
+        "openartifact"
+      ],
+      "nativePrivileges": true
+    },
+    "CI.yml/python-tests": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "oci",
+        "kubernetes",
+        "coverage",
+        "ubuntu",
+        "openartifact"
+      ],
+      "nativePrivileges": true
+    },
+    "CI.yml/kind-setup-script-tests": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "CI.yml/aws-controller-tests": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "CI.yml/gradle-repository-tests": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "ubuntu",
+        "openartifact"
+      ],
+      "nativePrivileges": true
+    },
+    "CI.yml/generate-test-matrix": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "CI.yml/seed-gradle-test-docker-cache": {
+      "purposes": [
+        "github",
+        "oci"
+      ],
+      "nativePrivileges": true
+    },
+    "CI.yml/gradle-tests": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "oci",
+        "kubernetes",
+        "coverage"
+      ],
+      "nativePrivileges": true
+    },
+    "CI.yml/node-tests": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "oci",
+        "kubernetes",
+        "coverage",
+        "ubuntu",
+        "openartifact"
+      ],
+      "nativePrivileges": true
+    },
+    "CI.yml/mountable-transforms-k8s-test": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "oci",
+        "kubernetes"
+      ],
+      "nativePrivileges": true
+    },
+    "CI.yml/link-checker": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "linkcheck"
+      ],
+      "nativePrivileges": false
+    },
+    "CI.yml/gcp-terraform-test": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "providers"
+      ],
+      "nativePrivileges": false
+    },
+    "CI.yml/aws-terraform-test": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "providers"
+      ],
+      "nativePrivileges": false
+    },
+    "CI.yml/codeql-analyze": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "analysis"
+      ],
+      "nativePrivileges": false
+    },
+    "CI.yml/sonarqube-analysis": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "analysis",
+        "oci"
+      ],
+      "nativePrivileges": true
+    },
+    "CI.yml/all-ci-checks-pass": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "add-untriaged.yml/apply-label": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "aws-cancelled-status.yml/reconcile": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "aws-integration.yml/select": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "aws-integration.yml/test": {
+      "delegates": "./.github/workflows/aws-suite.yml"
+    },
+    "aws-suite.yml/start": {
+      "purposes": [
+        "github",
+        "aws-launch"
+      ],
+      "nativePrivileges": false
+    },
+    "aws-suite.yml/watch": {
+      "delegates": "./.github/workflows/aws-watch.yml"
+    },
+    "aws-suite.yml/watch-2": {
+      "delegates": "./.github/workflows/aws-watch.yml"
+    },
+    "aws-suite.yml/watch-3": {
+      "delegates": "./.github/workflows/aws-watch.yml"
+    },
+    "aws-suite.yml/watch-4": {
+      "delegates": "./.github/workflows/aws-watch.yml"
+    },
+    "aws-suite.yml/outcome": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "aws-suite.yml/publish-main-dependencies": {
+      "purposes": [
+        "github",
+        "aws-launch"
+      ],
+      "nativePrivileges": false
+    },
+    "aws-watch.yml/watch": {
+      "purposes": [
+        "github",
+        "aws-watch"
+      ],
+      "nativePrivileges": false
+    },
+    "backport.yml/backport": {
+      "delegates": "opensearch-project/opensearch-build/.github/workflows/backport-pr.yml@be3c490f863e26ba1ed4377c142a3b8c1859567f"
+    },
+    "dependency-cache-check.yml/protocol": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "ubuntu",
+        "package",
+        "oci",
+        "kubernetes"
+      ],
+      "nativePrivileges": true
+    },
+    "dependency-cache-observe.yml/observe": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "dependency-cache-publish.yml/publish": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "aws-launch"
+      ],
+      "nativePrivileges": false
+    },
+    "dependency-cache-sync.yml/sync": {
+      "delegates": "./.github/workflows/dependency-cache-publish.yml"
+    },
+    "dependency-cache-sync.yml/acknowledge": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "deploy-schema-viewer.yml/redispatch-on-release": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "deploy-schema-viewer.yml/deploy": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "website"
+      ],
+      "nativePrivileges": false
+    },
+    "generate-workflow-schema.yaml/generate-cache-key": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "generate-workflow-schema.yaml/generate-workflow-schema": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "oci",
+        "kubernetes"
+      ],
+      "nativePrivileges": true
+    },
+    "k8s-local-test.yml/k8s-local-test": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "oci",
+        "kubernetes"
+      ],
+      "nativePrivileges": true
+    },
+    "local-integ-tests.yml/select-tests": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "local-integ-tests.yml/k8s-local-test": {
+      "delegates": "./.github/workflows/k8s-local-test.yml"
+    },
+    "local-integ-tests.yml/docker-compose-e2e-test": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "oci",
+        "kubernetes"
+      ],
+      "nativePrivileges": true
+    },
+    "local-integ-tests.yml/all-local-integ-checks-pass": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    },
+    "release-drafter.yml/draft-a-release": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "oci",
+        "kubernetes"
+      ],
+      "nativePrivileges": true
+    },
+    "release-drafter.yml/promote-prerelease": {
+      "delegates": "./.github/workflows/release-publish.yml"
+    },
+    "release-dryrun.yml/release-dryrun": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package",
+        "oci",
+        "kubernetes"
+      ],
+      "nativePrivileges": true
+    },
+    "release-publish.yml/publish": {
+      "purposes": [
+        "github",
+        "bootstrap",
+        "promote",
+        "oci"
+      ],
+      "nativePrivileges": true
+    },
+    "release-publish.yml/notify-maintainers": {
+      "purposes": [
+        "github"
+      ],
+      "nativePrivileges": false
+    }
+  },
+  "version": "v2.21.1"
+}

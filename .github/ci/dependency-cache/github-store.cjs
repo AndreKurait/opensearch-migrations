@@ -197,14 +197,7 @@ async function discoverPublicIndex({ repository, branch, token, request = fetch 
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) || typeof branch !== 'string' || !branch.startsWith('refs/heads/')) {
     throw new Error('Expected a base-branch ref and public GitHub repository for cache discovery');
   }
-  const url = new URL(`https://api.github.com/repos/${repository}/actions/caches`);
-  url.search = new URLSearchParams({ref: branch, key: INDEX, per_page:'100', sort:'created_at', direction:'desc'}).toString();
-  const headers = {Accept:'application/vnd.github+json', 'User-Agent':'migration-assistant-dependency-cache'};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await request(url, {headers, redirect:'error', signal:AbortSignal.timeout(15000)});
-  if (!response.ok) throw new Error(`Cannot discover ${branch} dependency index from GitHub cache metadata (HTTP ${response.status})`);
-  const records = (await response.json()).actions_caches;
-  if (!Array.isArray(records)) throw new Error('GitHub cache metadata did not return cache entries');
+  const records = await require('./cache-metadata.cjs').listMainCaches({repository, prefix:INDEX, branch, token, request});
   const index = records.find(row => row.ref === branch && validIndexKey(row.key));
   if (!index) throw missingCache(`No digest-bound dependency index published on ${branch}; run the trusted cache publisher`);
   return index.key;

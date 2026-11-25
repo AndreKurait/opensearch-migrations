@@ -26,11 +26,13 @@ def observe(repo, run, attempt):
                     continue
                 # A completed-event recovery observer can run after the first observer exited.
                 # A queued/in-progress sync for this immutable receipt already owns the retry.
-                runs = json.loads(gh('api', '-X', 'GET', f'repos/{repo}/actions/workflows/dependency-cache-sync.yml/runs',
-                                     '-f', 'branch=main', '-F', 'per_page=100'))['workflow_runs']
+                endpoint = f'repos/{repo}/actions/workflows/dependency-cache-sync.yml/runs'
+                runs = json.loads(gh('api', '-X', 'GET', endpoint, '-f', 'branch=main', '-F', 'per_page=100'))
                 title = f'Publish dependency cache · {key}'
-                if not any(r['display_title'] == title and (r['status'] != 'completed' or r['conclusion'] == 'success') for r in runs):
-                    gh('workflow', 'run', 'dependency-cache-sync.yml', '--repo', repo, '--ref', 'main', '-f', f'receipt={key}')
+                if not any(r['display_title'] == title and (r['status'] != 'completed' or r['conclusion'] == 'success')
+                           for r in runs['workflow_runs']):
+                    gh('workflow', 'run', 'dependency-cache-sync.yml', '--repo', repo, '--ref', 'main',
+                       '-f', f'receipt={key}')
                     print(f'Queued protected main receipt {key}', flush=True)
                 dispatched.add(key)
         status = gh('api', f'repos/{repo}/actions/runs/{run}', '--jq', '.status').strip()
