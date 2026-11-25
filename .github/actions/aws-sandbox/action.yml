@@ -4,6 +4,9 @@ inputs:
   config:
     description: Protected aws-ci environment configuration
     required: true
+  role:
+    description: Launcher role name in the configured sandbox
+    default: MigrationsGitHubLauncher
   duration:
     description: AWS session duration in seconds
     required: true
@@ -24,7 +27,7 @@ runs:
     - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
       with:
         aws-region: us-west-2
-        role-to-assume: ${{ format('arn:aws:iam::{0}:role/MigrationsGitHubLauncher', fromJSON(inputs.config).account) }}
+        role-to-assume: ${{ format('arn:aws:iam::{0}:role/{1}', fromJSON(inputs.config).account, inputs.role) }}
         allowed-account-ids: ${{ fromJSON(inputs.config).account }}
         mask-aws-account-id: true
         role-session-name: gha-${{ github.run_id }}-${{ github.run_attempt }}

@@ -1,0 +1,34 @@
+name: Run protected dependency publisher
+on:
+  workflow_call:
+    inputs:
+      receipt: {type: string, default: ''}
+      build: {type: string, default: ''}
+      sha: {type: string, required: true}
+      seed: {type: boolean, default: false}
+    secrets:
+      AWS_CI_CONFIG: {required: true}
+permissions: {}
+jobs:
+  publish:
+    if: github.repository == 'AndreKurait/opensearch-migrations' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    environment: aws-ci
+    permissions: {contents: read, id-token: write}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.workflow_sha }}', persist-credentials: false}
+      - uses: ./.github/actions/aws-sandbox
+        with:
+          config: ${{ secrets.AWS_CI_CONFIG }}
+          duration: '10800'
+          role: MigrationsGitHubCacheLauncher
+      - name: Publish from the private Oregon worker
+        uses: ./.github/actions/dependency-cache
+        with: {mode: launch}
+        env:
+          CI_CACHE_MAIN_SHA: ${{ inputs.sha }}
+          CI_CACHE_RECEIPT_KEY: ${{ inputs.receipt }}
+          CI_CACHE_BUILD_ID: ${{ inputs.build }}
+          CI_CACHE_SEED: ${{ inputs.seed }}

@@ -55,11 +55,15 @@ if verify_kind_binary "${cached_kind_binary}"; then
     echo "Using cached ${KIND_VERSION} binary at ${cached_kind_binary}"
 else
     kind_download="$(mktemp "${kind_cache_version_dir}/.${kind_asset}.XXXXXX")"
+    kind_release_base="https://github.com/kubernetes-sigs/kind/releases/download"
+    if [[ -n "${CI_DEPENDENCY_PROXY_URL:-}" ]]; then
+        kind_release_base="${CI_DEPENDENCY_PROXY_URL%/}/raw/kind"
+    fi
 
     curl --fail --silent --show-error --location \
         --retry 3 \
         --output "${kind_download}" \
-        "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/${kind_asset}"
+        "${kind_release_base}/${KIND_VERSION}/${kind_asset}"
 
     printf '%s  %s\n' "${kind_sha256}" "${kind_download}" | sha256sum --check -
     chmod 0755 "${kind_download}"

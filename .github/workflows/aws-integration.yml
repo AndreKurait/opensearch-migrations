@@ -96,6 +96,7 @@ jobs:
       contents: read
       id-token: write
       statuses: write
+      actions: write
     uses: ./.github/workflows/aws-suite.yml
     secrets:
       AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}

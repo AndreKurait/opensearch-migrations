@@ -1,0 +1,44 @@
+version: 0.2
+env:
+  shell: bash
+phases:
+  install:
+    runtime-versions:
+      java: corretto21
+      nodejs: 22
+      python: 3.11
+    commands:
+      - |
+        set -euo pipefail
+        [[ "${CI_CACHE_MODE:-}" =~ ^(record|publish|both)$ ]]
+        [[ "${CI_CACHE_MAIN_SHA:-}" =~ ^[a-f0-9]{40}$ ]]
+        if [[ -n "${CI_CACHE_GRANT_PARAMETER:-}" ]]; then
+          [[ "$CI_CACHE_GRANT_PARAMETER" =~ ^/migrations/cache-grants/[0-9]+-[0-9]+-[a-f0-9-]{36}$ ]]
+        fi
+        if [[ -n "${CI_CACHE_BUILD_ID:-}" ]]; then
+          [[ "$CI_CACHE_BUILD_ID" =~ ^migrations-github-eks:[a-f0-9-]{36}$ ]]
+        fi
+        packages=()
+        if ! command -v zstd >/dev/null; then packages+=(zstd); fi
+        if [[ "$CI_CACHE_MODE" != publish ]] && ! command -v skopeo >/dev/null; then packages+=(skopeo); fi
+        if (( ${#packages[@]} > 0 )); then
+          apt-get update -qq
+          apt-get install -y -qq "${packages[@]}"
+        fi
+        git init -q "$CODEBUILD_SRC_DIR/harness"
+        cd "$CODEBUILD_SRC_DIR/harness"
+        # Fetch only the fork's default branch and prove reachability before running the supplied SHA.
+        git fetch --no-tags --filter=blob:none https://github.com/AndreKurait/opensearch-migrations.git refs/heads/main
+        git merge-base --is-ancestor "$CI_CACHE_MAIN_SHA" FETCH_HEAD
+        git checkout --quiet --detach "$CI_CACHE_MAIN_SHA"
+        node -e 'if (process.versions.node.split(".")[0] !== "22") throw Error("Node 22 is required")'
+        npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund
+        npm ci --prefix .github/ci/dependency-cache/aws --ignore-scripts --no-audit --no-fund
+  build:
+    commands:
+      - |
+        set -euo pipefail
+        cd "$CODEBUILD_SRC_DIR/harness"
+        # This new worker must observe the actual wrapper distribution, including when its base image cached Gradle.
+        export GRADLE_USER_HOME="$CODEBUILD_SRC_DIR/gradle-home"
+        node .github/ci/dependency-cache/cli.cjs cloud-worker

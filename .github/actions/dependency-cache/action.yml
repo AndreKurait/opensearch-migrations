@@ -1,0 +1,11 @@
+name: Local dependency proxy
+description: Serve public build dependencies on demand and record protected main usage.
+inputs:
+  mode:
+    required: true
+    description: read, record, or launch the private main publisher
+runs:
+  using: node24
+  main: start.cjs
+  post: finish.cjs
+  post-if: always()

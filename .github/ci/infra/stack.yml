@@ -38,6 +38,111 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties: {LogGroupName: /aws/codebuild/migrations-github-eks, RetentionInDays: 14}
+  DependencyCacheLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: {LogGroupName: /aws/codebuild/migrations-main-dependency-cache, RetentionInDays: 14}
+  DependencyCacheWorker:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: codebuild.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition: {ArnEquals: {'aws:SourceArn': !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/migrations-main-dependency-cache'}, StringEquals: {'aws:SourceAccount': !Ref 'AWS::AccountId'}}
+      Policies:
+        - PolicyName: RecordAndPublishPublicDependencies
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt Artifacts.Arn
+                Condition: {StringEquals: {'s3:prefix': dependency-cache/v1/catalog/}}
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: [!Sub '${Artifacts.Arn}/dependency-cache/v1/blobs/*', !Sub '${Artifacts.Arn}/dependency-cache/v1/catalog/??.json', !Sub '${Artifacts.Arn}/builds/*/results.zip']
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: [!Sub '${Artifacts.Arn}/dependency-cache/v1/blobs/*', !Sub '${Artifacts.Arn}/dependency-cache/v1/catalog/??.json']
+                Condition: {StringEquals: {'s3:if-none-match': '*'}}
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub '${Artifacts.Arn}/dependency-cache/v1/catalog/??.json'
+                Condition: {'Null': {'s3:if-match': 'false'}}
+              - {Effect: Allow, Action: 'codebuild:BatchGetBuilds', Resource: [!GetAtt Project.Arn, !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:build/migrations-github-eks:*']}
+              - {Effect: Allow, Action: ['ssm:GetParameter', 'ssm:DeleteParameter'], Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/migrations/cache-grants/*'}
+              - {Effect: Allow, Action: ['logs:CreateLogStream', 'logs:PutLogEvents'], Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/migrations-main-dependency-cache:log-stream:*'}
+  DependencyCacheProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: migrations-main-dependency-cache
+      Description: Record public dependencies and publish the approved main catalog to GitHub Actions cache
+      ServiceRole: !GetAtt DependencyCacheWorker.Arn
+      TimeoutInMinutes: 90
+      QueuedTimeoutInMinutes: 30
+      Source: {Type: NO_SOURCE, BuildSpec: !File dependency-cache-buildspec.yml}
+      Artifacts: {Type: NO_ARTIFACTS}
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_LARGE
+        Image: aws/codebuild/standard:7.0
+        ImagePullCredentialsType: CODEBUILD
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - {Name: CODEBUILD_CONFIG_AUTO_DISCOVER, Value: 'false'}
+          - {Name: CI_DEPENDENCY_BUCKET, Value: !Ref Artifacts}
+      LogsConfig: {CloudWatchLogs: {Status: ENABLED, GroupName: !Ref DependencyCacheLogs}}
+  DependencyCacheLauncher:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MigrationsGitHubCacheLauncher
+      MaxSessionDuration: 10800
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Federated: !Ref ProviderArn}
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+                'token.actions.githubusercontent.com:repository_id': '744243892'
+                'token.actions.githubusercontent.com:repository_owner_id': '33106608'
+                'token.actions.githubusercontent.com:ref': refs/heads/main
+                'token.actions.githubusercontent.com:workflow': Publish main dependency cache
+                'token.actions.githubusercontent.com:sub': ['repo:AndreKurait/opensearch-migrations:environment:aws-ci', 'repo:AndreKurait@33106608/opensearch-migrations@744243892:environment:aws-ci']
+                'token.actions.githubusercontent.com:job_workflow_ref': AndreKurait/opensearch-migrations/.github/workflows/dependency-cache-publish.yml@refs/heads/main
+      Policies:
+        - PolicyName: LaunchMainDependencyCache
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: codebuild:StartBuild
+                Resource: !GetAtt DependencyCacheProject.Arn
+                Condition:
+                  'Null':
+                    'codebuild:source.buildspec': 'true'
+                    'codebuild:source.location': 'true'
+                    'codebuild:serviceRole': 'true'
+                    'codebuild:environment.type': 'true'
+                    'codebuild:environment.computeType': 'true'
+                    'codebuild:environment.image': 'true'
+                    'codebuild:environment.privilegedMode': 'true'
+                    'codebuild:artifacts.location': 'true'
+                    'codebuild:logsConfig.s3Logs.location': 'true'
+                    'codebuild:secondaryArtifacts': 'true'
+                    'codebuild:secondarySources': 'true'
+                    'codebuild:cache.type': 'true'
+                    'codebuild:cache.location': 'true'
+                    'codebuild:environment.fleet.fleetArn': 'true'
+                    'codebuild:environment.registryCredential.credential': 'true'
+                  'ForAllValues:StringEquals':
+                    'codebuild:environment.environmentVariables.name': [CI_CACHE_MAIN_SHA, CI_CACHE_MODE, CI_CACHE_GRANT_PARAMETER, CI_CACHE_RECEIPT_KEY, CI_CACHE_BUILD_ID]
+              - {Effect: Allow, Action: ['codebuild:BatchGetBuilds', 'codebuild:StopBuild'], Resource: [!GetAtt DependencyCacheProject.Arn, !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:build/migrations-main-dependency-cache:*']}
+              - {Effect: Allow, Action: ['ssm:PutParameter', 'ssm:DeleteParameter'], Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/migrations/cache-grants/*'}
   SandboxBoundary:
     Type: AWS::IAM::ManagedPolicy
     Properties:

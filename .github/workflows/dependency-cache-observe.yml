@@ -1,0 +1,28 @@
+name: Observe main dependency workers
+on:
+  workflow_run:
+    workflows: [CI, Local Integ Tests, Dependency cache protocol check]
+    branches: [main]
+    types: [in_progress, completed]
+permissions: {}
+concurrency:
+  group: cache-observer-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+  queue: max
+jobs:
+  observe:
+    if: >-
+      github.repository == 'AndreKurait/opensearch-migrations' && vars.DEPENDENCY_PROXY_ENABLED == 'true' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event.workflow_run.event)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    permissions: {actions: write, contents: read}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: '${{ github.workflow_sha }}', persist-credentials: false}
+      - name: Publish newly completed main workers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: python3 .github/ci/dependency-cache/observe.py

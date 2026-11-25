@@ -53,6 +53,7 @@ jobs:
       SOURCE_VERSION: ${{ inputs.source-version }}
       TARGET_VERSION: ${{ inputs.target-version }}
       TEST_IDS: ${{ inputs.test-ids }}
+      TEST_REPO_DIR: ${{ inputs.release-ref != '' && 'release-candidate' || '.' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,6 +62,8 @@ jobs:
         with:
           gradle-cache-enabled: true
           gradle-cache-read-only: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+          dependency-proxy-docker: 'true'
 
       - name: Stage runner helpers
         run: |
@@ -72,14 +75,17 @@ jobs:
         with:
           repository: ${{ inputs.release-repo || github.repository }}
           ref: ${{ inputs.release-ref }}
+          path: release-candidate
           persist-credentials: false
 
       - name: Get registry cache key
         id: registry-cache-key
+        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
         # Rotates monthly so stale image layers don't accumulate in one cache entry.
         run: echo "key=local-integ-registry-cache-v1-$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
       - name: Restore registry cache
         id: registry-cache
+        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: ${{ runner.temp }}/registry-cache
@@ -95,6 +101,7 @@ jobs:
           echo "${RUNNER_TEMP}/kind-bin" >> "$GITHUB_PATH"
 
       - name: Create kind cluster
+        working-directory: ${{ env.TEST_REPO_DIR }}
         # Recreate the ephemeral cluster once for transient startup failures.
         run: |
           for attempt in 1 2; do
@@ -109,12 +116,14 @@ jobs:
           exit 1
 
       - name: Start registry cache
-        # Docker Hub pulls from BuildKit and the kind node go through this proxy.
+        if: vars.DEPENDENCY_PROXY_ENABLED != 'true' || env.CI_DEPENDENCY_REGISTRY_ENDPOINT != ''
+        # With an active dependency proxy the helper configures the existing kind nodes.
         run: |
           "$RUNNER_TEMP/local-integ-scripts/registry-cache.sh" start
           "$RUNNER_TEMP/local-integ-scripts/registry-cache.sh" configure-kind "$KIND_CLUSTER_NAME"
 
       - name: Build Docker images (BuildKit)
+        working-directory: ${{ env.TEST_REPO_DIR }}
         timeout-minutes: 45
         run: |
           set -eu
@@ -149,7 +158,7 @@ jobs:
           OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
 
       - name: Run E2E tests
-        working-directory: libraries/testAutomation
+        working-directory: ${{ format('{0}/libraries/testAutomation', env.TEST_REPO_DIR) }}
         run: |
           pipenv install --deploy
           mkdir -p ./reports
@@ -175,6 +184,7 @@ jobs:
           echo "ARTIFACT_SUFFIX=$source-to-$target-${TEST_IDS//[^A-Za-z0-9._-]/-}" >> "$GITHUB_ENV"
       - name: Summarize test cases
         if: always()
+        working-directory: ${{ env.TEST_REPO_DIR }}
         run: |
           shopt -s nullglob
           for report in libraries/testAutomation/reports/*.json; do
@@ -185,7 +195,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: k8s-reports-${{ env.ARTIFACT_SUFFIX }}
-          path: libraries/testAutomation/reports/*.json
+          path: ${{ env.TEST_REPO_DIR }}/libraries/testAutomation/reports/*.json
           retention-days: 30
           if-no-files-found: warn
       - name: Upload application logs
@@ -196,15 +206,15 @@ jobs:
           name: k8s-local-${{ env.ARTIFACT_SUFFIX }}
           retention-days: 30
           if-no-files-found: warn
-          path: libraries/testAutomation/logs/
+          path: ${{ env.TEST_REPO_DIR }}/libraries/testAutomation/logs/
 
       - name: Stop registry cache
-        if: always()
+        if: always() && vars.DEPENDENCY_PROXY_ENABLED != 'true'
         run: '"$RUNNER_TEMP/local-integ-scripts/registry-cache.sh" stop'
       - name: Save registry cache
         # Only one matrix entry saves, and never from PRs or the merge queue.
         if: >-
-          !cancelled() && inputs.save-registry-cache &&
+          !cancelled() && vars.DEPENDENCY_PROXY_ENABLED != 'true' && inputs.save-registry-cache &&
           steps.registry-cache.outputs.cache-hit != 'true' &&
           contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5

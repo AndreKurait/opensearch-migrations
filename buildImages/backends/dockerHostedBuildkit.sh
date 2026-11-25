@@ -212,6 +212,11 @@ connect_cluster_to_registry_network() {
       docker inspect -f '{{range $key, $_ := .NetworkSettings.Networks}}{{println $key}}{{end}}' \
         "${EXTERNAL_REGISTRY_NAME}" | grep -Fxq "${cluster_network}" || return 1
   fi
+  # On a trusted recorder, route cluster pull and resolve requests through the same public dependency proxy as BuildKit.
+  if [[ -n "${CI_DEPENDENCY_REGISTRY_ENDPOINT:-}" ]]; then
+    local routing_script="${MIGRATIONS_REPO_ROOT_DIR}/.github/scripts/registry-cache.sh"
+    "${routing_script}" configure-dependency-nodes "$@"
+  fi
   local registry_dir="/etc/containerd/certs.d/${EXTERNAL_REGISTRY_NAME}:${EXTERNAL_REGISTRY_PORT}"
   local node
   for node in "$@"; do

@@ -113,17 +113,22 @@ jobs:
         with:
           gradle-cache-enabled: true
           gradle-cache-read-only: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+          dependency-proxy-docker: 'true'
 
       - name: Get registry cache key
         id: registry-cache-key
+        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
         # Must match k8s-local-test.yml, which saves the cache.
         run: echo "key=local-integ-registry-cache-v1-$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
       - name: Restore registry cache
+        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: ${{ runner.temp }}/registry-cache
           key: ${{ steps.registry-cache-key.outputs.key }}
       - name: Start registry cache
+        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
         run: ./.github/scripts/registry-cache.sh start
 
       - name: Build Docker images
@@ -168,7 +173,7 @@ jobs:
           path: logs/
           retention-days: 30
       - name: Stop registry cache
-        if: always()
+        if: always() && vars.DEPENDENCY_PROXY_ENABLED != 'true'
         run: ./.github/scripts/registry-cache.sh stop
 
   all-local-integ-checks-pass:

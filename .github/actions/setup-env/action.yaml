@@ -9,6 +9,14 @@ inputs:
     description: 'Gradle cache read-only mode (no save)'
     required: false
     default: 'true'
+  dependency-proxy-enabled:
+    description: 'Route supported CI dependencies through the per-job read or record proxy'
+    required: false
+    default: 'false'
+  dependency-proxy-docker:
+    description: 'Route Docker clients on disposable jobs that already use their own Docker daemon'
+    required: false
+    default: 'false'
 runs:
   using: "composite"
   steps:
@@ -19,21 +27,35 @@ runs:
 
     - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
       with:
-        cache-disabled: ${{ inputs.gradle-cache-enabled != 'true' }}
+        cache-disabled: ${{ inputs.gradle-cache-enabled != 'true' || inputs.dependency-proxy-enabled == 'true' }}
         cache-read-only: ${{ inputs.gradle-cache-read-only }}
 
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
       with:
         python-version: 3.11
 
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 22.x
+
+    - name: Install dependency cache toolkit
+      if: inputs.dependency-proxy-enabled == 'true'
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund
+
+    - name: Start dependency cache
+      if: inputs.dependency-proxy-enabled == 'true'
+      uses: ./.github/actions/dependency-cache
+      env:
+        CI_CACHE_TRUSTED_DOCKER: ${{ inputs.dependency-proxy-docker == 'true' && '1' || '0' }}
+      with:
+        mode: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && 'record' || 'read' }}
+
     - name: Install pipenv globally
       run: |
         python3 -m pip install pipenv==2026.5.0
       shell: bash
-
-    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-      with:
-        node-version: 22.x
 
     - name: Aggressive disk cleanup
       shell: bash

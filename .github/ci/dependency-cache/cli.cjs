@@ -1,0 +1,189 @@
+'use strict';
+
+const {spawn, execFile} = require('node:child_process');
+const {randomUUID} = require('node:crypto');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const {promisify} = require('node:util');
+const {setTimeout: delay} = require('node:timers/promises');
+const {startProxy} = require('./proxy.cjs');
+const {setupClients} = require('./client-routing.cjs');
+const {openLocalRecorder, readReceipt, MAX_RECEIPT_BYTES} = require('./receipts.cjs');
+
+const project = 'migrations-main-dependency-cache';
+const sourceBuild = /^migrations-github-eks:([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/;
+const receiptPattern = /^migrations-main-requests-v1-\d+-\d+-[0-9a-f-]{36}$/;
+const receiptPath = '.migrations-public-dependency-cache-v1/main-requests.json';
+const execute = promisify(execFile);
+const cacheEnv = ['ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RESULTS_URL', 'ACTIONS_CACHE_SERVICE_V2', 'ACTIONS_CACHE_MODE'];
+
+async function aws(service, operation, ...flags) {
+  try {
+    const {stdout} = await execute('aws', ['--region', 'us-west-2', '--no-cli-pager', '--output', 'json', service, operation, ...flags], {maxBuffer: 5 * 1024 * 1024});
+    return stdout.trim() ? JSON.parse(stdout) : {};
+  } catch (error) {
+    // Never relay AWS CLI argv, the private bucket, OIDC identifiers or the cache grant.
+    const code = error.stderr?.match(/An error occurred \((\w+)\)/)?.[1] || 'request failed';
+    throw new Error(`${service} ${operation}: ${code}`);
+  }
+}
+
+async function run(command, args, env = process.env) {
+  const child = spawn(command, args, {env, stdio: 'inherit'});
+  const stop = () => child.kill('SIGTERM');
+  process.once('SIGTERM', stop);
+  try {
+    await new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', (code, signal) => code === 0 ? resolve() : reject(new Error(`Worker exited with ${signal || code}`)));
+    });
+  } finally { process.off('SIGTERM', stop); }
+}
+
+async function serve(store, mode, body) {
+  let proxy;
+  let clients;
+  try {
+    proxy = await startProxy({resolve: key => store.resolve(key)});
+    clients = await setupClients({url: proxy.url, mode});
+    await body(clients.env);
+  } finally {
+    try { await clients?.close(); } finally { try { await proxy?.close(); } finally { await store.close(); } }
+  }
+}
+
+async function nativeReceipt(buildId) {
+  const match = sourceBuild.exec(buildId);
+  if (!match) throw new Error('Invalid main worker build ID');
+  const {builds} = await aws('codebuild', 'batch-get-builds', '--ids', buildId);
+  const build = builds?.[0];
+  const env = Object.fromEntries((build?.environment?.environmentVariables || []).map(v => [v.name, v.value]));
+  const bucket = process.env.CI_DEPENDENCY_BUCKET;
+  const key = `builds/${match[1]}/results.zip`;
+  if (!build?.buildComplete || build.id !== buildId || build.projectName !== 'migrations-github-eks' ||
+      env.CI_GIT_REF !== 'refs/heads/main' || env.CI_GIT_SHA !== process.env.CI_CACHE_MAIN_SHA ||
+      build.artifacts?.location !== `arn:aws:s3:::${bucket}/${key}`) throw new Error('Build is not the selected, completed main worker');
+  const info = await aws('s3api', 'head-object', '--bucket', bucket, '--key', key);
+  if (!(info.ContentLength > 0 && info.ContentLength <= 64 * 1024 ** 2)) throw new Error('Unexpected worker archive size');
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'main-receipt-'));
+  try {
+    const zip = path.join(dir, 'results.zip');
+    await aws('s3api', 'get-object', '--bucket', bucket, '--key', key, zip);
+    const script = 'import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1]) as z:\n entries=[i for i in z.infolist() if i.filename=="dependency-requests.json"]\n if len(entries)!=1 or entries[0].file_size>int(sys.argv[2]): raise ValueError("missing or oversized receipt")\n sys.stdout.buffer.write(z.read(entries[0]))';
+    const {stdout} = await execute('python3', ['-c', script, zip, String(MAX_RECEIPT_BYTES)], {maxBuffer: MAX_RECEIPT_BYTES + 1024});
+    return readReceipt(stdout);
+  } finally { await fs.rm(dir, {recursive: true, force: true}); }
+}
+
+async function githubReceipt(key) {
+  if (!receiptPattern.test(key)) throw new Error('Invalid main worker receipt key');
+  const cache = await import('@actions/cache');
+  try {
+    await fs.rm(receiptPath, {force: true});
+    if (await cache.restoreCache([receiptPath], key, []) !== key) throw new Error('Main worker receipt has expired');
+    return readReceipt(await fs.readFile(receiptPath));
+  } finally { await fs.rm(receiptPath, {force: true}); }
+}
+
+async function importMain(observations) {
+  const store = await require('./aws-store.cjs').openRecorder();
+  try {
+    let next = 0;
+    const workers = Array.from({length: Math.min(8, observations.length)}, async () => {
+      while (next < observations.length) await store.importObservation(observations[next++]);
+    });
+    const results = await Promise.allSettled(workers);
+    for (const result of results) if (result.status === 'rejected') throw result.reason;
+  } finally { await store.close(); }
+}
+
+async function cloudWorker() {
+  const mode = process.env.CI_CACHE_MODE;
+  if (!['record', 'publish', 'both'].includes(mode)) throw new Error('Invalid worker mode');
+  if (mode !== 'publish') {
+    const recorder = await require('./aws-store.cjs').openRecorder();
+    await serve(recorder, 'record', env => run(process.execPath, [path.join(__dirname, 'smoke.cjs')], {...process.env, ...env}));
+  }
+  if (mode === 'record') return;
+  const parameter = process.env.CI_CACHE_GRANT_PARAMETER;
+  if (!/^\/migrations\/cache-grants\/\d+-\d+-[a-f0-9-]{36}$/.test(parameter || '')) throw new Error('Missing scoped cache publication grant');
+  const grant = JSON.parse((await aws('ssm', 'get-parameter', '--name', parameter, '--with-decryption')).Parameter.Value);
+  await aws('ssm', 'delete-parameter', '--name', parameter);
+  for (const key of cacheEnv) if (typeof grant[key] === 'string') process.env[key] = grant[key];
+  process.env.GITHUB_WORKSPACE = process.cwd();
+  if (process.env.CI_CACHE_RECEIPT_KEY) await importMain(await githubReceipt(process.env.CI_CACHE_RECEIPT_KEY));
+  if (process.env.CI_CACHE_BUILD_ID) await importMain(await nativeReceipt(process.env.CI_CACHE_BUILD_ID));
+  const catalog = await require('./aws-store.cjs').openPublisher();
+  try {
+    const result = await require('./github-store.cjs').publish({entries: catalog.entries, materialize: catalog.materialize, generation: grant.generation});
+    console.log(`Published ${result.entries} paths across ${result.blobs} entries (${result.bytes} bytes).`);
+  } finally { await catalog.close(); }
+}
+
+async function launchCloud() {
+  const env = process.env;
+  if (env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_REPOSITORY !== 'AndreKurait/opensearch-migrations' ||
+      !/^\d+$/.test(env.GITHUB_RUN_ID) || !/^\d+$/.test(env.GITHUB_RUN_ATTEMPT) || !/^[0-9a-f]{40}$/.test(env.CI_CACHE_MAIN_SHA || '')) throw new Error('Publication must run from the protected main workflow');
+  const key = env.CI_CACHE_RECEIPT_KEY || '';
+  const native = env.CI_CACHE_BUILD_ID || '';
+  if ((key && !receiptPattern.test(key)) || (native && !sourceBuild.test(native)) || (key && native)) throw new Error('Invalid receipt input');
+  if (!env.ACTIONS_RUNTIME_TOKEN || !env.ACTIONS_RESULTS_URL || !env.ACTIONS_CACHE_SERVICE_V2) throw new Error('Actions cache grant unavailable');
+  const generation = env.GITHUB_RUN_ID.padStart(20, '0') + env.GITHUB_RUN_ATTEMPT.padStart(4, '0') + Date.now().toString();
+  const grant = Object.fromEntries(cacheEnv.filter(k => env[k]).map(k => [k, env[k]]));
+  const parameter = `/migrations/cache-grants/${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT}-${randomUUID()}`;
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cache-grant-'));
+  let id;
+  let done = false;
+  let interrupted = false;
+  const interrupt = () => { interrupted = true; };
+  process.once('SIGTERM', interrupt);
+  process.once('SIGINT', interrupt);
+  try {
+    // Pass the secret by a 0600 file. It must never appear in process arguments or CodeBuild metadata.
+    const file = path.join(dir, 'grant.json');
+    const payload = JSON.stringify({...grant, generation});
+    if (Buffer.byteLength(payload) > 8192) throw new Error('Publication grant exceeds Parameter Store capacity');
+    await fs.writeFile(file, payload, {mode: 0o600});
+    await aws('ssm', 'put-parameter', '--name', parameter, '--type', 'SecureString', '--tier',
+      Buffer.byteLength(payload) > 4096 ? 'Advanced' : 'Standard', '--value', `file://${file}`);
+    await fs.rm(file);
+    const variables = {CI_CACHE_MAIN_SHA: env.CI_CACHE_MAIN_SHA, CI_CACHE_MODE: env.CI_CACHE_SEED === 'true' ? 'both' : 'publish', CI_CACHE_GRANT_PARAMETER: parameter};
+    if (key) variables.CI_CACHE_RECEIPT_KEY = key;
+    if (native) variables.CI_CACHE_BUILD_ID = native;
+    const overrides = Object.entries(variables).map(([name, value]) => ({name, value, type: 'PLAINTEXT'}));
+    id = (await aws('codebuild', 'start-build', '--project-name', project, '--environment-variables-override', JSON.stringify(overrides))).build.id;
+    if (!id.startsWith(project + ':')) throw new Error('Unexpected cache worker');
+    console.log(`Started Oregon cache publisher ${id}`);
+    while (!interrupted) {
+      const build = (await aws('codebuild', 'batch-get-builds', '--ids', id)).builds[0];
+      if (build.buildComplete) {
+        done = true;
+        if (build.buildStatus !== 'SUCCEEDED') throw new Error(`Cache publication ${build.buildStatus} in ${id}`);
+        console.log('Cache publication succeeded.');
+        return;
+      }
+      await delay(5000);
+    }
+    throw new Error('Cache publisher interrupted');
+  } finally {
+    process.off('SIGTERM', interrupt); process.off('SIGINT', interrupt);
+    if (id && !done) await aws('codebuild', 'stop-build', '--id', id).catch(() => {});
+    await fs.rm(dir, {recursive: true, force: true});
+    await aws('ssm', 'delete-parameter', '--name', parameter).catch(error => {
+      if (!error.message.includes('ParameterNotFound')) throw error;
+    });
+  }
+}
+
+async function main(args) {
+  if (args[0] === 'cloud-worker') return cloudWorker();
+  if (args[0] === 'launch') return launchCloud();
+  if (args[0] === 'record-worker' && args[1] === '--' && args.length >= 3) {
+    return serve(await openLocalRecorder({receiptFile: process.env.CI_DEPENDENCY_RECEIPT}), 'record',
+      env => run(args[2], args.slice(3), {...process.env, ...env}));
+  }
+  throw new Error('Expected cloud-worker, launch, or record-worker -- COMMAND [ARGS]');
+}
+if (require.main === module) main(process.argv.slice(2)).catch(error => { console.error(error.message); process.exitCode = 1; });
+module.exports = {launchCloud, receiptPath, receiptPattern, run, serve};

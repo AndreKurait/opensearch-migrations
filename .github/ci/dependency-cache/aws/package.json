@@ -1,0 +1,6 @@
+{
+  "name": "migrations-aws-dependency-store",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "dependencies": { "@aws-sdk/client-s3": "3.1178.0" }
+}

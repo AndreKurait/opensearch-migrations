@@ -49,6 +49,9 @@ ext.configureMavenRepositories = { RepositoryHandler handler, boolean plugins ->
     handler.maven {
         name = 'dependencyCache'
         url = endpoint
+        if (endpoint.scheme == 'http' && endpoint.host in ['127.0.0.1', 'localhost', '[::1]']) {
+            allowInsecureProtocol = true
+        }
         if (repositoryUsername != null) {
             credentials {
                 username = repositoryUsername

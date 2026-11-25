@@ -137,10 +137,36 @@ report() {
   done
 }
 
+configure_dependency_nodes() {
+  local endpoint="${CI_DEPENDENCY_REGISTRY_ENDPOINT:?}" host origin node entry
+  [[ "$endpoint" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]] || return 1
+  for node in "$@"; do
+    for entry in 'docker.io dockerhub' 'ghcr.io ghcr' 'public.ecr.aws ecrpublic' 'quay.io quay' 'registry.k8s.io k8s' 'mirror.gcr.io gcr'; do
+      read -r host origin <<< "$entry"
+      docker exec "$node" mkdir -p "/etc/containerd/certs.d/$host"
+      # The only usable pull/resolve endpoint is the canonical cache URL. A 503 signals a cache miss.
+      docker exec -i "$node" cp /dev/stdin "/etc/containerd/certs.d/$host/hosts.toml" <<EOF
+server = "http://127.0.0.1:1"
+[host."http://${endpoint}/v2/${origin}"]
+  capabilities = ["pull", "resolve"]
+  override_path = true
+EOF
+    done
+  done
+}
+
 case "${1:-}" in
-  start) start ;;
-  configure-kind) configure_kind "${2:?kind cluster name required}" ;;
-  stop) stop ;;
+  configure-dependency-nodes) shift; configure_dependency_nodes "$@" ;;
+  start)
+    # The trusted client launcher already provisioned its own per-run BuildKit config.
+    [[ -n "${CI_DEPENDENCY_REGISTRY_ENDPOINT:-}" ]] || start ;;
+  configure-kind)
+    cluster="${2:?kind cluster name required}"
+    if [[ -n "${CI_DEPENDENCY_REGISTRY_ENDPOINT:-}" ]]; then
+      mapfile -t nodes < <(kind get nodes --name "$cluster")
+      (( ${#nodes[@]} > 0 )) && configure_dependency_nodes "${nodes[@]}"
+    else configure_kind "$cluster"; fi ;;
+  stop) [[ -n "${CI_DEPENDENCY_REGISTRY_ENDPOINT:-}" ]] || stop ;;
   report) report ;;
   *)
     echo "Usage: $0 start | configure-kind <cluster> | stop | report" >&2

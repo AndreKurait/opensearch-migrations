@@ -59,10 +59,18 @@ phases:
         if [[ -n "${CI_RELEASE_VERSION:-}" ]]; then cd "$CODEBUILD_SRC_DIR/release"; fi
         command="$CI_SUITE"
         if [[ "${CI_MODE:-}" == cleanup ]]; then command=cleanup; fi
-        python3 -u "$CODEBUILD_SRC_DIR/harness/.github/ci/aws/run.py" "$command"
+        runner=("$CODEBUILD_SRC_DIR/harness/.github/ci/aws/run.py" "$command")
+        recorder="$CODEBUILD_SRC_DIR/harness/.github/ci/dependency-cache/cli.cjs"
+        if [[ "${CI_MODE:-}" != cleanup && "${CI_GIT_REF:-}" == refs/heads/main && -f "$recorder" ]]; then
+          export CI_DEPENDENCY_RECEIPT="$CODEBUILD_SRC_DIR/ci-results/dependency-requests.json"
+          node "$recorder" record-worker -- python3 -u "${runner[@]}"
+        else
+          python3 -u "${runner[@]}"
+        fi
 artifacts:
   base-directory: ci-results
   files:
     - '**/*.xml'
     - '**/summary.json'
+    - 'dependency-requests.json'
   enable-symlinks: no

@@ -1,0 +1,34 @@
+name: Publish main dependency cache
+run-name: Publish dependency cache · ${{ inputs.receipt || inputs.build || (inputs.seed && 'bootstrap') || 'repair' }}
+on:
+  workflow_dispatch:
+    inputs:
+      receipt: {type: string, description: Exact protected main worker receipt key}
+      build: {type: string, description: Completed native main worker build ID}
+      sha: {type: string, description: Commit of the original native worker}
+      seed: {type: boolean, default: false, description: Exercise Gradle and OCI to bootstrap the cache}
+permissions: {}
+concurrency:
+  group: migrations-main-dependency-cache-publish
+  queue: max
+jobs:
+  sync:
+    uses: ./.github/workflows/dependency-cache-publish.yml
+    permissions: {contents: read, id-token: write}
+    secrets: {AWS_CI_CONFIG: '${{ secrets.AWS_CI_CONFIG }}'}
+    with:
+      receipt: ${{ inputs.receipt }}
+      build: ${{ inputs.build }}
+      sha: ${{ inputs.sha || github.sha }}
+      seed: ${{ inputs.seed }}
+  acknowledge:
+    needs: sync
+    if: github.ref == 'refs/heads/main' && inputs.receipt != ''
+    runs-on: ubuntu-24.04
+    permissions: {actions: write}
+    steps:
+      - name: Retire the published receipt
+        env: {GH_TOKEN: '${{ github.token }}', RECEIPT: '${{ inputs.receipt }}'}
+        run: |
+          [[ "$RECEIPT" =~ ^migrations-main-requests-v1-[0-9]+-[0-9]+-[0-9a-f-]{36}$ ]]
+          gh cache delete "$RECEIPT" --ref refs/heads/main --repo "$GITHUB_REPOSITORY"

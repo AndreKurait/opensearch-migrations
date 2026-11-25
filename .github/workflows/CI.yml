@@ -23,6 +23,7 @@ concurrency:
 jobs:
   gradle-extended-check:
     if: &run_ci github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch'
+    permissions: {contents: read}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -32,9 +33,11 @@ jobs:
           - publishToMavenLocal
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
       - uses: ./.github/actions/setup-env
         with:
           gradle-cache-enabled: true
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
       - name: Run Gradle Build
         run: ./gradlew ${{matrix.tasks}}
         env:
@@ -42,12 +45,15 @@ jobs:
 
   gradle-build-macos:
     if: *run_ci
+    permissions: {contents: read}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
       - uses: ./.github/actions/setup-env
         with:
           gradle-cache-enabled: false
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
       - name: Run Gradle build on macOS
         run: ./gradlew build
         env:
@@ -55,10 +61,14 @@ jobs:
 
   python-lint:
     if: *run_ci
+    permissions: {contents: read}
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
       - uses: ./.github/actions/setup-env
+        with:
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
@@ -69,6 +79,7 @@ jobs:
 
   python-tests:
     if: *run_ci
+    permissions: {contents: read}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -88,7 +99,11 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
       - uses: ./.github/actions/setup-env
+        with:
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+          dependency-proxy-docker: ${{ matrix.py-project == 'migrationConsole/lib/console_link' }}
 
       # Set up Kind cluster for workflow integration tests (only for console_link project)
       - name: Set up Kind cluster
@@ -96,6 +111,11 @@ jobs:
         uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
         with:
           cluster_name: console-link-test
+
+      - name: Configure dependency proxy for kind workloads
+        if: matrix.py-project == 'migrationConsole/lib/console_link' && env.CI_DEPENDENCY_REGISTRY_ENDPOINT != ''
+        working-directory: ${{ github.workspace }}
+        run: .github/scripts/registry-cache.sh configure-kind console-link-test
 
       # Verify Kind cluster is ready (only for console_link project)
       - name: Verify Kind cluster
@@ -185,7 +205,9 @@ jobs:
           echo "matrix=$(IFS=,; echo "[${indices[*]}]")" >> $GITHUB_OUTPUT
 
   seed-gradle-test-docker-cache:
-    if: *run_ci
+    if: >-
+      vars.DEPENDENCY_PROXY_ENABLED != 'true' &&
+      (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -214,6 +236,11 @@ jobs:
 
   gradle-tests:
     needs: [generate-test-matrix, seed-gradle-test-docker-cache]
+    if: >-
+      !cancelled() && needs.generate-test-matrix.result == 'success' &&
+      (needs.seed-gradle-test-docker-cache.result == 'success' ||
+      (vars.DEPENDENCY_PROXY_ENABLED == 'true' && needs.seed-gradle-test-docker-cache.result == 'skipped'))
+    permissions: {contents: read}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -224,21 +251,26 @@ jobs:
       HAS_CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
       - uses: ./.github/actions/setup-env
         with:
           gradle-cache-enabled: true
           gradle-cache-read-only: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+          dependency-proxy-docker: 'true'
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/share/swift
           sudo docker system prune -af
           df -h
       - name: Restore Gradle test infrastructure Docker cache
+        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
         uses: AndreKurait/docker-cache@7a3887908bdb97935395833df69b060cfcca0f7f # 0.7.0
         with:
           key: gradle-test-docker-${{ runner.os }}-infrastructure-${{ hashFiles('.github/gradle-test-images/infrastructure.txt') }}
           read-only: true
       - name: Restore Gradle test search Docker cache
+        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
         uses: AndreKurait/docker-cache@7a3887908bdb97935395833df69b060cfcca0f7f # 0.7.0
         with:
           key: gradle-test-docker-${{ runner.os }}-search-${{ hashFiles('.github/gradle-test-images/search.txt') }}
@@ -303,6 +335,7 @@ jobs:
 
   node-tests:
     if: *run_ci
+    permissions: {contents: read}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -320,7 +353,11 @@ jobs:
         working-directory: ${{ matrix.npm-project }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
       - uses: ./.github/actions/setup-env
+        with:
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+          dependency-proxy-docker: ${{ matrix.npm-project == './orchestrationSpecs' }}
       - name: Install NPM dependencies
         run: npm ci
       - name: Run CDK Jest Tests (using mocked images)

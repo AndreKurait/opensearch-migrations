@@ -82,3 +82,8 @@ deployment/k8s/aws/dist/
 # to change depending on the environment.
 *.tfvars
 *.tfvars.json
+
+# Per-run dependency proxy and Actions cache staging
+/.migrations-public-dependency-cache-v1/
+/.github/ci/dependency-cache/node_modules/
+/.github/ci/dependency-cache/aws/node_modules/
