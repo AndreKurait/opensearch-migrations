@@ -202,6 +202,9 @@ def build(command_line=None):
             'HOME': str(home),
             'TMPDIR': str(tmp),
             'JAVA_HOME': str(java),
+            # Seatbelt checks the destination address family. Match the local broker's real IPv4 socket
+            # instead of using Java's IPv4-mapped IPv6 default for a literal IPv4 endpoint.
+            'JAVA_TOOL_OPTIONS': '-Djava.net.preferIPv4Stack=true',
             'CI': 'true',
             'GRADLE_USER_HOME': str(home / 'gradle'),
             'MAVEN_REPOSITORY_URL': f'{proxy.geturl().rstrip("/")}/maven/',
@@ -218,8 +221,16 @@ def build(command_line=None):
             if result.returncode == 0:
                 raise RuntimeError('Seatbelt allowed direct external traffic')
         # Match Gradle's client/daemon JVM arguments so --no-daemon can execute entirely inside one JVM.
-        command(prefix + [str(work / 'gradlew'), '--no-daemon', '-Dorg.gradle.jvmargs=', *command_line],
-                env=env, cwd=work)
+        try:
+            command(prefix + [str(work / 'gradlew'), '--no-daemon', '-Dorg.gradle.jvmargs=', *command_line],
+                    env=env, cwd=work)
+        except subprocess.CalledProcessError:
+            predicate = ('subsystem == "com.apple.sandbox.reporting" AND '
+                         '(eventMessage CONTAINS "Sandbox: java(" OR eventMessage CONTAINS "Sandbox: sh(")')
+            logs = subprocess.run(['/usr/bin/log', 'show', '--style', 'compact', '--last', '2m', '--predicate',
+                                   predicate], capture_output=True, text=True, timeout=15)
+            print('Java sandbox diagnostics:', logs.stdout[-2200:], flush=True)
+            raise
         if command_line != ['build']:
             result = work / '.github/ci/network/gradle-fixture/build/classes/java/main/network/Probe.class'
             if not result.is_file() or result.read_bytes()[:4] != bytes.fromhex('cafebabe'):
