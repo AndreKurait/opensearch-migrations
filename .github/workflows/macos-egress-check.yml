@@ -19,7 +19,7 @@ jobs:
           set -euo pipefail
           guard="$RUNNER_TEMP/darwin_guard.py"
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/darwin_guard.py" -o "$guard"
-          expected=8ad0d8a99d217ca94bfd32375d2a2c5eedb7ce91d0dde60ef50503840beb5f11
+          expected=de1b63375ab221ea7a400d3ce09446efca69922ec792b1fea6b9c7e31e3630f7
           test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
           /usr/bin/python3 "$guard" install
       # END generated network guard
@@ -32,7 +32,8 @@ jobs:
       - name: Install trusted dependency broker client
         run: npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund
       - uses: ./.github/actions/dependency-cache
-        with: {mode: record, catalog-token: '${{ github.token }}'}
+        env: {CI_DEPENDENCY_STRICT_READ: '1'}
+        with: {mode: read, catalog-token: '${{ github.token }}'}
       - name: Fetch and verify the pinned platform-specific Corretto JDK
         id: corretto
         run: node .github/ci/dependency-cache/corretto.cjs
@@ -41,9 +42,6 @@ jobs:
           distribution: jdkfile
           java-version: ${{ steps.corretto.outputs.java-version }}
           jdkFile: ${{ steps.corretto.outputs.archive }}
-      - uses: ./.github/actions/dependency-cache
-        env: {CI_DEPENDENCY_STRICT_READ: '1'}
-        with: {mode: read, catalog-token: '${{ github.token }}'}
       - name: Compile and execute Java with the repository wrapper in Seatbelt
         env: {CI_DEPENDENCY_TEST_SOURCE: '${{ github.workspace }}'}
         run: /usr/bin/python3 "$RUNNER_TEMP/darwin_guard.py" gradle-fixture

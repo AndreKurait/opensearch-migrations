@@ -163,9 +163,9 @@ def seatbelt(temp, java, port):
             '(allow mach-lookup (global-name "com.apple.SystemConfiguration.DNSConfiguration"))',
             '(deny network*)',
             f'(allow network-outbound (remote tcp "localhost:{port}"))',
-            # Gradle 8 binds a kernel-assigned UDP port for its private file-lock service. Binding
-            # does not grant the separate outbound or inbound network operations in this profile.
-            '(allow network-bind (local udp "*:0"))',
+            # Gradle 8 requests an ephemeral UDP port for its file-lock service. Seatbelt expresses
+            # the resulting unknown port as '*'. Sending and receiving remain separate operations.
+            '(allow network-bind (local udp "*:*"))',
             '(deny process-exec (literal "/usr/bin/sudo") (literal "/usr/bin/su"))',
         ]
     )
@@ -283,6 +283,21 @@ def fixture():
         response = execute(['/usr/bin/curl', '-fsS', '--max-time', '5', f'http://127.0.0.1:{port}/fixture'])
         if response.returncode or response.stdout != 'local broker':
             raise RuntimeError(f'Candidate could not reach its broker ({response.returncode}): {response.stderr}')
+        with socket.socket(type=socket.SOCK_DGRAM) as host_udp:
+            host_udp.bind(('127.0.0.1', 0))
+            host_udp.settimeout(0.5)
+            udp_probe = (
+                "import socket,sys; s=socket.socket(type=socket.SOCK_DGRAM); s.bind(('',0));"
+                "print('udp-bound',flush=True); s.sendto(b'candidate',('127.0.0.1',int(sys.argv[1])))"
+            )
+            udp = execute(['/usr/bin/python3', '-I', '-c', udp_probe, str(host_udp.getsockname()[1])])
+            if 'udp-bound' not in udp.stdout:
+                raise RuntimeError('Candidate UDP bind failed: ' + udp.stderr[-350:])
+            try:
+                host_udp.recv(128)
+                raise RuntimeError('Candidate sent a datagram to a private host service')
+            except socket.timeout:
+                pass
         github = next(iter(addresses('api.github.com')))
         for argv in [
             ['/usr/bin/nc', '-z', '-w', '2', github, '443'],
