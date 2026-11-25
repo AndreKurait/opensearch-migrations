@@ -110,7 +110,7 @@ async function nativeWorker(command, args) {
   }
 }
 
-async function nativeReceipt(buildId) {
+async function nativeReceipt(buildId, expectedSha = process.env.CI_CACHE_MAIN_SHA) {
   const match = sourceBuild.exec(buildId);
   if (!match) throw new Error('Invalid main worker build ID');
   const {builds} = await aws('codebuild', 'batch-get-builds', '--ids', buildId);
@@ -119,7 +119,7 @@ async function nativeReceipt(buildId) {
   const bucket = process.env.CI_DEPENDENCY_BUCKET;
   const key = `builds/${match[1]}/results.zip`;
   if (!build?.buildComplete || build.id !== buildId || build.projectName !== 'migrations-github-eks' ||
-      env.CI_GIT_REF !== 'refs/heads/main' || env.CI_GIT_SHA !== process.env.CI_CACHE_MAIN_SHA ||
+      env.CI_GIT_REF !== 'refs/heads/main' || env.CI_GIT_SHA !== expectedSha ||
       build.artifacts?.location !== `arn:aws:s3:::${bucket}/${key}`) throw new Error('Build is not the selected, completed main worker');
   const info = await aws('s3api', 'head-object', '--bucket', bucket, '--key', key);
   if (!(info.ContentLength > 0 && info.ContentLength <= 64 * 1024 ** 2)) throw new Error('Unexpected worker archive size');
@@ -167,6 +167,15 @@ async function importMain(observations) {
 async function cloudWorker() {
   const mode = process.env.CI_CACHE_MODE;
   if (!['record', 'publish', 'both'].includes(mode)) throw new Error('Invalid worker mode');
+  if (mode === 'record' && process.env.CI_CACHE_BUILD_ID) {
+    const sha = process.env.CI_CACHE_RECEIPT_SHA || process.env.CI_CACHE_MAIN_SHA;
+    if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('Invalid native receipt SHA');
+    await execute('git', ['merge-base', '--is-ancestor', sha, 'HEAD']);
+    const observations = await nativeReceipt(process.env.CI_CACHE_BUILD_ID, sha);
+    await importMain(observations);
+    console.log(`Imported ${observations.length} verified native dependency requests.`);
+    return;
+  }
   if (mode !== 'publish') {
     const recorder = await require('./aws-store.cjs').openRecorder();
     await serve(recorder, 'record', env => run(process.execPath, [path.join(__dirname, 'smoke.cjs')], {...process.env, ...env}));
