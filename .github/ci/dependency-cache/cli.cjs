@@ -133,6 +133,14 @@ async function nativeReceipt(buildId) {
   } finally { await fs.rm(dir, {recursive: true, force: true}); }
 }
 
+function receiptKeys(value) {
+  const [first, ...rest] = value.split(',');
+  if (!receiptPattern.test(first) || rest.length > 3 || rest.some(id => !/^[a-f0-9-]{36}$/.test(id)))
+    throw new Error('Invalid main worker receipt batch');
+  const prefix = first.slice(0, -36);
+  return [first, ...rest.map(id => prefix + id)];
+}
+
 async function githubReceipt(key) {
   if (!receiptPattern.test(key)) throw new Error('Invalid main worker receipt key');
   const cache = await require('./github-store.cjs').loadToolkit();
@@ -170,7 +178,11 @@ async function cloudWorker() {
   await aws('ssm', 'delete-parameter', '--name', parameter);
   for (const key of cacheEnv) if (typeof grant[key] === 'string') process.env[key] = grant[key];
   process.env.GITHUB_WORKSPACE = process.cwd();
-  if (process.env.CI_CACHE_RECEIPT_KEY) await importMain(await githubReceipt(process.env.CI_CACHE_RECEIPT_KEY));
+  if (process.env.CI_CACHE_RECEIPT_KEY) {
+    const receipts = [];
+    for (const key of receiptKeys(process.env.CI_CACHE_RECEIPT_KEY)) receipts.push(...await githubReceipt(key));
+    await importMain(receipts);
+  }
   if (process.env.CI_CACHE_BUILD_ID) await importMain(await nativeReceipt(process.env.CI_CACHE_BUILD_ID));
   const catalog = await require('./aws-store.cjs').openPublisher();
   try {
@@ -185,7 +197,8 @@ async function launchCloud() {
       !/^\d+$/.test(env.GITHUB_RUN_ID) || !/^\d+$/.test(env.GITHUB_RUN_ATTEMPT) || !/^[0-9a-f]{40}$/.test(env.CI_CACHE_MAIN_SHA || '')) throw new Error('Publication must run from the protected main workflow');
   const key = env.CI_CACHE_RECEIPT_KEY || '';
   const native = env.CI_CACHE_BUILD_ID || '';
-  if ((key && !receiptPattern.test(key)) || (native && !sourceBuild.test(native)) || (key && native)) throw new Error('Invalid receipt input');
+  if (key) receiptKeys(key);
+  if ((native && !sourceBuild.test(native)) || (key && native)) throw new Error('Invalid receipt input');
   if (!env.ACTIONS_RUNTIME_TOKEN || !env.ACTIONS_RESULTS_URL || !env.ACTIONS_CACHE_SERVICE_V2) throw new Error('Actions cache grant unavailable');
   const generation = env.GITHUB_RUN_ID.padStart(20, '0') + env.GITHUB_RUN_ATTEMPT.padStart(4, '0') + Date.now().toString();
   const grant = Object.fromEntries(cacheEnv.filter(k => env[k]).map(k => [k, env[k]]));

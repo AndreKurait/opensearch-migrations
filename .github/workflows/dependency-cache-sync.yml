@@ -3,7 +3,7 @@ run-name: Publish dependency cache · ${{ inputs.receipt || inputs.build || (inp
 on:
   workflow_dispatch:
     inputs:
-      receipt: {type: string, description: Exact protected main worker receipt key}
+      receipt: {type: string, description: Protected main receipt key or a batch with up to three additional UUIDs}
       build: {type: string, description: Completed native main worker build ID}
       sha: {type: string, description: Commit of the original native worker}
       seed: {type: boolean, default: false, description: Exercise Gradle and OCI to bootstrap the cache}
@@ -55,5 +55,12 @@ jobs:
       - name: Retire the published receipt
         env: {GH_TOKEN: '${{ github.token }}', RECEIPT: '${{ inputs.receipt }}'}
         run: |
-          [[ "$RECEIPT" =~ ^migrations-main-requests-v1-[0-9]+-[0-9]+-[0-9a-f-]{36}$ ]]
-          gh cache delete "$RECEIPT" --ref refs/heads/main --repo "$GITHUB_REPOSITORY"
+          set -euo pipefail
+          IFS=, read -ra parts <<< "$RECEIPT"
+          [[ ${#parts[@]} -le 4 && "${parts[0]}" =~ ^(migrations-main-requests-v1-[0-9]+-[0-9]+-)([0-9a-f-]{36})$ ]]
+          prefix=${BASH_REMATCH[1]}
+          parts[0]=${BASH_REMATCH[2]}
+          for id in "${parts[@]}"; do
+            [[ "$id" =~ ^[0-9a-f-]{36}$ ]]
+            gh cache delete "$prefix$id" --ref refs/heads/main --repo "$GITHUB_REPOSITORY"
+          done

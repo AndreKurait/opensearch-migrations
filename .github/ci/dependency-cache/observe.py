@@ -19,22 +19,26 @@ def observe(repo, run, attempt):
     while terminal < 2:
         caches = json.loads(gh('api', '--paginate', '--slurp', '-X', 'GET', f'repos/{repo}/actions/caches',
                                '-f', 'ref=refs/heads/main', '-f', f'key={prefix}', '-F', 'per_page=100'))
-        for page in caches:
-            for row in page['actions_caches']:
-                key = row['key']
-                if key in dispatched or not re.fullmatch(re.escape(prefix) + r'[a-f0-9-]{36}', key):
+        visible = {row['key'] for page in caches for row in page['actions_caches']
+                   if re.fullmatch(re.escape(prefix) + r'[a-f0-9-]{36}', row['key'])}
+        if visible - dispatched:
+            endpoint = f'repos/{repo}/actions/workflows/dependency-cache-sync.yml/runs'
+            runs = json.loads(gh('api', '-X', 'GET', endpoint, '-f', 'branch=main', '-F', 'per_page=100'))
+            for previous in runs['workflow_runs']:
+                if previous['status'] == 'completed' and previous['conclusion'] != 'success':
                     continue
-                # A completed-event recovery observer can run after the first observer exited.
-                # A queued/in-progress sync for this immutable receipt already owns the retry.
-                endpoint = f'repos/{repo}/actions/workflows/dependency-cache-sync.yml/runs'
-                runs = json.loads(gh('api', '-X', 'GET', endpoint, '-f', 'branch=main', '-F', 'per_page=100'))
-                title = f'Publish dependency cache · {key}'
-                if not any(r['display_title'] == title and (r['status'] != 'completed' or r['conclusion'] == 'success')
-                           for r in runs['workflow_runs']):
-                    gh('workflow', 'run', 'dependency-cache-sync.yml', '--repo', repo, '--ref', 'main',
-                       '-f', f'receipt={key}')
-                    print(f'Queued protected main receipt {key}', flush=True)
-                dispatched.add(key)
+                title = f'Publish dependency cache · {prefix}'
+                if previous['display_title'].startswith(title):
+                    dispatched.update(prefix + suffix for suffix in previous['display_title'][len(title):].split(','))
+            pending = sorted(visible - dispatched)
+            # Four UUIDs plus the shared run prefix fit in a single Actions run title.
+            for offset in range(0, len(pending), 4):
+                batch = pending[offset:offset + 4]
+                receipt = prefix + ','.join(key[len(prefix):] for key in batch)
+                gh('workflow', 'run', 'dependency-cache-sync.yml', '--repo', repo, '--ref', 'main',
+                   '-f', f'receipt={receipt}')
+                print(f'Queued {len(batch)} protected main worker receipts', flush=True)
+                dispatched.update(batch)
         status = gh('api', f'repos/{repo}/actions/runs/{run}', '--jq', '.status').strip()
         terminal = terminal + 1 if status == 'completed' else 0
         if terminal < 2:
