@@ -86,11 +86,12 @@ def mirror_prefix(stage):
     return f'migration-ecr-{stage}-mirrors/'
 
 
-def stage_bootstrap(source, destination, stage):
-    """Scope the OCI repositories in the assembled source or published release bootstrap."""
+def release_bootstrap(source, destination, stage):
+    """Scope OCI repositories in immutable releases that predate --ecr-mirror-prefix."""
     script = source.read_text()
+    if '--ecr-mirror-prefix' in script:
+        return source
     prefix = mirror_prefix(stage)
-    # Both bootstrap formats embed the mirror writer and the Helm values generator.
     # Keep source registries, chart filenames and upstream third-party image names intact.
     for original, scoped in [
         ('"mirrored/', f'"{prefix}mirrored/'),
@@ -271,9 +272,13 @@ class Worker:
     def bootstrap(self, build_phase=False):
         stage = self.build_stage if build_phase else self.stage
         stack = self.stage + '-build' if build_phase else self.ma
+        script = self.bootstrap_script
+        if self.release:
+            # Includes the k6 canary that assembles a bootstrap from the pinned release source.
+            script = release_bootstrap(script, self.temp / f'{stage}-bootstrap.sh', stage)
         args = [
             'bash',
-            stage_bootstrap(self.bootstrap_script, self.temp / f'{stage}-bootstrap.sh', stage),
+            script,
             '--region',
             self.region,
             '--stage',
@@ -332,6 +337,7 @@ class Worker:
             CI_WORKER_CIDR=self.cidr,
             CI_VPC_CIDR='10.200.0.0/16' if self.network else '10.212.0.0/16',
             CI_INHERIT_STACK_TAGS=str(self.cdc).lower(),
+            ECR_MIRROR_PREFIX=mirror_prefix(stage).rstrip('/'),
         )
         command(*args, env=env)
         exports = self.outputs(stack)['MigrationsExportString']

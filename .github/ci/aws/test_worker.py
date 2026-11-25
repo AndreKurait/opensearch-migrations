@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
-from run import Worker, command, phase, stage_bootstrap
+from run import Worker, command, phase, release_bootstrap
 from suites import PRESETS, SNAPSHOT_BUCKET, byos_snapshot, fixture_uri
 from verification import junit
 
@@ -64,27 +64,30 @@ class TestCloudWorker(unittest.TestCase):
         mirrors.assert_any_call(worker.stage)
         mirrors.assert_any_call(worker.build_stage)
 
-    def test_mirror_writes_helm_pulls_and_buildkit_use_the_same_run_namespace(self):
-        stage = 'ci-a123'
+    def test_source_bootstrap_uses_the_native_scope_for_both_isolated_clusters(self):
+        worker = Worker('isolated', self.temp)
+        worker.bootstrap_script = self.temp / 'assembled.sh'
+        for stage, build_phase in [(worker.build_stage, True), (worker.stage, False)]:
+            exports = (f'export MIGRATIONS_EKS_CLUSTER_NAME={worker.cluster_name(stage)};'
+                       'export MIGRATIONS_ECR_REGISTRY=ecr')
+            with patch('run.release_bootstrap') as legacy, patch('run.command') as execute:
+                with patch.dict(os.environ, PATH='/bin', ECR_MIRROR_PREFIX='ignored'), patch.object(
+                    worker, 'outputs', return_value={'MigrationsExportString': exports}
+                ):
+                    worker.bootstrap(build_phase=build_phase)
+            legacy.assert_not_called()
+            self.assertEqual(execute.call_args.args[:2], ('bash', worker.bootstrap_script))
+            self.assertEqual(execute.call_args.kwargs['env']['ECR_MIRROR_PREFIX'], f'migration-ecr-{stage}-mirrors')
+
+    def test_new_release_bootstrap_supports_the_native_prefix_and_rejects_invalid_names(self):
         repo = Path(__file__).resolve().parents[3]
         source = self.temp / 'bootstrap.sh'
         subprocess.run([repo / 'deployment/k8s/aws/assemble-bootstrap.sh', '--output', source],
                        stdout=subprocess.DEVNULL, check=True)
-        scoped = stage_bootstrap(source, self.temp / 'scoped.sh', stage)
-        subprocess.run(['bash', '-n', scoped], check=True)
-        script = scoped.read_text()
-        prefix = f'migration-ecr-{stage}-mirrors/'
-        self.assertIn(f'local ecr_repo="{prefix}mirrored/', script)
-        self.assertIn(f'"{prefix}charts/${{name}}"', script)
-        self.assertIn(f'"oci://${{ecr_host}}/{prefix}charts"', script)
-        self.assertIn(f'${{ECR_HOST}}/{prefix}mirrored/docker.io/moby/buildkit', script)
-        start = script.index('generate_private_ecr_values()')
-        end = script.index('# --- END inlined: generatePrivateEcrValues.sh ---', start)
-        values = subprocess.check_output(['bash', '-c', script[start:end] + '\ngenerate_private_ecr_values ecr.test'],
-                                         text=True)
-        self.assertIn(f'oci://ecr.test/{prefix}charts/cert-manager', values)
-        self.assertIn(f'ecr.test/{prefix}mirrored/mirror.gcr.io/library/busybox', values)
-        self.assertIn(f'"{prefix}mirrored/mirror.gcr.io/grafana/grafana"', values)
+        self.assertEqual(release_bootstrap(source, self.temp / 'legacy.sh', 'ci-a123'), source)
+        result = subprocess.run(['bash', source, '--ecr-mirror-prefix', '../invalid'], text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Invalid ECR mirror namespace', result.stderr)
 
     def test_mirror_cleanup_deletes_only_repository_names_inside_its_own_stage(self):
         worker = Worker('cfn-import', self.temp)
@@ -100,17 +103,16 @@ class TestCloudWorker(unittest.TestCase):
 
     def test_released_mirror_skips_all_legacy_empty_token_logins(self):
         source = self.temp / 'release-bootstrap.sh'
-        repo = Path(__file__).resolve().parents[3]
-        subprocess.run([repo / 'deployment/k8s/aws/assemble-bootstrap.sh', '--output', source],
-                       stdout=subprocess.DEVNULL, check=True)
-        # 3.4.2 embeds these pipelines in the image mirror, chart mirror and release-image loop.
+        # Frozen path formats from 3.4.2 are independent of the current source implementation.
+        source.write_text('echo "mirrored/image" "$ECR/mirrored" "${ECR_HOST}/mirrored/buildkit"\n'
+                          'echo "charts/${name}" "oci://${ecr_host}/charts" "oci://${ECR}/charts/chart"\n')
         with source.open('a') as script:
             for login, indent in [('crane auth login', 4), ('helm registry login', 4), ('crane auth login', 12)]:
                 script.write('aws ecr-public get-login-password --region us-east-1 2>/dev/null | \\\n'
                              f'{" " * indent}{login} public.ecr.aws -u AWS --password-stdin 2>/dev/null || true\n')
-        scoped = stage_bootstrap(source, self.temp / 'stage-bootstrap.sh', 'ci-a123')
+        scoped = release_bootstrap(source, self.temp / 'stage-bootstrap.sh', 'ci-a123')
         self.assertNotIn('get-login-password --region us-east-1 2>/dev/null |', scoped.read_text())
-        self.assertIn('login_to_public_ecr_if_available helm registry login', scoped.read_text())
+        self.assertEqual(scoped.read_text().count('migration-ecr-ci-a123-mirrors/'), 6)
         subprocess.run(['bash', '-n', scoped], check=True)
 
     def test_phase_timeout_kills_background_writer_before_cleanup_can_run(self):

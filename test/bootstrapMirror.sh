@@ -23,6 +23,40 @@ tmp_root="$(mktemp -d)"
 trap 'rm -rf "$tmp_root"' EXIT
 
 (
+  cd "$tmp_root"
+  ensure_crane() { :; }
+  login_to_public_ecr_if_available() { :; }
+  mirror_image_is_current() { return 1; }
+  mirror_ecr_tag_exists() { echo "check $2" >> calls; return 1; }
+  aws() { echo "aws $*" >> calls; }
+  crane() { echo "crane $*" >> calls; }
+  helm() {
+    echo "helm $*" >> calls
+    if [[ "$1" == "pull" ]]; then touch chart-1.tgz; fi
+  }
+  for ECR_MIRROR_PREFIX in '' team/dev; do
+    : > calls
+    prefix="${ECR_MIRROR_PREFIX:+$ECR_MIRROR_PREFIX/}"
+    buildkit=docker.io/moby/buildkit
+    ensure_mirror_ecr_repositories us-west-2 "$buildkit:buildx-stable-1"
+    copy_image ecr.test us-west-2 '' '' "$buildkit:buildx-stable-1"
+    mirror_charts_to_ecr ecr.test us-west-2 'chart|1|oci://upstream.test'
+    grep -Fq -- "--repository-name ${prefix}mirrored/$buildkit" calls || fail "wrong image repository"
+    grep -Fqx "crane copy $buildkit:buildx-stable-1 ecr.test/${prefix}mirrored/$buildkit:buildx-stable-1" calls \
+      || fail "wrong BuildKit mirror destination"
+    grep -Fqx "check ${prefix}charts/chart" calls || fail "wrong chart existence check"
+    grep -Fq -- "--repository-name ${prefix}charts/chart" calls || fail "wrong chart repository"
+    grep -Fqx 'helm pull oci://upstream.test/chart --version 1' calls || fail "wrong upstream chart source"
+    grep -Fqx "helm push chart-1.tgz oci://ecr.test/${prefix}charts" calls || fail "wrong chart destination"
+    generate_private_ecr_values ecr.test > values.yaml
+    grep -Fq "oci://ecr.test/${prefix}charts/cert-manager" values.yaml || fail "wrong Helm chart repository"
+    grep -Fq "ecr.test/${prefix}mirrored/mirror.gcr.io/library/busybox" values.yaml || fail "wrong image repository"
+    [[ "$(grep -Fc "repository: \"${prefix}mirrored/mirror.gcr.io/grafana/grafana\"" values.yaml)" == 2 ]] \
+      || fail "wrong split Grafana image repositories"
+  done
+)
+
+(
   aws() { return 1; }
   registry_login() { cat >> "$tmp_root/public-login"; }
   login_to_public_ecr_if_available registry_login
