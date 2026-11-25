@@ -844,6 +844,13 @@ jobs:
         exit 1
     # END generated network guard
 
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: ./.github/actions/setup-env
+      with:
+        gradle-cache-enabled: true
+        dependency-proxy-enabled: ${{ inputs.cache-only || vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+        dependency-proxy-docker: 'true'
+        java-required: 'false'
     - name: Start loopback SonarQube after applying the host firewall
       shell: bash
       run: |
@@ -857,10 +864,6 @@ jobs:
         done
         docker logs ci-sonarqube >&2
         exit 1
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - uses: ./.github/actions/setup-env
-      with:
-        gradle-cache-enabled: true
     - name: Cache SonarQube Scanner
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
       with:
@@ -890,7 +893,7 @@ jobs:
         # Maven Central mirrors the SonarSource scanner releases and has been
         # reliable from GitHub-hosted runners; binaries.sonarsource.com has
         # started returning 403 from some egress IPs.
-        SCANNER_URL="https://repo1.maven.org/maven2/org/sonarsource/scanner/cli/sonar-scanner-cli/${SCANNER_VERSION}/${SCANNER_ZIP}"
+        SCANNER_URL="${MAVEN_REPOSITORY_URL:-https://repo1.maven.org/maven2/}org/sonarsource/scanner/cli/sonar-scanner-cli/${SCANNER_VERSION}/${SCANNER_ZIP}"
         SCANNER_SHA256="bb8f709f9cb73352f8d1260a3b3c506c0f41146754bc630762c126d795499d0b"
 
         # Retry on transient failures (CDN flakes, partial downloads).
