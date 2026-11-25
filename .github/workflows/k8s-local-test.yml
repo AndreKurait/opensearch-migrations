@@ -141,15 +141,18 @@ jobs:
           key: ${{ steps.registry-cache-key.outputs.key }}
 
       - name: Configure kind host
+        shell: bash ${{ github.workspace }}/.github/actions/local-build-cache/test-shell.sh {0}
         # Kubernetes 1.35 requires cgroup v2; also raises inotify limits for Fluent Bit.
         run: '"$RUNNER_TEMP/local-integ-scripts/configureKindHost.sh"'
 
       - name: Install kind
+        shell: bash ${{ github.workspace }}/.github/actions/local-build-cache/test-shell.sh {0}
         run: |
           KIND_INSTALL_DIR="${RUNNER_TEMP}/kind-bin" "$RUNNER_TEMP/local-integ-scripts/installKind.sh"
           echo "${RUNNER_TEMP}/kind-bin" >> "$GITHUB_PATH"
 
       - name: Create kind cluster
+        shell: bash ${{ github.workspace }}/.github/actions/local-build-cache/test-shell.sh {0}
         working-directory: ${{ env.TEST_REPO_DIR }}
         # Recreate the ephemeral cluster once for transient startup failures.
         run: |
@@ -165,6 +168,7 @@ jobs:
           exit 1
 
       - name: Start registry cache
+        shell: bash ${{ github.workspace }}/.github/actions/local-build-cache/test-shell.sh {0}
         if: (!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true') || env.CI_DEPENDENCY_REGISTRY_ENDPOINT != ''
         # With an active dependency proxy the helper configures the existing kind nodes.
         run: |
@@ -172,6 +176,7 @@ jobs:
           "$RUNNER_TEMP/local-integ-scripts/registry-cache.sh" configure-kind "$KIND_CLUSTER_NAME"
 
       - name: Build Docker images (BuildKit)
+        shell: bash ${{ github.workspace }}/.github/actions/local-build-cache/test-shell.sh {0}
         working-directory: ${{ env.TEST_REPO_DIR }}
         timeout-minutes: 45
         run: |
@@ -218,6 +223,7 @@ jobs:
           key: ${{ steps.build-layers.outputs.key }}
 
       - name: Run E2E tests
+        shell: bash ${{ github.workspace }}/.github/actions/local-build-cache/test-shell.sh {0}
         working-directory: ${{ format('{0}/libraries/testAutomation', env.TEST_REPO_DIR) }}
         run: |
           pipenv install --deploy

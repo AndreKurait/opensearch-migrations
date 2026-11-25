@@ -176,6 +176,7 @@ jobs:
         run: ./.github/scripts/registry-cache.sh start
 
       - name: Build Docker images
+        shell: bash ${{ github.workspace }}/.github/actions/local-build-cache/test-shell.sh {0}
         timeout-minutes: 30
         env:
           DOCKER_BUILD_RETRIES: 3
@@ -192,6 +193,7 @@ jobs:
           key: ${{ steps.build-layers.outputs.key }}
 
       - name: Docker compose up
+        shell: bash ${{ github.workspace }}/.github/actions/local-build-cache/test-shell.sh {0}
         timeout-minutes: 10
         run: |
           KAFKA_TRAFFIC_TOPIC="logging-traffic-topic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
@@ -200,6 +202,7 @@ jobs:
           docker ps
 
       - name: Run E2E tests
+        shell: bash ${{ github.workspace }}/.github/actions/local-build-cache/test-shell.sh {0}
         timeout-minutes: 15
         run: |
           docker exec "$(docker ps --filter "name=migration-console" -q)" \
