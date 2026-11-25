@@ -88,11 +88,6 @@ runs:
         cache-disabled: ${{ inputs.gradle-cache-enabled != 'true' || inputs.dependency-proxy-enabled == 'true' }}
         cache-read-only: ${{ inputs.gradle-cache-read-only }}
 
-    - name: Install pipenv globally
-      run: |
-        python3 -m pip install pipenv==2026.5.0
-      shell: bash
-
     - name: Aggressive disk cleanup
       shell: bash
       run: |

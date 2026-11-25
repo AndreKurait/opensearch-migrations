@@ -228,6 +228,7 @@ jobs:
         shell: test-shell.sh {0}
         working-directory: ${{ format('{0}/libraries/testAutomation', env.TEST_REPO_DIR) }}
         run: |
+          python3 -m pip install pipenv==2026.5.0
           pipenv install --deploy
           mkdir -p ./reports
           kubectl config unset current-context || true
