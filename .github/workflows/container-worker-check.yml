@@ -55,8 +55,7 @@ jobs:
         with: {persist-credentials: false}
       - name: Install Ubuntu guest tooling
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils openssh-client socat
+          bash .github/ci/dependency-cache/install-ubuntu-tools.sh qemu-system-x86 qemu-utils cloud-image-utils openssh-client socat
           # QEMU package installation or a later udev event can reset a one-time ACL on /dev/kvm.
           # Keep access confined to the runner account on this disposable host.
           user=$(id -un)

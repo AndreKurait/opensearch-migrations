@@ -4,8 +4,7 @@ set -euo pipefail
 # This launcher and its commands come from the base checkout. The guest builds the candidate in /work/source.
 launcher="$(dirname -- "$0")/hermetic-run.sh"
 if ! command -v bwrap >/dev/null || ! command -v skopeo >/dev/null; then
-  sudo -n apt-get -qq update
-  sudo -n apt-get -qq install -y bubblewrap skopeo
+  bash "$(dirname -- "$0")/install-ubuntu-tools.sh" bubblewrap skopeo
 fi
 suite=${1:?Missing repository check}
 case "$suite" in

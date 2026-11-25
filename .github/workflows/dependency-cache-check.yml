@@ -59,8 +59,7 @@ jobs:
       - &install_tools
         name: Install sandbox and registry client
         run: |
-          sudo apt-get -qq update
-          sudo apt-get -qq install -y bubblewrap skopeo
+          bash .github/ci/dependency-cache/install-ubuntu-tools.sh bubblewrap skopeo
           npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-fund --no-audit
       - &dependency_broker
         uses: ./.github/actions/dependency-cache
