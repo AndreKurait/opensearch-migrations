@@ -5,9 +5,11 @@ import ipaddress
 import json
 import http.server
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import re
+import secrets
 import shutil
 import socket
 import ssl
@@ -136,7 +138,33 @@ def install():
     print('Hosted IPv4 and IPv6 outbound PF policy active')
 
 
-def seatbelt(temp, java, port):
+@contextmanager
+def local_ipc():
+    # Gradle's incoming worker connector binds port zero. Restrict this ephemeral VM's allocator
+    # to an unused short interval and give Seatbelt those exact TCP ports (one rule per port).
+    # PF still rejects public inbound TCP; the worker profile accepts and connects on loopback.
+    keys = ['net.inet.ip.portrange.' + key for key in ('first', 'last')]
+    old = {key: command(['/usr/sbin/sysctl', '-n', key], capture_output=True).stdout.strip() for key in keys}
+    listeners = ['/usr/bin/sudo', '-n', '/usr/sbin/lsof', '-nP', '-iTCP', '-sTCP:LISTEN', '-Fn']
+    listed = command(listeners, capture_output=True).stdout
+    occupied = {int(port) for port in re.findall(r'(?m)^n.*:(\d+)$', listed)}
+    choices = [first for first in range(18000, 28000, 96) if occupied.isdisjoint(range(first, first + 96))]
+    first = secrets.choice(choices)
+    ports = range(first, first + 96)
+
+    def set_key(key, value):
+        command(['/usr/bin/sudo', '-n', '/usr/sbin/sysctl', '-w', f'{key}={value}'], capture_output=True)
+
+    try:
+        set_key(keys[0], first)
+        set_key(keys[1], ports[-1])
+        yield ports
+    finally:
+        set_key(keys[1], old[keys[1]])
+        set_key(keys[0], old[keys[0]])
+
+
+def seatbelt(temp, java, port, ipc):
     def quote(value):
         return json.dumps(str(value))
 
@@ -163,6 +191,11 @@ def seatbelt(temp, java, port):
             '(allow mach-lookup (global-name "com.apple.SystemConfiguration.DNSConfiguration"))',
             '(deny network*)',
             f'(allow network-outbound (remote tcp "localhost:{port}"))',
+            # Darwin checks bind before it has assigned the ephemeral port. Inbound/listen and
+            # outbound are independently limited to the known-empty job interval on loopback.
+            '(allow network-bind (local tcp "localhost:*"))',
+            '(allow network-inbound ' + ' '.join(f'(local tcp "localhost:{p}")' for p in ipc) + ')',
+            '(allow network-outbound ' + ' '.join(f'(remote tcp "localhost:{p}")' for p in ipc) + ')',
             # Gradle 8 requests an ephemeral UDP port for its file-lock service. Seatbelt expresses
             # the resulting unknown port as '*'. Sending and receiving remain separate operations.
             '(allow network-bind (local udp "*:*"))',
@@ -171,7 +204,7 @@ def seatbelt(temp, java, port):
     )
 
 
-def build(command_line=None):
+def build(ipc, command_line=None):
     command_line = command_line or ['build']
     if sys.platform != 'darwin' or not shutil.which('sandbox-exec'):
         raise RuntimeError('Hosted macOS Seatbelt is required')
@@ -198,7 +231,7 @@ def build(command_line=None):
             file = Path(os.environ['CI_DEPENDENCY_GRADLE_WRAPPER_JAR']).with_suffix(suffix)
             shutil.copy(file, wrapper / file.name)
         profile = temp / 'candidate.sb'
-        profile.write_text(seatbelt(temp, java, proxy.port))
+        profile.write_text(seatbelt(temp, java, proxy.port, ipc))
         prefix = ['/usr/bin/sandbox-exec', '-f', str(profile)]
         env = {
             'PATH': f'{java}/bin:/usr/bin:/bin:/usr/sbin:/sbin',
@@ -243,7 +276,7 @@ def build(command_line=None):
             print('Compiled a Java class using the repository wrapper, Corretto and brokered JUnit dependencies.')
 
 
-def fixture():
+def fixture(ipc):
     if sys.platform != 'darwin':
         raise RuntimeError('Run this proof on macOS')
 
@@ -257,13 +290,20 @@ def fixture():
             tempfile.TemporaryDirectory(
         dir='/private/tmp'
     ) as staged, tempfile.NamedTemporaryFile(dir='/private/tmp') as private:
-        private_tcp.bind(('127.0.0.1', 0))
+        for candidate in range(29000, 29500):
+            try:
+                private_tcp.bind(('127.0.0.1', candidate))
+                break
+            except OSError:
+                continue
+        else:
+            raise RuntimeError('Could not reserve the second host listener outside the Gradle IPC range')
         private_tcp.listen()
         port = server.server_address[1]
         threading.Thread(target=server.serve_forever, daemon=True).start()
         temporary = Path(staged).resolve()
         profile = temporary / 'candidate.sb'
-        profile.write_text(seatbelt(temporary, Path('/Library/Java'), port))
+        profile.write_text(seatbelt(temporary, Path('/Library/Java'), port, ipc))
         prefix = ['/usr/bin/sandbox-exec', '-f', str(profile)]
         env = {'HOME': str(temporary), 'PATH': '/usr/bin:/bin', 'TMPDIR': str(temporary)}
 
@@ -331,7 +371,11 @@ int main(int argc, char **argv) {
 
 
 if __name__ == '__main__':
-    if sys.argv[1:] == ['gradle-fixture']:
-        build(['--project-dir', '.github/ci/network/gradle-fixture', 'build', '--info', '--stacktrace'])
+    if sys.argv[1:] == ['install']:
+        install()
     else:
-        {'install': install, 'build': build, 'fixture': fixture}[sys.argv[1]]()
+        with local_ipc() as ipc:
+            if sys.argv[1:] == ['gradle-fixture']:
+                build(ipc, ['--project-dir', '.github/ci/network/gradle-fixture', 'build', '--info', '--stacktrace'])
+            else:
+                {'build': build, 'fixture': fixture}[sys.argv[1]](ipc)
