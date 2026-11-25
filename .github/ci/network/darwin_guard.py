@@ -151,7 +151,7 @@ def seatbelt(temp, java, port):
             '(allow file-read-metadata)',
             f'(allow file-write* (subpath {quote(temp)}) (literal "/dev/null") (literal "/dev/tty"))',
             '(deny file-write-setugid)',
-            '(deny process-info* signal mach-lookup*)',
+            '(deny process-info* signal mach-lookup)',
             '(allow process-info* signal (target same-sandbox))',
             '(allow mach-lookup (global-name "com.apple.system.opendirectoryd.libinfo"))',
             '(allow mach-lookup (global-name "com.apple.SystemConfiguration.DNSConfiguration"))',
