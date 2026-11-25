@@ -84,7 +84,7 @@ test('a reader restores the index first, rejects unknowns, and fetches requested
   await assert.rejects(fs.access(kind.path), { code: 'ENOENT' });
 });
 
-test('objects packed together retain individual hashes; a missing or corrupt object is never a public 404', async t => {
+test('small objects sharing a digest prefix restore individually; a missing or corrupt object is never a public 404', async t => {
   const { store, events, backend } = await fixture(t);
   const candidates = new Map();
   let pair;
@@ -98,13 +98,13 @@ test('objects packed together retain individual hashes; a missing or corrupt obj
   const content = new Map(pair.map(p => [p.entry.key, p.data]));
   const entries = pair.map(p => p.entry);
   await store.publish({ entries, generation, materialize: (e, file) => fs.writeFile(file, content.get(e.key)) });
-  const cacheKey = [...backend.keys()].find(k => k.includes('blob-pack-'));
+  const cacheKey = [...backend.keys()].find(k => k.endsWith(`blob-object-${entries[0].digest}`));
   assert.ok(cacheKey);
   const original = backend.get(cacheKey);
   let reader = await store.openReader();
   events.length = 0;
-  for (const entry of entries) assert.equal(await fs.readFile((await reader.resolve(entry.key)).path, 'utf8'), content.get(entry.key));
-  assert.equal(events.filter(e => e.op === 'restore').length, 1);
+  assert.equal(await fs.readFile((await reader.resolve(entries[0].key)).path, 'utf8'), content.get(entries[0].key));
+  assert.deepEqual(events.filter(e => e.op === 'restore').map(e => e.key), [cacheKey]);
   await reader.close();
   reader = await store.openReader();
   backend.delete(cacheKey);

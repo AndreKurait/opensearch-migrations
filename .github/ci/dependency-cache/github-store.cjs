@@ -67,7 +67,7 @@ function selectRecent(entries, maxBytes = DEFAULT_BYTES) {
 
 // Group small files by digest prefix, so normal catalog churn only affects that prefix's packs.
 // The pack is concatenated bytes with a digest and length table authenticated by the index.
-function layout(entries) {
+function layout(entries, individual = false) {
   const unique = new Map();
   for (const entry of entries) if (!entry.missing && !unique.has(entry.digest)) unique.set(entry.digest, entry);
   const blobs = [];
@@ -88,6 +88,11 @@ function layout(entries) {
     bytes = 0;
   }
   for (const entry of [...unique.values()].sort((a, b) => byName(a.digest, b.digest))) {
+    if (individual) {
+      locations.set(entry.digest, { id: `object-${entry.digest}`, offset: 0 });
+      blobs.push({ id: `object-${entry.digest}`, size: entry.size, members: [entry] });
+      continue;
+    }
     const prev = group[0];
     if (prev && (prev.digest.slice(0, 2) !== entry.digest.slice(0, 2) || bytes + entry.size > PACK_BYTES ||
         group.length === PACK_MEMBERS || entry.size > SMALL_BYTES)) finish();
@@ -208,8 +213,8 @@ function createStore(toolkit, options = {}) {
   async function publish({ entries, materialize, generation, maxBytes = DEFAULT_BYTES }) {
     if (typeof generation !== 'string' || !/^[0-9]{1,40}$/.test(generation)) throw new Error('Invalid cache generation');
     const chosen = selectRecent(entries, maxBytes);
-    const { blobs } = layout(chosen);
-    const index = JSON.stringify({ version: 1, generation, entries: chosen });
+    const { blobs } = layout(chosen, true);
+    const index = JSON.stringify({ version: 2, generation, entries: chosen });
     const indexDigest = hash(index);
     const indexKey = `${INDEX}${generation}-${indexDigest}`;
     const temp = await stageDirectory(true);
@@ -257,7 +262,7 @@ function createStore(toolkit, options = {}) {
       if (!validIndexKey(key) || (indexKey && key !== indexKey)) throw missingCache('No verified dependency index accessible to this pull request; run the trusted cache publisher');
       const data = await fs.readFile(destination, 'utf8');
       index = JSON.parse(data);
-      if (index.version !== 1 || key !== `${INDEX}${index.generation}-${hash(data)}` || !Array.isArray(index.entries)) {
+      if (![1, 2].includes(index.version) || key !== `${INDEX}${index.generation}-${hash(data)}` || !Array.isArray(index.entries)) {
         throw new Error(`Invalid dependency cache index ${key}`);
       }
       index.entries = index.entries.map(prepareEntry);
@@ -266,7 +271,7 @@ function createStore(toolkit, options = {}) {
       throw error;
     }
     const entries = new Map(index.entries.map(e => [e.key, e]));
-    const { blobs, locations } = layout(index.entries);
+    const { blobs, locations } = layout(index.entries, index.version === 2);
     const blobMap = new Map(blobs.map(blob => [blob.id, blob]));
     const metrics = { archiveTransfers: 0, archivePayloadBytes: 0 };
     const pending = new Map();
