@@ -1,6 +1,10 @@
 name: CI checks
 on:
   workflow_call:
+    inputs:
+      cache-only:
+        type: boolean
+        default: false
     secrets:
       CODECOV_TOKEN:
         required: false
@@ -8,6 +12,7 @@ on:
 permissions: {contents: read, actions: read}
 
 env:
+  CI_DEPENDENCY_STRICT_READ: ${{ inputs.cache-only && '1' || '0' }}
   python-version: '3.11'
   java-version: '21'
   gradle-version: '8.12.1'

@@ -46,7 +46,7 @@ runs:
         CI_GRADLE_REMOTE_CACHE: ${{ inputs.java-required == 'true' && 'true' || 'false' }}
       with:
         catalog-token: ${{ github.token }}
-        mode: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && 'record' || 'read' }}
+        mode: ${{ env.CI_DEPENDENCY_STRICT_READ != '1' && github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && 'record' || 'read' }}
 
     - name: Fetch the pinned Corretto JDK for this runner
       id: corretto
