@@ -87,10 +87,10 @@ phases:
         cd "$CODEBUILD_SRC_DIR/harness"
         if [[ -n "${CI_RELEASE_VERSION:-}" ]]; then cd "$CODEBUILD_SRC_DIR/release"; fi
         recorder="$CODEBUILD_SRC_DIR/harness/.github/ci/dependency-cache/cli.cjs"
-        if [[ "${CI_MODE:-}" != cleanup && "${CI_GIT_REF:-}" == refs/heads/main && -f "$recorder" ]]; then
+        if [[ "${CI_MODE:-}" != cleanup && -f "$recorder" ]]; then
           export CI_DEPENDENCY_RECEIPT="$CODEBUILD_SRC_DIR/ci-results/dependency-requests.json"
           export CI_CACHE_TRUSTED_DOCKER=1
-          node "$recorder" record-worker -- bash /tmp/migrations-native-suite.sh
+          node "$recorder" native-worker -- bash /tmp/migrations-native-suite.sh
         else
           bash /tmp/migrations-native-suite.sh
         fi

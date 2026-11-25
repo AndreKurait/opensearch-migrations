@@ -239,7 +239,7 @@ Resources:
                     'codebuild:environment.fleet.fleetArn': 'true'
                     'codebuild:environment.registryCredential.credential': 'true'
                   'ForAllValues:StringEquals':
-                    'codebuild:environment.environmentVariables.name': [CI_GH_RUN_ID, CI_GH_RUN_ATTEMPT, CI_SUITE, CI_GIT_SHA, CI_GIT_REF, CI_STAGE, CI_RELEASE_VERSION, TEST_IDS, SOURCE_VERSION, TARGET_VERSION, S3_REPO_URI, SNAPSHOT_NAME, RFS_WORKERS, MONITOR_RETRY_LIMIT, AOSS_TEST_IDS, TEST_PRESET, TARGET_CLUSTER_SIZE, SPEEDUP_FACTOR]
+                    'codebuild:environment.environmentVariables.name': [CI_GH_RUN_ID, CI_GH_RUN_ATTEMPT, CI_SUITE, CI_GIT_SHA, CI_GIT_REF, CI_STAGE, CI_RELEASE_VERSION, CI_DEPENDENCY_MODE, TEST_IDS, SOURCE_VERSION, TARGET_VERSION, S3_REPO_URI, SNAPSHOT_NAME, RFS_WORKERS, MONITOR_RETRY_LIMIT, AOSS_TEST_IDS, TEST_PRESET, TARGET_CLUSTER_SIZE, SPEEDUP_FACTOR]
 
               - Effect: Allow
                 Action: ['codebuild:BatchGetBuilds', 'codebuild:StopBuild']

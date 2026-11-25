@@ -23,7 +23,7 @@ def parameters(suites, raw):
     suite = ALIASES.get(suites[0], suites[0])
     config = SUITES[suite]
     patterns = {}
-    choices = {}
+    choices = {'CI_DEPENDENCY_MODE': ('replay',)}
     if config.tests:
         patterns['TEST_IDS'] = r'(?:[0-9]{4}(?:,[0-9]{4})*|all)'
         choices['SOURCE_VERSION'] = SOURCE_VERSIONS if suite == 'byos' else (config.source,)

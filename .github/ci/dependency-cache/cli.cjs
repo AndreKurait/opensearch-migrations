@@ -70,6 +70,46 @@ async function serve(store, mode, body, packageTransport) {
   }
 }
 
+// Use the CodeBuild image's AWS CLI so playback can bootstrap without npm.
+async function nativeWorker(command, args) {
+  const bucket = process.env.CI_RECOVERY_BUCKET;
+  const storage = {
+    async *catalog() {
+      const result = await aws('s3api', 'list-objects-v2', '--bucket', bucket, '--prefix', 'dependency-cache/v1/catalog/');
+      for (const row of result.Contents || []) yield row.Key;
+    },
+    get: (key, file) => aws('s3api', 'get-object', '--bucket', bucket, '--key', key, file),
+  };
+  const snapshot = await require('./aws-store.cjs').openPublisher({storage});
+  const entries = new Map(snapshot.entries.map(item => [item.key, item]));
+  const strict = process.env.CI_DEPENDENCY_MODE === 'replay' || process.env.CI_GIT_REF !== 'refs/heads/main';
+  const stats = {restored: 0, bytes: 0, originRequests: 0, misses: 0};
+  const store = await openLocalRecorder({
+    receiptFile: process.env.CI_DEPENDENCY_RECEIPT,
+    async fetchArtifact(key, file) {
+      const entry = entries.get(key);
+      if (entry) {
+        if (entry.missing) return null;
+        await snapshot.materialize(entry, file);
+        stats.restored++;
+        stats.bytes += entry.size;
+        return entry;
+      }
+      stats.misses++;
+      if (strict) throw new Error(`Native dependency cache miss: ${key}`);
+      stats.originRequests++;
+      return require('./proxy.cjs').fetchPublic(key, file);
+    },
+  });
+  try {
+    await serve(store, 'record', env => run(command, args, {...process.env, ...env}));
+    if (strict && (!stats.restored || stats.misses)) throw new Error('Incomplete native dependency cache replay');
+  } finally {
+    await snapshot.close();
+    console.log(`Native dependency cache ${JSON.stringify(stats)}`);
+  }
+}
+
 async function nativeReceipt(buildId) {
   const match = sourceBuild.exec(buildId);
   if (!match) throw new Error('Invalid main worker build ID');
@@ -197,6 +237,7 @@ async function launchCloud() {
 async function main(args) {
   if (args[0] === 'cloud-worker') return cloudWorker();
   if (args[0] === 'launch') return launchCloud();
+  if (args[0] === 'native-worker' && args[1] === '--' && args.length >= 3) return nativeWorker(args[2], args.slice(3));
   if (args[0] === 'record-worker' && args[1] === '--' && args.length >= 3) {
     return serve(await openLocalRecorder({receiptFile: process.env.CI_DEPENDENCY_RECEIPT}), 'record',
       env => run(args[2], args.slice(3), {...process.env, ...env}));
