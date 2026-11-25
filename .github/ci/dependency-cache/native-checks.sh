@@ -3,7 +3,22 @@ set -euo pipefail
 
 # This launcher and its commands come from the base checkout. The guest builds the candidate in /work/source.
 launcher="$(dirname -- "$0")/hermetic-run.sh"
+# The hosted Ubuntu 24.04 image includes skopeo and the runtime libraries for bubblewrap.
+if ! command -v bwrap >/dev/null && [[ -n "${CI_DEPENDENCY_PROXY_URL:-}" && $(dpkg --print-architecture) == amd64 ]]; then
+  package=bubblewrap_0.9.0-1ubuntu0.3_amd64.deb
+  archive=$(mktemp)
+  trap 'rm -f -- "$archive"' EXIT
+  curl --fail --silent --show-error "$CI_DEPENDENCY_PROXY_URL/raw/bubblewrap/$package" -o "$archive"
+  echo "2461f1beee9cb04c8942739fe1a2b37e7b7c2a3d518f0779dc75f9245baa3094  $archive" | sha256sum --check --status
+  sudo -n dpkg --install "$archive"
+  rm -f -- "$archive"
+  trap - EXIT
+fi
 if ! command -v bwrap >/dev/null || ! command -v skopeo >/dev/null; then
+  if [[ ${CI_DEPENDENCY_STRICT_READ:-0} == 1 ]]; then
+    echo 'The cache-only runner requires bubblewrap and skopeo' >&2
+    exit 1
+  fi
   bash "$(dirname -- "$0")/install-ubuntu-tools.sh" bubblewrap skopeo
 fi
 suite=${1:?Missing repository check}

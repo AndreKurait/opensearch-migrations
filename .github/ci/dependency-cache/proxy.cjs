@@ -31,6 +31,7 @@ const registries = {
   distroless: {host: 'gcr.io', realm: 'https://gcr.io/v2/token', service: 'gcr.io', repo: 'distroless/static', cdn: []},
 };
 const rawOrigins = {
+  bubblewrap: ['https://security.ubuntu.com/ubuntu/pool/main/b/bubblewrap/', []],
   jdk: ['https://download.java.net/', []],
   corretto: ['https://corretto.aws/downloads/', []],
   k3s: ['https://github.com/k3s-io/k3s/releases/download/', githubAssets],
