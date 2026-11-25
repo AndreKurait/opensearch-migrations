@@ -1,0 +1,54 @@
+name: Test a Terraform module
+description: Run plan-time tests with a local provider mirror.
+inputs:
+  module:
+    required: true
+    description: Terraform module path
+  cache-only:
+    required: true
+    description: Require the published CLI and provider mirror
+runs:
+  using: composite
+  steps:
+    - id: period
+      shell: bash
+      run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      id: cache
+      with:
+        path: ${{ runner.temp }}/terraform-tools
+        key: terraform-tools-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.period.outputs.month }}-${{ hashFiles(format('{0}/**/*.tf', inputs.module)) }}
+        fail-on-cache-miss: ${{ inputs.cache-only == 'true' }}
+    - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
+      if: steps.cache.outputs.cache-hit != 'true'
+      with:
+        terraform_wrapper: false
+    - name: Populate the provider mirror
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ inputs.module }}
+      run: |
+        set -euo pipefail
+        tools="$RUNNER_TEMP/terraform-tools"
+        mkdir -p "$tools/providers"
+        cp "$(command -v terraform)" "$tools/terraform"
+        CHECKPOINT_DISABLE=1 "$tools/terraform" providers mirror "$tools/providers"
+    - name: Publish the CLI and provider mirror
+      if: steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name)
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: ${{ runner.temp }}/terraform-tools
+        key: ${{ steps.cache.outputs.cache-primary-key }}
+    - name: Run Terraform tests from the local provider mirror
+      shell: bash
+      working-directory: ${{ inputs.module }}
+      env:
+        CHECKPOINT_DISABLE: '1'
+        TF_IN_AUTOMATION: 'true'
+      run: |
+        set -euo pipefail
+        tools="$RUNNER_TEMP/terraform-tools"
+        export TF_CLI_CONFIG_FILE="$RUNNER_TEMP/test-terraform.rc"
+        printf 'provider_installation {\n  filesystem_mirror {\n    path = "%s"\n  }\n}\n' "$tools/providers" > "$TF_CLI_CONFIG_FILE"
+        "$tools/terraform" init -backend=false
+        "$tools/terraform" test
