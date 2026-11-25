@@ -50,7 +50,6 @@ jobs:
         if: ${{ !cancelled() && steps.watch.outputs.artifact == 'true' }}
         with:
           name: aws-${{ inputs.suite }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/aws-test-results.zip
+          path: ${{ runner.temp }}/aws-test-results/
           if-no-files-found: error
           retention-days: 30
-          compression-level: 0

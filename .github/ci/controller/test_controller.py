@@ -176,12 +176,11 @@ class ObservationTests(unittest.TestCase):
             self.assertNotIn('![x]', text)
             self.assertEqual((1, 1), (counts['passed'], counts['failed']))
             write('<testsuite><testcase name="case"><failure>acct 123456789012</failure></testcase></testsuite>')
-            dest = path.with_name('published.zip')
-            render(path, public_archive=dest)
-            with ZipFile(dest) as archive:
-                self.assertEqual({'junit.xml', 'summary.json'}, set(archive.namelist()))
-                self.assertNotIn(b'123456789012', archive.read('junit.xml'))
-                self.assertEqual(1, json.loads(archive.read('summary.json'))['failures'])
+            dest = path.with_name('published')
+            render(path, output_dir=dest)
+            self.assertEqual({'junit.xml', 'summary.json'}, {file.name for file in dest.iterdir()})
+            self.assertNotIn('123456789012', (dest / 'junit.xml').read_text())
+            self.assertEqual(1, json.loads((dest / 'summary.json').read_text())['failures'])
             for xml in ['<testsuite/>', '<!DOCTYPE testsuite><testsuite/>']:
                 write(xml)
                 with self.assertRaises(ValueError):

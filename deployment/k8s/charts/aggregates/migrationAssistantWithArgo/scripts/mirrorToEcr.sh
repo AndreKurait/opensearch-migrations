@@ -108,8 +108,8 @@ ptc_rewrite() {
 # Args: <ecr-host> <region> <dockerhub-mirrors> <ptc-endpoint> <image>
 copy_image() {
   local ecr_host="$1" region="$2" dockerhub_mirrors="$3" ptc="$4" image="$5"
-  local image_no_tag="${image%%:*}" tag="${image##*:}"
-  local ecr_repo="mirrored/${image_no_tag}"
+  local tag="${image##*:}" ecr_repo
+  ecr_repo=$(mirror_ecr_repo_name "$image")
   local dest="${ecr_host}/${ecr_repo}:${tag}"
 
   # Build source candidates — for mirror.gcr.io/*, try each mirror
@@ -215,6 +215,7 @@ mirror_images_to_ecr() {
 # Args: <ecr-host> <region> <charts-string>
 mirror_charts_to_ecr() {
   local ecr_host="$1" region="$2" charts="$3"
+  local chart_namespace="${ECR_MIRROR_PREFIX:+$ECR_MIRROR_PREFIX/}charts"
 
   ensure_crane
 
@@ -239,7 +240,7 @@ mirror_charts_to_ecr() {
     repo="${repo#"${repo%%[![:space:]]*}"}"; repo="${repo%"${repo##*[![:space:]]}"}"
     [ -z "$name" ] && continue
 
-    if mirror_ecr_tag_exists "$region" "charts/${name}" "$version"; then
+    if mirror_ecr_tag_exists "$region" "${chart_namespace}/${name}" "$version"; then
       echo "  ✅ $name $version (already mirrored)"
       continue
     fi
@@ -274,9 +275,9 @@ mirror_charts_to_ecr() {
       continue
     fi
 
-    aws ecr create-repository --repository-name "charts/${name}" --region "$region" 2>/dev/null || true
-    echo "  Pushing $tgz → oci://${ecr_host}/charts"
-    helm push "$tgz" "oci://${ecr_host}/charts" </dev/null 2>&1 || { echo "  ❌ FAILED to push $name" >&2; _chart_fail=1; }
+    aws ecr create-repository --repository-name "${chart_namespace}/${name}" --region "$region" 2>/dev/null || true
+    echo "  Pushing $tgz → oci://${ecr_host}/${chart_namespace}"
+    helm push "$tgz" "oci://${ecr_host}/${chart_namespace}" </dev/null 2>&1 || { echo "  ❌ FAILED to push $name" >&2; _chart_fail=1; }
     rm -f "$tgz"
     echo "  ✅ $name $version"
   done < "$_chartlist"

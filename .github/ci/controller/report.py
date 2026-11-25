@@ -3,7 +3,7 @@ import json
 import os
 import re
 import xml.etree.ElementTree as ET
-from zipfile import ZIP_DEFLATED, ZipFile
+from zipfile import ZipFile
 
 
 def public_text(value):
@@ -13,7 +13,7 @@ def public_text(value):
     return re.sub(r'(?<!\d)\d{12}(?!\d)', '[account]', value)
 
 
-def render(path, public_archive=None):
+def render(path, output_dir=None):
     with ZipFile(path) as archive:
         entries = [entry for entry in archive.infolist() if entry.filename == 'junit.xml']
         if len(entries) != 1 or entries[0].file_size > 8 * 1024**2:
@@ -37,11 +37,11 @@ def render(path, public_archive=None):
         if len(lines) < 100 and re.fullmatch(r'[A-Za-z0-9_. -]{1,128}', name):
             lines.append(f'| `{name}` | {state} |')
     counts = ' · '.join(f'**{count} {label}**' for label, count in outcomes.items())
-    if public_archive:
-        # Rebuild the public artifact from bounded JUnit evidence. The source archive is PR-controlled.
+    if output_dir:
+        # Only these two files go to GitHub. The source archive is PR-controlled.
         summary = dict(suite=public_text(root.get('name', '')), tests=len(cases), failures=outcomes['failed'],
                        errors=outcomes['error'], skipped=outcomes['skipped'])
-        with ZipFile(public_archive, 'w', compression=ZIP_DEFLATED) as archive:
-            archive.writestr('junit.xml', public_text(ET.tostring(root, encoding='unicode')))
-            archive.writestr('summary.json', json.dumps(summary, indent=2) + '\n')
+        output_dir.mkdir()
+        (output_dir / 'junit.xml').write_text(public_text(ET.tostring(root, encoding='unicode')), encoding='utf-8')
+        (output_dir / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
     return '\n'.join([counts, '', '| Test case | Result |', '| --- | --- |', *lines]), outcomes

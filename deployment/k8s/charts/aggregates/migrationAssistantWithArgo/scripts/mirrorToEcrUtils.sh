@@ -25,7 +25,7 @@ mirror_ecr_repo_name() {
   if [[ "$last_component" == *:* ]]; then
     without_digest="${without_digest%:*}"
   fi
-  echo "mirrored/${without_digest}"
+  echo "${ECR_MIRROR_PREFIX:+$ECR_MIRROR_PREFIX/}mirrored/${without_digest}"
 }
 
 # Create only repositories that are absent. Listing once makes a warm rerun

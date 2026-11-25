@@ -117,6 +117,7 @@ while [[ $# -gt 0 ]]; do
     --ignore-checks) ignore_checks=true; shift 1 ;;
     --use-public-images) push_images_to_ecr=false; shift 1 ;;
     --ma-images-source) ma_images_source="$2"; shift 2 ;;
+    --ecr-mirror-prefix) ECR_MIRROR_PREFIX="$2"; shift 2 ;;
     --skip-setting-k8s-context) skip_setting_k8s_context=true; shift 1 ;;
     --kubectl-context) kubectl_context="$2"; shift 2 ;;
     # Accepted for older callers; the EKS build never includes test-only images now.
@@ -178,6 +179,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --ma-images-source <registry>             Copy MA images from another ECR registry instead of"
       echo "                                            public.ecr.aws. Use when images were built on a separate"
       echo "                                            cluster (e.g. one with internet access)."
+      echo "  --ecr-mirror-prefix <namespace>           Prefix the mirrored/ and charts/ ECR repositories,"
+      echo "                                            e.g. team/dev. Defaults to ECR_MIRROR_PREFIX or empty."
       echo ""
       echo "EKS access options:"
       echo "  --eks-access-principal-arn <arn>          Grant an IAM principal (role/user) cluster-admin access"
@@ -288,6 +291,12 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+ecr_component='[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*'
+if [[ -n "${ECR_MIRROR_PREFIX:-}" && ! "$ECR_MIRROR_PREFIX" =~ ^${ecr_component}(/${ecr_component})*$ ]]; then
+  echo "Invalid ECR mirror namespace. Use lowercase ECR repository components, for example team/dev." >&2
+  exit 1
+fi
 
 if [[ "$disable_general_purpose_pool" == "true" && "$use_general_node_pool" == "true" ]]; then
   echo "ERROR: --disable-general-purpose-pool and --use-general-node-pool are mutually exclusive"
@@ -2337,7 +2346,8 @@ if [[ "$build" == "true" && -z "$ma_images_source" ]]; then
     # Use the ECR-mirrored buildkit image so the kubernetes driver doesn't pull
     # from Docker Hub. mirror_images_to_ecr already copied this image above.
     ECR_HOST="${MIGRATIONS_ECR_REGISTRY%%/*}"
-    export BUILDKIT_IMAGE="${ECR_HOST}/mirrored/docker.io/moby/buildkit:buildx-stable-1"
+    BUILDKIT_IMAGE="${ECR_HOST}/$(mirror_ecr_repo_name docker.io/moby/buildkit):buildx-stable-1"
+    export BUILDKIT_IMAGE
   else
     unset BUILDKIT_IMAGE
   fi
