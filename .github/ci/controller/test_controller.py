@@ -182,6 +182,16 @@ class ObservationTests(unittest.TestCase):
 
 
 class CapacityTests(unittest.TestCase):
+    def test_every_enabled_suite_reserves_every_quota_by_name(self):
+        self.assertEqual(set(plan.ALL), set(capacity.RESERVATIONS))
+        self.assertFalse(set(capacity.RESERVATIONS) & plan.DISABLED_SUITES)
+        for name, needs in capacity.RESERVATIONS.items():
+            with self.subTest(name=name):
+                self.assertEqual(set(capacity.QUOTAS), set(needs))
+                self.assertTrue(all(type(n) is int and n >= 0 for n in needs.values()))
+        self.assertEqual(4, capacity.RESERVATIONS['isolated']['eips'])
+        self.assertEqual(0, capacity.RESERVATIONS['cfn-import']['egws'])
+
     def test_all_possible_queue_combinations_fit(self):
         room = dict(builds=12, vpcs=4, igws=4, egws=5, eips=5, nat_per_az=5, vcpus=32, enis=5000)
         lanes = capacity.lanes(room)

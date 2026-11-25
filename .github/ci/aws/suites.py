@@ -1,9 +1,25 @@
 """Public-cloud integration suite definitions used by the disposable test worker."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 import os
 import re
 from urllib.parse import urlsplit
+
+
+@dataclass(frozen=True)
+class Reservation:
+    # One create-VPC solution stack uses three NATs/EIPs in separate AZs. Two
+    # four-CPU native BuildKit pods need eight-vCPU hosts after kubelet reserves.
+    builds: int = 1
+    vpcs: int = 1
+    igws: int = 1
+    egws: int = 1
+    eips: int = 3
+    nat_per_az: int = 1
+    enis: int = 64  # peak per availability zone
+    vcpus: int = 24
 
 
 @dataclass(frozen=True)
@@ -12,21 +28,10 @@ class Suite:
     target: str = 'OS_1.3'
     tests: str = ''
     timeout_minutes: int = 180
+    reservation: Reservation | None = Reservation()
+    snapshot_prefixes: tuple[str, ...] = ()
 
 
-SUITES = {
-    'eks': Suite(tests='0001,0002'),
-    'cdc': Suite(tests='0031,0032,0033,0040,0042', timeout_minutes=300),
-    'cdc-k6': Suite(tests='0080', timeout_minutes=300),
-    'cdc-aoss': Suite(target='AOSS', tests='0034,0041', timeout_minutes=240),
-    'aoss': Suite(source='OS_1.3', target='AOSS', tests='0021,0024'),
-    'byos': Suite(target='OS_2.19', tests='0010', timeout_minutes=1080),
-    'isolated': Suite(target='OS_2.19', tests='0040', timeout_minutes=240),
-    'cfn-create': Suite(),
-    'cfn-import': Suite(),
-}
-ALIASES = {'aoss-timeseries': 'aoss', 'aoss-vector': 'aoss'}
-DISABLED_SUITES = frozenset({'byos', 'aoss'})
 SNAPSHOT_BUCKET = 's3://migrations-snapshots-library-us-east-1'
 AOSS_SNAPSHOT_PREFIX = 'aoss-osb-data/os1x-aoss-osb-data'
 PRESETS = {
@@ -36,6 +41,25 @@ PRESETS = {
     'large-es6x-20B': ('large-snapshot-es6x', 'large-snapshot', 'ES_6.8', '90', 'large'),
     'large-es7x-24B': ('large-snapshot-es7x', 'large-snapshot', 'ES_7.10', '90', 'large'),
 }
+
+SUITES = {
+    'eks': Suite(tests='0001,0002'),
+    'cdc': Suite(tests='0031,0032,0033,0040,0042', timeout_minutes=300, reservation=Reservation(enis=96, vcpus=32)),
+    'cdc-k6': Suite(tests='0080', timeout_minutes=300, reservation=Reservation(enis=128, vcpus=32)),
+    'cdc-aoss': Suite(target='AOSS', tests='0034,0041', timeout_minutes=240,
+                      reservation=Reservation(enis=96, vcpus=32)),
+    # The historic snapshots are unavailable. Assign a reservation after fixture access is restored.
+    'aoss': Suite(source='OS_1.3', target='AOSS', tests='0021,0024', reservation=None,
+                  snapshot_prefixes=(AOSS_SNAPSHOT_PREFIX,)),
+    'byos': Suite(target='OS_2.19', tests='0010', timeout_minutes=1080, reservation=None,
+                  snapshot_prefixes=tuple(preset[0] for preset in PRESETS.values())),
+    'isolated': Suite(target='OS_2.19', tests='0040', timeout_minutes=240,
+                      reservation=Reservation(vpcs=2, igws=2, eips=4, nat_per_az=2, enis=128, vcpus=32)),
+    'cfn-create': Suite(),
+    'cfn-import': Suite(reservation=Reservation(eips=1, egws=0)),
+}
+ALIASES = {'aoss-timeseries': 'aoss', 'aoss-vector': 'aoss'}
+DISABLED_SUITES = frozenset(name for name, suite in SUITES.items() if suite.reservation is None)
 
 
 def fixture_uri(bucket, prefix, override=None):

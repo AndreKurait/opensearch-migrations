@@ -2,6 +2,7 @@
 import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
 from datetime import datetime
 import hashlib
 import json
@@ -9,6 +10,8 @@ import os
 import re
 import subprocess
 import time
+
+from parameters import SUITES
 
 REGION = 'us-west-2'
 PROJECT = 'migrations-github-eks'
@@ -19,18 +22,7 @@ QUOTAS = {
     'igws': ('vpc', 'L-A4707A72'), 'egws': ('vpc', 'L-45FE3B85'), 'nat_per_az': ('vpc', 'L-FE5A380F'),
     'enis': ('vpc', 'L-DF5E4CA3'), 'vcpus': ('ec2', 'L-1216C47A'),
 }
-# Every source suite runs native amd64 and arm64 BuildKit pods requesting 4 CPUs each. A four-vCPU
-# host cannot fit one after kubelet reservations. Allow for two eight-vCPU hosts, system nodes and
-# the console; CDC's independent workload pools and the overlapping isolated clusters need more.
-# Use the same conservative reservation for release canaries and previously approved candidate code.
-RESERVATIONS = {
-    suite: dict(zip(QUOTAS, values)) for suite, values in {
-        'isolated': (1, 4, 2, 2, 1, 2, 128, 32), 'cfn-import': (1, 1, 1, 1, 0, 1, 64, 24),
-        'cdc-k6': (1, 3, 1, 1, 1, 1, 128, 32), 'cdc-aoss': (1, 3, 1, 1, 1, 1, 96, 32),
-        'cdc': (1, 3, 1, 1, 1, 1, 96, 32), 'eks': (1, 3, 1, 1, 1, 1, 64, 24),
-        'cfn-create': (1, 3, 1, 1, 1, 1, 64, 24),
-    }.items()
-}
+RESERVATIONS = {name: asdict(suite.reservation) for name, suite in SUITES.items() if suite.reservation is not None}
 
 
 def cli(*args, payload=None):
@@ -176,7 +168,12 @@ def lanes(room):
     # Sum of the per-resource maxima in every lane must fit for *any* selection, including overlapping runs.
     buckets = []
     assignment = {}
-    for suite, need in RESERVATIONS.items():
+    # Place overlapping VPCs first, then suites that can share the remaining EIPs.
+    # The largest ENI and CPU reservations get first choice of available lanes.
+    order = sorted(RESERVATIONS, key=lambda name: (RESERVATIONS[name]['vpcs'], -RESERVATIONS[name]['eips'],
+                   RESERVATIONS[name]['enis'], RESERVATIONS[name]['vcpus'], name), reverse=True)
+    for suite in order:
+        need = RESERVATIONS[suite]
         if any(need[k] > room[k] for k in QUOTAS):
             continue
         for idx in [len(buckets), *range(len(buckets))]:

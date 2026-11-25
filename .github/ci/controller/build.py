@@ -11,13 +11,12 @@ import subprocess
 import sys
 import time
 
-from capacity import admit, client, config
+from capacity import PROJECT, admit, client, config
 from parameters import ALIASES, SUITES, parameters
 from plan import RELEASE, SHA, select
 from report import public_text, render
 
-PROJECT = 'migrations-github-eks'
-LOG_GROUP = '/aws/codebuild/migrations-github-eks'
+LOG_GROUP = f'/aws/codebuild/{PROJECT}'
 UUID = r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}'
 BUILD_ID = rf'{PROJECT}:{UUID}'
 TERMINAL = {'SUCCEEDED', 'FAILED', 'FAULT', 'STOPPED', 'TIMED_OUT'}
