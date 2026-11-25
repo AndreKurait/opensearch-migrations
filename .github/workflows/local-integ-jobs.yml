@@ -152,6 +152,14 @@ jobs:
           dependency-proxy-enabled: ${{ inputs.cache-only || vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
           dependency-proxy-docker: 'true'
 
+      - name: Restore BuildKit registry layers
+        id: build-layers
+        if: inputs.cache-only || vars.DEPENDENCY_PROXY_ENABLED == 'true'
+        uses: ./.github/actions/local-build-cache
+        with:
+          suite: compose
+          cache-only: ${{ inputs.cache-only }}
+
       - name: Get registry cache key
         id: registry-cache-key
         if: ${{ !inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true' }}
@@ -172,6 +180,16 @@ jobs:
         env:
           DOCKER_BUILD_RETRIES: 3
         run: ./buildImages/buildDockerImages.sh
+
+      - name: Publish BuildKit registry layers
+        if: >-
+          !inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED == 'true' && github.ref == 'refs/heads/main' &&
+          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) &&
+          steps.build-layers.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/buildkit-registry
+          key: ${{ steps.build-layers.outputs.key }}
 
       - name: Docker compose up
         timeout-minutes: 10

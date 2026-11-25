@@ -1,0 +1,40 @@
+name: Restore local image build layers
+description: Restore the disposable registry used for BuildKit cache imports and exports.
+inputs:
+  suite:
+    required: true
+    description: Image build suite
+  cache-only:
+    required: true
+    description: Require cache-only image build steps
+outputs:
+  cache-hit:
+    value: ${{ steps.layers.outputs.cache-hit }}
+    description: Whether this exact commit was already published
+  key:
+    value: ${{ steps.layers.outputs.cache-primary-key }}
+    description: Cache key for the current build
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      id: layers
+      with:
+        path: ${{ runner.temp }}/buildkit-registry
+        key: migrations-buildkit-registry-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.suite }}-${{ github.sha }}
+        restore-keys: migrations-buildkit-registry-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.suite }}-
+    - shell: bash
+      run: |
+        mkdir -p "$RUNNER_TEMP/buildkit-registry"
+        echo "EXTERNAL_REGISTRY_VOLUME=$RUNNER_TEMP/buildkit-registry" >> "$GITHUB_ENV"
+    - if: inputs.cache-only == 'true'
+      shell: bash
+      run: |
+        # Block forwarded packets before Docker's filter rules. Keep traffic between
+        # Docker/kind networks and the job's local registry and broker available.
+        nic=$(ip -4 route show default | awk 'NR==1 {print $5}')
+        test -n "$nic"
+        for firewall in iptables ip6tables; do
+          sudo "$firewall" -w 5 -t mangle -I FORWARD 1 -o "$nic" -j DROP
+          sudo "$firewall" -w 5 -t mangle -C FORWARD -o "$nic" -j DROP
+        done
