@@ -81,3 +81,17 @@ test('existing destination is never overwritten and mismatch/lookup-only never d
   assert.equal(await safeRestore([member], 'wanted', [], lookup), undefined);
   assert.equal(await safeRestore([member], 'other', [], {...lookup, lookupOnly: true}), 'other');
 });
+
+
+test('archive failure reports only backend hostname and HTTP status', async (t) => {
+  const {dir, member} = await fixture(t);
+  const log = t.mock.method(console, 'warn', () => {});
+  const secret = 'fixture-signature-never-logged';
+  await assert.rejects(safeRestore([member], 'wanted', [], {
+    destination: path.join(dir, 'dest'),
+    download: async () => ({ok: true, matchedKey: 'wanted', signedDownloadUrl: `${signed}?sig=${secret}`}),
+    request: async () => new Response('denied', {status: 403}),
+  }), {message: 'Cache archive at cache.example.invalid failed (HTTP_403,Error).'});
+  assert.equal(log.mock.calls.length, 1);
+  assert.equal(log.mock.calls[0].arguments[0], 'Cache archive at cache.example.invalid failed (HTTP_403,Error).');
+});
