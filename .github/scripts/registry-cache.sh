@@ -141,7 +141,7 @@ configure_dependency_nodes() {
   local endpoint="${CI_DEPENDENCY_REGISTRY_ENDPOINT:?}" host origin node entry
   [[ "$endpoint" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]] || return 1
   for node in "$@"; do
-    for entry in 'docker.io dockerhub' 'ghcr.io ghcr' 'public.ecr.aws ecrpublic' 'quay.io quay' 'registry.k8s.io k8s' 'mirror.gcr.io gcr'; do
+    for entry in 'docker.io dockerhub' 'ghcr.io ghcr' 'public.ecr.aws ecrpublic' 'quay.io quay' 'registry.k8s.io k8s' 'mirror.gcr.io gcr' 'gcr.io distroless'; do
       read -r host origin <<< "$entry"
       docker exec "$node" mkdir -p "/etc/containerd/certs.d/$host"
       # The only usable pull/resolve endpoint is the canonical cache URL. A 503 signals a cache miss.

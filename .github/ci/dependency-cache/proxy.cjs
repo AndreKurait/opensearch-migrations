@@ -28,6 +28,7 @@ const registries = {
     cdn: [/^d[a-z0-9]+\.cloudfront\.net$/]},
   k8s: {host: 'registry.k8s.io', cdn: [k8sCdn, 'prod-registry-k8s-io-eu-central-1.s3.dualstack.eu-central-1.amazonaws.com']},
   gcr: {host: 'mirror.gcr.io', cdn: ['storage.googleapis.com']},
+  distroless: {host: 'gcr.io', realm: 'https://gcr.io/v2/token', service: 'gcr.io', repo: 'distroless/static', cdn: []},
 };
 const rawOrigins = {
   jdk: ['https://download.java.net/', []],
@@ -92,6 +93,7 @@ function parseKey(key) {
   const registry = registries[originId];
   if (originId === 'dockerhub' && repos.length === 1) repos.unshift('library');
   const repo = repos.join('/');
+  if (registry.repo && registry.repo !== repo) throw new Error('Unsupported public OCI repository');
   return {urls: [new URL(`https://${registry.host}/v2/${repo}/${operation}/${ref}`)], cdn: registry.cdn, registry,
     repo, digest, manifest: operation === 'manifests', oci: true};
 }

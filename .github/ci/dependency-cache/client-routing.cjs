@@ -14,6 +14,7 @@ const run = promisify(execFile);
 const origins = {
   'docker.io': 'dockerhub', 'registry-1.docker.io': 'dockerhub', 'index.docker.io': 'dockerhub',
   'ghcr.io': 'ghcr', 'quay.io': 'quay', 'public.ecr.aws': 'ecrpublic', 'registry.k8s.io': 'k8s', 'mirror.gcr.io': 'gcr',
+  'gcr.io': 'distroless',
 };
 const originEntries = Object.entries(origins).filter(([host]) => !['registry-1.docker.io', 'index.docker.io'].includes(host));
 const loopback = name => ['localhost', '127.0.0.1', '[::1]'].includes(name);
@@ -36,6 +37,7 @@ function imageReference(repository, tag) {
   if (digestPos !== -1) {
     tag ||= name.slice(digestPos + 1);
     name = name.slice(0, digestPos);
+    if (name.lastIndexOf(':') > name.lastIndexOf('/')) name = name.slice(0, name.lastIndexOf(':'));
   } else if (tagPos > name.lastIndexOf('/')) {
     tag ||= name.slice(tagPos + 1);
     name = name.slice(0, tagPos);

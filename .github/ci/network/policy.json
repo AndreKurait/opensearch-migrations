@@ -148,6 +148,23 @@
     "python": [
       "pypi.org:443",
       "files.pythonhosted.org:443"
+    ],
+    "console-image": [
+      "cdn.amazonlinux.com:443",
+      "mountpoint-s3-release.s3.amazonaws.com:443"
+    ],
+    "searchguard": [
+      "maven.search-guard.com:443"
+    ],
+    "compatibility-images": [
+      "dl-cdn.alpinelinux.org:443",
+      "artifacts.alfresco.com:443"
+    ],
+    "k6-build": [
+      "gcr.io:443",
+      "codeload.github.com:443",
+      "proxy.golang.org:443",
+      "sum.golang.org:443"
     ]
   },
   "jobs": {
@@ -194,7 +211,7 @@
         "openartifact"
       ],
       "nativePrivileges": true,
-      "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.py-project != 'migrationConsole/lib/console_link'"
+      "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true' && !startsWith(matrix.py-project, 'migrationConsole/')"
     },
     "ci-jobs.yml/kind-setup-script-tests": {
       "purposes": [
@@ -460,7 +477,8 @@
         "bootstrap",
         "package",
         "oci",
-        "kubernetes"
+        "kubernetes",
+        "console-image"
       ],
       "nativePrivileges": true,
       "unreviewedForkSandbox": "false"
@@ -471,7 +489,11 @@
         "bootstrap",
         "package",
         "oci",
-        "kubernetes"
+        "kubernetes",
+        "console-image",
+        "searchguard",
+        "compatibility-images",
+        "k6-build"
       ],
       "nativePrivileges": true,
       "unreviewedForkSandbox": "false"
@@ -491,7 +513,9 @@
         "bootstrap",
         "package",
         "oci",
-        "kubernetes"
+        "kubernetes",
+        "console-image",
+        "searchguard"
       ],
       "nativePrivileges": true,
       "unreviewedForkSandbox": "false"

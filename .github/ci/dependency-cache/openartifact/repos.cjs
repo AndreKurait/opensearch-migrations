@@ -11,6 +11,7 @@ const sources = [
   ['ecrpublic', 'docker', 'https://public.ecr.aws'],
   ['k8s', 'docker', 'https://registry.k8s.io'],
   ['gcr', 'docker', 'https://mirror.gcr.io'],
+  ['distroless', 'docker', 'https://gcr.io'],
   ['corretto', 'raw', 'https://corretto.aws/downloads'],
   ['gradle', 'raw', 'https://services.gradle.org/distributions'],
   ['kubectl', 'raw', 'https://dl.k8s.io'],

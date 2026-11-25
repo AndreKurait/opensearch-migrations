@@ -210,7 +210,7 @@ jobs:
             azure.archive.ubuntu.com:80 azure.archive.ubuntu.com:443 us-west-2.ec2.archive.ubuntu.com:80 us-west-2.ec2.archive.ubuntu.com:443 archive.ubuntu.com:80 archive.ubuntu.com:443 security.ubuntu.com:80 security.ubuntu.com:443 packages.microsoft.com:443 packages.cloud.google.com:443
       - *enforce_native
       - name: Require isolated execution for external fork code
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.py-project != 'migrationConsole/lib/console_link')
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !(vars.DEPENDENCY_PROXY_ENABLED == 'true' && !startsWith(matrix.py-project, 'migrationConsole/'))
         shell: bash
         working-directory: ${{ runner.temp }}
         run: |
