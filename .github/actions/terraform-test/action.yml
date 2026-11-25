@@ -32,6 +32,7 @@ runs:
         tools="$RUNNER_TEMP/terraform-tools"
         mkdir -p "$tools/providers"
         cp "$(command -v terraform)" "$tools/terraform"
+        CHECKPOINT_DISABLE=1 "$tools/terraform" get
         CHECKPOINT_DISABLE=1 "$tools/terraform" providers mirror "$tools/providers"
     - name: Publish the CLI and provider mirror
       if: steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name)
