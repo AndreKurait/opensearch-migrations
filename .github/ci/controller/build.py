@@ -113,14 +113,14 @@ def collect(build):
     key = f'builds/{uuid}/results.zip'
     if location != f'arn:aws:s3:::{bucket}/{key}':
         raise ValueError('Unexpected CodeBuild artifact location')
-    target = Path(os.environ['RUNNER_TEMP']) / 'aws-test-results.zip'
     head = aws('s3api', 'head-object', '--bucket', bucket, '--key', key)
     if not 0 < head['ContentLength'] <= 64 * 1024**2:
         raise ValueError('Worker artifact is empty or exceeds the 64 MiB report limit')
-    private = target.with_suffix('.private.zip')
+    temp = Path(os.environ['RUNNER_TEMP'])
+    private = temp / 'worker-results.private.zip'
     try:
         aws('s3api', 'get-object', '--bucket', bucket, '--key', key, str(private))
-        report, counts = render(private, public_archive=target)
+        report, counts = render(private, output_dir=temp / 'aws-test-results')
     finally:
         private.unlink(missing_ok=True)
     summary(report)
