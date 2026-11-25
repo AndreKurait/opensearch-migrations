@@ -22,6 +22,19 @@ fail() {
 tmp_root="$(mktemp -d)"
 trap 'rm -rf "$tmp_root"' EXIT
 
+(
+  aws() { return 1; }
+  registry_login() { cat >> "$tmp_root/public-login"; }
+  login_to_public_ecr_if_available registry_login
+  [[ ! -e "$tmp_root/public-login" ]] || fail "an unavailable token changed the public registry credentials"
+  aws() { return 0; }
+  login_to_public_ecr_if_available registry_login
+  [[ ! -e "$tmp_root/public-login" ]] || fail "an empty token changed the public registry credentials"
+  aws() { echo sample-token; }
+  login_to_public_ecr_if_available registry_login
+  [[ "$(cat "$tmp_root/public-login")" == "sample-token" ]] || fail "the valid public token was not passed on stdin"
+)
+
 task_file="${tmp_root}/tasks"
 write_bootstrap_image_tasks $'dependency-one:v1\ndependency-two:v2\ndependency-three:v3' \
   true "$task_file"

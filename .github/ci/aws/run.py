@@ -103,6 +103,14 @@ def stage_bootstrap(source, destination, stage):
         if original not in script:
             raise ValueError(f'Unrecognized bootstrap mirror format, expected {original!r}')
         script = script.replace(original, scoped)
+    # Older published bootstraps saved empty registry credentials when the
+    # sandbox could not request a public ECR token. Use anonymous public pulls.
+    script = re.sub(
+        r'aws ecr-public get-login-password --region us-east-1 2>/dev/null \| \\\n[ \t]+'
+        r'(?:crane auth login|helm registry login) public\.ecr\.aws -u AWS --password-stdin 2>/dev/null \|\| true',
+        ': # Pull from ECR Public anonymously.',
+        script,
+    )
     destination.write_text(script)
     return destination
 
