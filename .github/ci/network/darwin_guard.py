@@ -262,7 +262,7 @@ def build(ipc, command_line=None):
         profile.write_text(seatbelt(temp, java, proxy.port, ipc))
         command(['/usr/bin/sudo', '-n', '/usr/sbin/chown', '-R', str(GUEST_UID), str(profile.parent)])
         command(['/usr/bin/sudo', '-n', '/bin/chmod', '0755', str(temp)])
-        prefix = ['/usr/bin/sudo', '-n', '-u', f'#{GUEST_UID}', '-g', '#65534', '/usr/bin/env', '-i']
+        prefix = ['/usr/bin/sudo', '-n', '/usr/bin/python3', '-I', str(Path(__file__).resolve()), 'guest']
         env = {
             'PATH': f'{java}/bin:/usr/bin:/bin:/usr/sbin:/sbin',
             'HOME': str(home),
@@ -282,7 +282,7 @@ def build(ipc, command_line=None):
         if 'CI_GRADLE_BUILD_CACHE_URL' in os.environ:
             env['CI_GRADLE_BUILD_CACHE_URL'] = f'{proxy.geturl().rstrip("/")}/gradle-build-cache/'
             env['CI_GRADLE_BUILD_CACHE_PUSH'] = 'false'
-        prefix += [f'{key}={value}' for key, value in env.items()] + ['/usr/bin/sandbox-exec', '-f', str(profile)]
+        prefix += [json.dumps(env), str(profile)]
         command(prefix + ['/usr/bin/nc', '-z', '-w', '3', '127.0.0.1', str(proxy.port)], env=env, cwd=work)
         for target in ('1.1.1.1', '2606:4700:4700::1111'):
             result = subprocess.run(prefix + ['/usr/bin/nc', '-z', '-w', '2', target, '443'], env=env, cwd=work)
@@ -337,10 +337,10 @@ def fixture(ipc):
         profile.write_text(seatbelt(temporary, Path('/Library/Java'), port, ipc))
         command(['/bin/chmod', '0755', str(temporary)])
         command(['/usr/bin/sudo', '-n', '/usr/sbin/chown', str(GUEST_UID), str(temporary)])
-        prefix = ['/usr/bin/sudo', '-n', '-u', f'#{GUEST_UID}', '-g', '#65534', '/usr/bin/env', '-i']
+        prefix = ['/usr/bin/sudo', '-n', '/usr/bin/python3', '-I', str(Path(__file__).resolve()), 'guest']
         env = {'HOME': str(temporary), 'PATH': '/usr/bin:/bin', 'TMPDIR': str(temporary)}
 
-        prefix += [f'{key}={value}' for key, value in env.items()] + ['/usr/bin/sandbox-exec', '-f', str(profile)]
+        prefix += [json.dumps(env), str(profile)]
 
         def execute(argv):
             return subprocess.run(
@@ -419,7 +419,14 @@ int main(int argc, char **argv) {
 
 
 if __name__ == '__main__':
-    if sys.argv[1:] == ['install']:
+    if sys.argv[1:2] == ['guest']:
+        # An unmapped UID has no password, admin groups or home service. sudo -u only accepts
+        # Directory Services accounts on hosted macOS, so the trusted parent drops it directly.
+        os.setgroups([])
+        os.setgid(65534)
+        os.setuid(GUEST_UID)
+        os.execve('/usr/bin/sandbox-exec', ['sandbox-exec', '-f', sys.argv[3], *sys.argv[4:]], json.loads(sys.argv[2]))
+    elif sys.argv[1:] == ['install']:
         install()
     else:
         with local_ipc() as ipc:
