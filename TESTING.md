@@ -42,7 +42,7 @@ The default IDs and scheduled groups are in [.github/scripts/local-integ-matrix.
 
 ## AWS integration tests
 
-When automatic runs are enabled, PRs run local integration tests. To run a PR against AWS, review the entire change that will execute, including test code, setup scripts, Gradle tasks and dependency changes. On the PR, a collaborator with current write, maintain or admin access can comment `/aws-test FULL_HEAD_SHA eks`. Copy the 40-character SHA from the PR’s **Commits** tab. A push to the PR requires a new approval. `/aws-test FULL_HEAD_SHA` uses the PR’s `run-eks-tests`, `run-cfn-tests`, or `run-eks-isolated-tests` labels if present. With no matching labels, it runs all seven enabled suites. Labels alone never start an AWS build.
+When automatic runs are enabled, PRs run local integration tests. To run a PR against AWS, review the entire change that will execute, including test code, setup scripts, Gradle tasks and dependency changes. On the PR, a collaborator with current write, maintain or admin access can comment `/aws-test FULL_HEAD_SHA eks`. Copy the 40-character SHA from the PR’s **Commits** tab. A push to the PR requires a new approval. `/aws-test FULL_HEAD_SHA` uses the PR’s `run-eks-tests`, `run-cfn-tests`, or `run-eks-isolated-tests` labels if present. With no matching label or explicit suite, it runs `cfn-create`, which installs the candidate on EKS, waits for the console pod, and checks `console --version`. Use `/aws-test FULL_HEAD_SHA all` for all seven enabled suites. Labels alone never start an AWS build.
 
 | Suite | Default test coverage | Worker timeout |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ When automatic runs are enabled, PRs run local integration tests. To run a PR ag
 | `cfn-create`, `cfn-import` | Install and verify the solution with a new or existing VPC | 3 h each |
 | `isolated` | Build in one cluster, deploy in an isolated VPC and run `0040` | 4 h |
 
-To run a specific changed test before merge, dispatch **AWS integration tests** from `main` with the PR number and reviewed head SHA. A dispatch without a PR runs `main`. Inputs are passed as data. Each suite supports its own subset of parameters, validated in [.github/ci/controller/parameters.py](.github/ci/controller/parameters.py).
+To run a specific changed test before merge, dispatch **AWS integration tests** from `main` with the PR number and reviewed head SHA. A dispatch without a PR runs `main`. The default selection is the deployment check. An explicit suite or group selects the corresponding AWS tests. Inputs are passed as data. Each suite supports its own subset of parameters, validated in [.github/ci/controller/parameters.py](.github/ci/controller/parameters.py).
 
 ```bash
 gh workflow run aws-integration.yml --ref main \
@@ -81,6 +81,8 @@ python3 .github/ci/infra/deploy.py --profile github-actions-test --region us-wes
   --expected-account "$AWS_CI_ACCOUNT_ID"
 python3 .github/ci/controller/capacity.py --profile github-actions-test --publish
 ```
+
+For source runs, the production bootstrap builds the CloudFormation templates and deployable images for the approved commit. GitHub-hosted workflows own general Gradle checks. The AWS deployment check covers CloudFormation, EKS startup and console readiness. Use a named migration suite for data migration, CDC or isolation assertions.
 
 The CodeBuild Linux/Large worker provides 8 vCPUs, 16 GiB memory and 128 GB of disk for one test. CodeBuild provisions and retires that worker, assigns its build ID, and records logs and results. The EKS nodes created by the tests consume a separate EC2 quota. A directly managed EC2 runner would also need instance startup, runner registration, log collection and termination. [CodeBuild compute types](https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref-compute-types.html)
 

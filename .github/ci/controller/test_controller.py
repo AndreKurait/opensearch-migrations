@@ -106,6 +106,13 @@ class ApprovalTests(unittest.TestCase):
             with self.subTest(selection=selection), self.assertRaises(ValueError):
                 plan.select(selection)
 
+    def test_unnamed_request_runs_deployment_smoke_and_all_remains_explicit(self):
+        self.assertEqual(['cfn-create'], json.loads(self.select()['matrix']))
+        self.event.update(sender={'login': 'reviewer'}, inputs={'pr': '12', 'sha': SHA})
+        self.assertEqual(['cfn-create'], json.loads(self.select('workflow_dispatch')['matrix']))
+        self.event['inputs'].update(suite='all')
+        self.assertEqual(set(plan.ALL), set(json.loads(self.select('workflow_dispatch')['matrix'])))
+
     def test_only_supported_inputs_for_each_suite(self):
         self.assertEqual({'TEST_IDS': '0040,0042'}, parameters(['cdc'], '{"TEST_IDS":"0040,0042"}'))
         for suites, opts in [(['cdc'], {'CI_ROLE_BOUNDARY_ARN': 'other'}), (['eks'], {'TEST_IDS': '42\nX='}),

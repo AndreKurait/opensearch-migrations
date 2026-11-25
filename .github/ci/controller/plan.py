@@ -10,6 +10,7 @@ from parameters import ALIASES, SUITES, parameters
 from suites import DISABLED_SUITES
 
 ALL = tuple(s for s in SUITES if s not in DISABLED_SUITES)
+DEFAULT_PR_SUITE = 'cfn-create'
 GROUPS = {
     'all': ALL,
     'run-eks-tests': ('eks', 'aoss', 'cdc', 'cdc-aoss', 'cdc-k6'),
@@ -77,8 +78,8 @@ def plan(event_name, event, repository, sha, ref, authenticate=api):
             release = latest_release()
     elif event_name == 'workflow_dispatch':
         inputs = event['inputs']
-        group = inputs['suite']
-        suites = select(group)
+        group = inputs.get('suite') or None
+        suites = select(group) if group else (DEFAULT_PR_SUITE,)
         release = inputs.get('release', '').strip()
         options = inputs.get('parameters', '{}')
         if inputs.get('pr') or inputs.get('sha'):
@@ -109,7 +110,7 @@ def plan(event_name, event, repository, sha, ref, authenticate=api):
             suites = tuple(dict.fromkeys(s for key in matched for s in GROUPS[key] if s not in DISABLED_SUITES))
             if matched and not suites:
                 raise ValueError('Only paused snapshot suites were requested')
-            suites = suites or ALL
+            suites = suites or (DEFAULT_PR_SUITE,)
     if not re.fullmatch(SHA, sha) or (release and not re.fullmatch(RELEASE, release)):
         raise ValueError('Invalid commit SHA or release version')
     return {'sha': sha, 'ref': git_ref, 'matrix': json.dumps(list(suites), separators=(',', ':')),

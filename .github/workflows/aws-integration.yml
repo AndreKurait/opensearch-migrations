@@ -14,8 +14,7 @@ on:
     inputs:
       suite:
         type: string
-        description: Suite, group, or comma-separated selections (see TESTING.md)
-        default: all
+        description: Suite, group, or comma-separated selections (default is the deployment check)
       release:
         type: string
         description: Optional published Migration Assistant release version (default builds from source)
