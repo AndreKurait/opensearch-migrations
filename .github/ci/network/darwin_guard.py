@@ -143,13 +143,16 @@ def seatbelt(temp, java, port):
         [
             '(version 1)',
             '(deny default)',
-            '(allow process-fork process-exec sysctl-read mach-lookup)',
+            '(allow process-fork process-exec sysctl-read ipc-posix* ipc-sysv* system-socket)',
+            '(allow mach-lookup (global-name "com.apple.system.opendirectoryd.libinfo"))',
+            '(allow mach-lookup (global-name "com.apple.SystemConfiguration.DNSConfiguration"))',
+            '(allow file-read* (literal "/private/var/select/sh"))',
             '(allow file-read* ' + ' '.join(read) + ')',
             '(allow file-read-metadata)',
             f'(allow file-write* (subpath {quote(temp)}) (literal "/dev/null") (literal "/dev/tty"))',
             '(deny network*)',
             f'(allow network-outbound (remote ip "localhost:{port}"))',
-            '(allow signal (target self))',
+            '(allow signal (target same-sandbox))',
             '(deny process-exec (literal "/usr/bin/sudo") (literal "/usr/bin/su"))',
         ]
     )
@@ -237,9 +240,12 @@ def fixture():
                 prefix + argv, env=env, cwd=temporary, capture_output=True, text=True, timeout=15
             )
 
+        baseline = execute(['/usr/bin/true'])
+        if baseline.returncode:
+            raise RuntimeError(f'Seatbelt native exec failed ({baseline.returncode}): {baseline.stderr}')
         response = execute(['/usr/bin/curl', '-fsS', '--max-time', '5', f'http://127.0.0.1:{port}/fixture'])
         if response.returncode or response.stdout != 'local broker':
-            raise RuntimeError('Candidate cannot reach its assigned broker')
+            raise RuntimeError(f'Candidate could not reach its broker ({response.returncode}): {response.stderr}')
         github = next(iter(addresses('api.github.com')))
         for argv in [
             ['/usr/bin/nc', '-z', '-w', '2', github, '443'],
