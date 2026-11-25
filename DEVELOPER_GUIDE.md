@@ -71,7 +71,7 @@ Users can interact with the migration process through the CLI, which orchestrate
 
 Builds use Maven Central and the Gradle Plugin Portal by default. To use a shared
 dependency cache, including for Spotless and `buildSrc`, see
-[dependency repository configuration](jenkins/DEPENDENCY_CACHE.md#use-another-repository-manager).
+[dependency repository configuration](gradle/codeartifact/README.md).
 
 ## Running Tests
 
@@ -158,3 +158,5 @@ find . -name Pipfile -not -path "*/cdk.out/*"  | while read pipfile; do
   (cd "$dir" && PIPENV_IGNORE_VIRTUALENVS=1 PIPENV_VENV_IN_PROJECT=1 pipenv install)
 done
 ```
+
+Protected release tags, release rehearsal and production credentials are documented in [Publishing a prerelease](docs/ReleasePublishing.md).

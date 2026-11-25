@@ -1,0 +1,257 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: GitHub Actions launcher and bounded AWS integration-test sandbox
+Parameters:
+  ProviderArn: {Type: String}
+  WorkerLimit: {Type: Number, Default: 12, MinValue: 2, MaxValue: 100}
+  RecoveryDigest: {Type: String, AllowedPattern: '[a-f0-9]{64}'}
+Resources:
+  Artifacts:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption: &encryption {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]}
+      OwnershipControls: &ownership {Rules: [{ObjectOwnership: BucketOwnerEnforced}]}
+      PublicAccessBlockConfiguration: &private {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+      LifecycleConfiguration: {Rules: [{Id: ExpireBuilds, Prefix: builds/, Status: Enabled, ExpirationInDays: 14, AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}}]}
+  Fixtures:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'migrations-ci-fixtures-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption: *encryption
+      OwnershipControls: *ownership
+      PublicAccessBlockConfiguration: *private
+  CdkAssets:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'cdk-mactest01-assets-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption: *encryption
+      OwnershipControls: *ownership
+      PublicAccessBlockConfiguration: *private
+      LifecycleConfiguration: {Rules: [{Id: ExpireAssets, Status: Enabled, ExpirationInDays: 14}]}
+  CdkImages:
+    Type: AWS::ECR::Repository
+    Properties: {RepositoryName: !Sub 'cdk-mactest01-container-assets-${AWS::AccountId}-${AWS::Region}', ImageTagMutability: IMMUTABLE, EmptyOnDelete: true}
+  CdkVersion:
+    Type: AWS::SSM::Parameter
+    Properties: {Type: String, Name: /cdk-bootstrap/mactest01/version, Value: '32', Description: Isolated CDK asset storage for CLI-credential synthesis}
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: {LogGroupName: /aws/codebuild/migrations-github-eks, RetentionInDays: 14}
+  SandboxBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub 'MigrationsGitHubSandboxBoundary-${AWS::Region}'
+      PolicyDocument: !Include sandbox-policy.yml
+  ControlPlaneBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub 'MigrationsGitHubControlPlaneBoundary-${AWS::Region}'
+      PolicyDocument: !Include control-plane-policy.yml
+  Worker:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'MigrationsGitHubWorker-${AWS::Region}'
+      ManagedPolicyArns: [!Ref SandboxBoundary]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: codebuild.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition: {ArnEquals: {'aws:SourceArn': !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/migrations-github-eks'}, StringEquals: {'aws:SourceAccount': !Ref 'AWS::AccountId'}}
+      Policies: [{PolicyName: SandboxProvisioning, PolicyDocument: !Include worker-iam.yml}]
+  Project:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: migrations-github-eks
+      Description: Run one maintainer-approved immutable test revision in a disposable worker
+      ServiceRole: !GetAtt Worker.Arn
+      TimeoutInMinutes: 1200
+      ConcurrentBuildLimit: !Ref WorkerLimit
+      QueuedTimeoutInMinutes: 60
+      Source: {Type: NO_SOURCE, BuildSpec: !File worker-buildspec.yml}
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_LARGE
+        Image: aws/codebuild/standard:7.0
+        ImagePullCredentialsType: CODEBUILD
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - {Name: CI_WORKER_ROLE_ARN, Value: !GetAtt Worker.Arn}
+          - {Name: CI_ROLE_BOUNDARY_ARN, Value: !Ref SandboxBoundary}
+          - {Name: CI_CONTROL_PLANE_BOUNDARY_ARN, Value: !Ref ControlPlaneBoundary}
+          - {Name: CI_SNAPSHOT_BUCKET, Value: !Ref Fixtures}
+          - {Name: CI_SNAPSHOT_REGION, Value: !Ref 'AWS::Region'}
+          - {Name: CI_TAG_ORACLE_FUNCTION, Value: !Ref TagOracle}
+          - {Name: CI_RECOVERY_BUCKET, Value: !Ref Artifacts}
+          - {Name: CI_RECOVERY_SHA256, Value: !Ref RecoveryDigest}
+      LogsConfig: {CloudWatchLogs: {Status: ENABLED, GroupName: !Ref LogGroup}}
+      Artifacts: {Type: S3, Location: !Ref Artifacts, Path: builds, NamespaceType: BUILD_ID, Name: results.zip, Packaging: ZIP, OverrideArtifactName: false, EncryptionDisabled: false}
+  Launcher:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MigrationsGitHubLauncher
+      MaxSessionDuration: 21600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Federated: !Ref ProviderArn}
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+                'token.actions.githubusercontent.com:repository_id': '744243892'
+                'token.actions.githubusercontent.com:repository_owner_id': '33106608'
+                'token.actions.githubusercontent.com:ref': refs/heads/main
+                'token.actions.githubusercontent.com:workflow': AWS integration tests
+                'token.actions.githubusercontent.com:sub': ['repo:AndreKurait/opensearch-migrations:environment:aws-ci', 'repo:AndreKurait@33106608/opensearch-migrations@744243892:environment:aws-ci']
+                'token.actions.githubusercontent.com:job_workflow_ref': ['AndreKurait/opensearch-migrations/.github/workflows/aws-suite.yml@refs/heads/main', 'AndreKurait/opensearch-migrations/.github/workflows/aws-watch.yml@refs/heads/main']
+      Policies:
+        - PolicyName: LaunchAndObserve
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: codebuild:StartBuild
+                Resource: !GetAtt Project.Arn
+                Condition:
+                  'Null':
+                    'codebuild:source.buildspec': 'true'
+                    'codebuild:source.location': 'true'
+                    'codebuild:serviceRole': 'true'
+                    'codebuild:environment.type': 'true'
+                    'codebuild:environment.computeType': 'true'
+                    'codebuild:environment.image': 'true'
+                    'codebuild:environment.privilegedMode': 'true'
+                    'codebuild:artifacts.location': 'true'
+                    'codebuild:logsConfig.s3Logs.location': 'true'
+                    'codebuild:secondarySources': 'true'
+                    'codebuild:cache.type': 'true'
+                    'codebuild:cache.location': 'true'
+                    'codebuild:environment.fleet.fleetArn': 'true'
+                    'codebuild:environment.registryCredential.credential': 'true'
+                  'ForAllValues:StringEquals':
+                    'codebuild:environment.environmentVariables.name': [CI_SUITE, CI_GIT_SHA, CI_GIT_REF, CI_STAGE, CI_RELEASE_VERSION, TEST_IDS, SOURCE_VERSION, TARGET_VERSION, S3_REPO_URI, SNAPSHOT_NAME, RFS_WORKERS, MONITOR_RETRY_LIMIT, AOSS_TEST_IDS, TEST_PRESET, TARGET_CLUSTER_SIZE, SPEEDUP_FACTOR]
+
+              - Effect: Allow
+                Action: ['codebuild:BatchGetBuilds', 'codebuild:StopBuild']
+                Resource: [!GetAtt Project.Arn, !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:build/migrations-github-eks:*']
+              - {Effect: Allow, Action: 'codebuild:ListBuildsForProject', Resource: !GetAtt Project.Arn}
+              - Effect: Allow
+                Action: ['servicequotas:GetServiceQuota', 'ec2:DescribeVpcs', 'ec2:DescribeNetworkInterfaces', 'ec2:DescribeAddresses', 'ec2:DescribeInternetGateways', 'ec2:DescribeEgressOnlyInternetGateways', 'ec2:DescribeNatGateways', 'ec2:DescribeSubnets', 'ec2:DescribeInstances', 'ec2:DescribeInstanceTypes']
+                Resource: '*'
+                Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
+              - {Effect: Allow, Action: 'logs:GetLogEvents', Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/migrations-github-eks:log-stream:*'}
+              - {Effect: Allow, Action: 'cloudformation:DescribeStacks', Resource: !Ref 'AWS::StackId'}
+              - {Effect: Allow, Action: 's3:GetObject', Resource: !Sub '${Artifacts.Arn}/builds/*/results.zip'}
+  RecoveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: &lambdaTrust {Version: '2012-10-17', Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: 'sts:AssumeRole'}]}
+      Policies:
+        - PolicyName: RecoverInterruptedRun
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - {Effect: Allow, Action: ['codebuild:StartBuild', 'codebuild:ListBuildsForProject'], Resource: !GetAtt Project.Arn}
+              - {Effect: Allow, Action: 'codebuild:BatchGetBuilds', Resource: [!GetAtt Project.Arn, !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:build/migrations-github-eks:*']}
+              - {Effect: Allow, Action: ['logs:CreateLogStream', 'logs:PutLogEvents'], Resource: !GetAtt RecoveryLogs.Arn}
+  RecoveryLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: {LogGroupName: /aws/lambda/migrations-ci-recover, RetentionInDays: 14}
+  Recovery:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: migrations-ci-recover
+      Role: !GetAtt RecoveryRole.Arn
+      Timeout: 60
+      Runtime: python3.12
+      Handler: index.handler
+      Environment: {Variables: {PROJECT: !Ref Project}}
+      Code: {ZipFile: !File recover.py}
+  Interrupted:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source: [aws.codebuild]
+        detail-type: [CodeBuild Build State Change]
+        detail: {project-name: [!Ref Project], build-status: [FAULT, FAILED, STOPPED, TIMED_OUT]}
+      Targets: [{Id: RecoverSandbox, Arn: !GetAtt Recovery.Arn}]
+  AllowRecovery:
+    Type: AWS::Lambda::Permission
+    Properties: {FunctionName: !Ref Recovery, Action: 'lambda:InvokeFunction', Principal: events.amazonaws.com, SourceArn: !GetAtt Interrupted.Arn}
+  ReconcileInterrupted:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(1 hour)
+      Targets: [{Id: Reconcile, Arn: !GetAtt Recovery.Arn}]
+  AllowReconcile:
+    Type: AWS::Lambda::Permission
+    Properties: {FunctionName: !Ref Recovery, Action: 'lambda:InvokeFunction', Principal: events.amazonaws.com, SourceArn: !GetAtt ReconcileInterrupted.Arn}
+  TagOracleLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: {LogGroupName: /aws/lambda/migrations-ci-tag-events, RetentionInDays: 14}
+  TagOracleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: *lambdaTrust
+      Policies:
+        - PolicyName: ProjectSandboxTagEvents
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - {Effect: Allow, Action: 'cloudtrail:LookupEvents', Resource: '*', Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}}
+              - {Effect: Allow, Action: 'eks:DescribeCluster', Resource: !Sub 'arn:${AWS::Partition}:eks:${AWS::Region}:${AWS::AccountId}:cluster/migration-eks-cluster-ci-*'}
+              - {Effect: Allow, Action: ['logs:PutLogEvents', 'logs:CreateLogStream'], Resource: !GetAtt TagOracleLogs.Arn}
+  TagOracle:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: migrations-ci-tag-events
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt TagOracleRole.Arn
+      Timeout: 90
+      Code: {ZipFile: !File tag-events.py}
+  EndpointLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: {LogGroupName: /aws/lambda/migrations-ci-private-endpoint, RetentionInDays: 14}
+  EndpointRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: *lambdaTrust
+      Policies:
+        - PolicyName: PrivateEndpointOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - {Effect: Allow, Action: ['ec2:DescribeVpcs', 'ec2:DescribeSubnets', 'ec2:DescribeSecurityGroups', 'ec2:DescribeVpcEndpoints', 'ec2:DescribeNetworkInterfaces', 'aoss:CreateVpcEndpoint', 'aoss:BatchGetVpcEndpoint', 'aoss:DeleteVpcEndpoint'], Resource: '*', Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}}
+              # AOSS implements Classic endpoints with PrivateLink and Route 53.
+              # This operator-owned Lambda validates the real CI stack and VPC before
+              # calling AOSS. No candidate job can assume or change its role.
+              - Effect: Allow
+                Action: ['ec2:CreateTags', 'ec2:CreateVpcEndpoint', 'ec2:DeleteVpcEndpoints', 'ec2:ModifyVpcEndpoint']
+                Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:*'
+                Condition: {StringEquals: {'aws:CalledViaLast': aoss.amazonaws.com}}
+              - Effect: Allow
+                Action: ['route53:AssociateVPCWithHostedZone', 'route53:ChangeResourceRecordSets', 'route53:CreateHostedZone', 'route53:DeleteHostedZone', 'route53:GetChange', 'route53:GetHostedZone', 'route53:ListHostedZonesByName', 'route53:ListHostedZonesByVPC', 'route53:ListResourceRecordSets']
+                Resource: '*'
+                Condition: {StringEquals: {'aws:CalledViaLast': aoss.amazonaws.com}}
+              - {Effect: Allow, Action: 'cloudformation:DescribeStacks', Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/ci-*-endpoints/*'}
+              - {Effect: Allow, Action: ['logs:CreateLogStream', 'logs:PutLogEvents'], Resource: !GetAtt EndpointLogs.Arn}
+  EndpointBroker:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: migrations-ci-private-endpoint
+      Role: !GetAtt EndpointRole.Arn
+      Timeout: 300
+      Runtime: python3.12
+      Handler: index.handler
+      Code: {ZipFile: !File private-endpoint.py}
+Outputs:
+  ArtifactBucketName: {Value: !Ref Artifacts}
+  FixtureBucketName: {Value: !Ref Fixtures}
+  LauncherRoleArn: {Value: !GetAtt Launcher.Arn}
+  WorkerRoleArn: {Value: !GetAtt Worker.Arn}
+  ProjectName: {Value: !Ref Project}

@@ -119,7 +119,7 @@ def test_quiesce_failure_still_deletes_the_workflow_and_cleans_up():
 
 
 def test_a_failing_dump_step_does_not_preempt_the_saved_artifacts():
-    """save_namespace_diagnostics writes what Jenkins archives, so it must not be skipped."""
+    """save_namespace_diagnostics writes the workflow artifacts, so it must not be skipped."""
     test_case = _make_test_case(phase="Succeeded")
     test_case.argo_service.print_workflow_details.side_effect = RuntimeError("kubectl exploded")
 

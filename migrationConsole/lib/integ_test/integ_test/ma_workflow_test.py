@@ -114,7 +114,7 @@ def _perform_teardown(request, keep_workflows, skip_workflow_reset, dump_all_wor
             return
         dumped = True
         logger.info(f"{reason} - printing workflow details for {test_case.workflow_name}")
-        # Stepped individually: save_namespace_diagnostics writes the artifacts Jenkins
+        # Stepped individually: save_namespace_diagnostics writes the artifacts the workflow
         # archives, so an earlier print failing must not cost us the saved copy.
         teardown_step("print workflow status", lambda: test_case.argo_service.print_workflow_status(
             workflow_name=test_case.workflow_name))

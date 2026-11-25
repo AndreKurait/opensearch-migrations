@@ -1,0 +1,43 @@
+Version: '2012-10-17'
+Statement:
+  # EKS Auto Mode adds the cluster-name principal tag to its own sessions. Only
+  # the platform operator can alter this policy. Pod roles receive the smaller boundary.
+  - Sid: InternalLoadBalancer
+    Effect: Allow
+    Action: elasticloadbalancing:CreateLoadBalancer
+    Resource: !Sub 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/net/*'
+    Condition:
+      StringEquals:
+        'elasticloadbalancing:Scheme': internal
+        'aws:RequestTag/eks:eks-cluster-name': '${aws:PrincipalTag/eks:eks-cluster-name}'
+      StringLike: {'aws:PrincipalTag/eks:eks-cluster-name': 'migration-eks-cluster-ci-*'}
+  - Sid: TaggedLoadBalancerDependencies
+    Effect: Allow
+    Action: ['elasticloadbalancing:CreateTargetGroup', 'elasticloadbalancing:CreateListener', 'ec2:CreateSecurityGroup', 'ec2:AuthorizeSecurityGroupIngress']
+    Resource:
+      - !Sub 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:targetgroup/*'
+      - !Sub 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:listener/net/*'
+      - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:security-group/*'
+      - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:security-group-rule/*'
+    Condition:
+      StringEquals: {'aws:RequestTag/eks:eks-cluster-name': '${aws:PrincipalTag/eks:eks-cluster-name}'}
+      StringLike: {'aws:PrincipalTag/eks:eks-cluster-name': 'migration-eks-cluster-ci-*'}
+  - Sid: OwnLoadBalancer
+    Effect: Allow
+    Action: ['elasticloadbalancing:CreateListener', 'elasticloadbalancing:Delete*', 'elasticloadbalancing:Modify*', 'elasticloadbalancing:SetSecurityGroups', 'elasticloadbalancing:SetSubnets', 'elasticloadbalancing:RegisterTargets', 'elasticloadbalancing:DeregisterTargets', 'elasticloadbalancing:AddTags', 'ec2:AuthorizeSecurityGroupIngress', 'ec2:RevokeSecurityGroupIngress']
+    Resource:
+      - !Sub 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:*'
+      - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:security-group/*'
+    Condition:
+      StringEquals: {'aws:ResourceTag/eks:eks-cluster-name': '${aws:PrincipalTag/eks:eks-cluster-name}'}
+      StringLike: {'aws:PrincipalTag/eks:eks-cluster-name': 'migration-eks-cluster-ci-*'}
+  - Sid: AddInitialLoadBalancerTags
+    Effect: Allow
+    Action: elasticloadbalancing:AddTags
+    Resource: !Sub 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:*'
+    Condition: {StringEquals: {'elasticloadbalancing:CreateAction': [CreateLoadBalancer, CreateTargetGroup, CreateListener]}, StringLike: {'aws:PrincipalTag/eks:eks-cluster-name': 'migration-eks-cluster-ci-*'}}
+  - Sid: LoadBalancerDiscovery
+    Effect: Allow
+    Action: 'elasticloadbalancing:Describe*'
+    Resource: '*'
+    Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}

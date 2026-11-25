@@ -14,6 +14,8 @@ The same test should be runnable locally against kind with minimal argument chan
 
 ## What The Current E2E Flow Looks Like
 
+This proposal records the original design. The current cloud implementation is `Worker.transform_images` in `.github/ci/aws/run.py`.
+
 The outer runner is `libraries/testAutomation/testAutomation/test_runner.py`. Jenkins and local runs invoke it from `libraries/testAutomation` with `pipenv run app ...`.
 
 That runner installs or reuses the MA deployment, waits for the `migration-console` pod, then execs pytest inside that pod:

@@ -75,6 +75,8 @@ class Test0011RfsBackpressure(MATestBase):
                     # Smaller than the 10 MiB default so a contended round trip takes seconds, not tens of seconds,
                     # and the in-flight limit gets many rounds in a few minutes.
                     "documentsSizePerBulkRequest": BULK_BYTES,
+                    # The fixture has one large shard of about 1.7GB. RFS reserves 2.5x this bound.
+                    "maxShardSizeBytes": 2 * 1024**3,
                     "failedDocumentStream": {
                         "type": "s3",
                         "bucket": self._deployment_default_s3_bucket(),

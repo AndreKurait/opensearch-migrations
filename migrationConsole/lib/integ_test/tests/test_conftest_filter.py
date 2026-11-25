@@ -166,7 +166,7 @@ def test_broken_constructor_does_not_abort_the_whole_selection():
     conftest instantiates every selected class during pytest collection, so an
     exception escaping a constructor propagates out of pytest_generate_tests and
     aborts collection for the ENTIRE session. That is what silently reduced the
-    ES7x/ES1x/ES2x/ES6x/OS1x Jenkins jobs to zero executed tests: Test0010's
+    ES7x/ES1x/ES2x/ES6x/OS1x matrix jobs to zero executed tests: Test0010's
     constructor raised KeyError('BYOS_SNAPSHOT_NAME') and every unrelated test
     selected alongside it vanished.
     """

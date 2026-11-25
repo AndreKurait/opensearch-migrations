@@ -212,7 +212,7 @@ class K8sService:
                             exit_code_file: str) -> MigrationConsolePodIdentity:
         """Launch a command in the background inside the migration console pod.
 
-        The command's output is written to log_file so Jenkins can tail it.
+        The command's output is written to log_file so CI can tail it.
         On completion, the exit code is written to exit_code_file.
         """
         pod_identity = self.get_migration_console_pod_identity()
@@ -244,7 +244,7 @@ class K8sService:
     def poll_cmd_completion(self, log_file: str, exit_code_file: str,
                             poll_interval: int = 30, timeout: int = 0,
                             expected_console_pod: Optional[MigrationConsolePodIdentity] = None) -> int:
-        """Poll until a background command completes, tailing its log for Jenkins console output.
+        """Poll until a background command completes, tailing its log for live console output.
 
         Returns the exit code of the background command.
         """
@@ -282,7 +282,7 @@ class K8sService:
                         )
                     poll_console_pod_id = current_pod.name
 
-            # Print new log bytes since last poll (no filtering/rewrapping for Jenkins parity)
+            # Print new log bytes since last poll without filtering or rewrapping
             try:
                 resp = self.exec_migration_console_cmd(
                     command_list=["tail", "-c", f"+{next_byte + 1}", log_file],

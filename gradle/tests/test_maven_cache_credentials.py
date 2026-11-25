@@ -1,4 +1,4 @@
-"""Verify the Jenkins agent keeps AWS credentials out of controller-visible output."""
+"""Verify the CodeArtifact helper keeps AWS credentials out of build output."""
 
 import json
 import os
@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 
-SCRIPT = Path(__file__).resolve().parents[2] / "jenkins/configureMavenCache.sh"
+SCRIPT = Path(__file__).resolve().parents[2] / "gradle/codeartifact/configureMavenCache.sh"
 
 
 class MavenCacheCredentialsTests(unittest.TestCase):
@@ -30,7 +30,7 @@ args = sys.argv[1:]
 with open(os.environ["TEST_AWS_LOG"], "a") as log:
     log.write(json.dumps(args) + "\\n")
 if args[:2] == ["sts", "get-caller-identity"]:
-    print("arn:aws:sts::123456789012:assumed-role/jenkins-agent/session")
+    print("arn:aws:sts::123456789012:assumed-role/build-role/session")
 elif args[:2] == ["sts", "assume-role"]:
     assert args[args.index("--role-arn") + 1] == (
         "arn:aws:iam::123456789012:role/test-domain-maven-reader")

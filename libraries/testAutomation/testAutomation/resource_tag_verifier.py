@@ -27,7 +27,7 @@ independently of its tags:
 Because the cluster is the index, this is exact regardless of what else lives in the region, and
 needs no clean account.
 
-Usage (standalone -- no Jenkins involved):
+Standalone usage:
 
     cd libraries/testAutomation
     pipenv install --deploy
@@ -592,17 +592,22 @@ def verify_cloudtrail_creates(result: VerificationResult, expected: Dict[str, st
     logger.info("Scanning CloudTrail for creates by the cluster role %s between %s and %s",
                 cluster_role_arn, start_time, end_time)
 
-    # LookupEvents is limited account-wide, and the Jenkins matrix runs several EKS tests in the
+    # LookupEvents is limited account-wide, and the integration matrix runs several EKS tests in the
     # same account concurrently. Botocore's default four attempts were exhausted by that contention
     # in build 486. Adaptive mode adds client-side rate limiting and a bounded retry budget while
     # preserving the strict verdict if CloudTrail remains unreadable after all attempts.
-    ct = boto3.client("cloudtrail", region_name=region, config=_cloudtrail_retry_config())
-    paginator = ct.get_paginator("lookup_events")
+    if __package__:
+        from .tag_event_pages import iter_tag_event_pages
+    else:
+        from tag_event_pages import iter_tag_event_pages
     scanned = matched = 0
     truncated = False
-    for page in paginator.paginate(
-            LookupAttributes=[{"AttributeKey": "ReadOnly", "AttributeValue": "false"}],
-            StartTime=start_time, EndTime=end_time):
+    for page in iter_tag_event_pages(region, cluster_name, start_time, end_time, _cloudtrail_retry_config()):
+        # The sandbox project returns only the cluster's entries and counts every event it scanned.
+        scanned += page.get("ScannedCount", len(page["Events"])) - len(page["Events"])
+        if scanned > max_events:
+            truncated = True
+            break
         for event in page["Events"]:
             scanned += 1
             if scanned > max_events:

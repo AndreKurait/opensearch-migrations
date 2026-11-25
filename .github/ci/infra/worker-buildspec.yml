@@ -1,0 +1,68 @@
+version: 0.2
+env:
+  shell: bash
+phases:
+  install:
+    runtime-versions:
+      java: corretto21
+      nodejs: 22
+      python: 3.11
+    commands:
+      - |
+        set -euo pipefail
+        mkdir -p "$CODEBUILD_SRC_DIR/ci-results"
+        [[ "$CI_STAGE" =~ ^ci-[a-z0-9]{1,12}$ ]]
+        [[ "$CI_SUITE" =~ ^[a-z][a-z0-9-]{1,48}$ ]]
+        if [[ "${CI_MODE:-}" == cleanup ]]; then
+          [[ "$CI_RECOVERY_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          aws s3api get-object --bucket "$CI_RECOVERY_BUCKET" --key "recovery/$CI_RECOVERY_SHA256.tar.gz" /tmp/ci-cleanup.tar.gz >/dev/null
+          echo "$CI_RECOVERY_SHA256  /tmp/ci-cleanup.tar.gz" | sha256sum -c -
+          mkdir -p "$CODEBUILD_SRC_DIR/harness"
+          tar -xzf /tmp/ci-cleanup.tar.gz -C "$CODEBUILD_SRC_DIR/harness"
+        else
+          [[ "$CI_GIT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$CI_GIT_REF" =~ ^(refs/pull/[1-9][0-9]*/head|refs/heads/main)$ ]]
+          [[ -z "${CI_RELEASE_VERSION:-}" || "$CI_RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          git init -q "$CODEBUILD_SRC_DIR/harness"
+          git -C "$CODEBUILD_SRC_DIR/harness" fetch --no-tags --depth=1 https://github.com/AndreKurait/opensearch-migrations.git "$CI_GIT_SHA"
+          git -C "$CODEBUILD_SRC_DIR/harness" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$CODEBUILD_SRC_DIR/harness" rev-parse HEAD)" = "$CI_GIT_SHA"
+          printf 'Verified candidate %s\n' "$CI_GIT_SHA"
+          if [[ -n "${CI_RELEASE_VERSION:-}" ]]; then
+            git init -q "$CODEBUILD_SRC_DIR/release"
+            git -C "$CODEBUILD_SRC_DIR/release" fetch --no-tags --depth=1 https://github.com/opensearch-project/opensearch-migrations.git "refs/tags/$CI_RELEASE_VERSION"
+            git -C "$CODEBUILD_SRC_DIR/release" checkout --quiet --detach FETCH_HEAD
+            echo "Release $CI_RELEASE_VERSION at $(git -C "$CODEBUILD_SRC_DIR/release" rev-parse HEAD)"
+          fi
+        fi
+        python3 -m pip install --disable-pip-version-check pipenv==2026.5.0
+        if [[ "${CI_MODE:-}" != cleanup ]]; then
+          apt-get update -qq && apt-get install -y -qq skopeo
+          curl --fail --silent --show-error --location -o /tmp/crane.tgz https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz
+          echo '0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0  /tmp/crane.tgz' | sha256sum -c -
+          tar -xzf /tmp/crane.tgz -C /tmp crane
+          install -m 0755 /tmp/crane /usr/local/bin/crane
+        fi
+        curl --fail --silent --show-error --location -o /tmp/kubectl https://dl.k8s.io/release/v1.35.0/bin/linux/amd64/kubectl
+        echo "a2e984a18a0c063279d692533031c1eff93a262afcc0afdc517375432d060989  /tmp/kubectl" | sha256sum -c -
+        install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+        curl --fail --silent --show-error --location -o /tmp/helm.tgz https://get.helm.sh/helm-v3.19.2-linux-amd64.tar.gz
+        echo "2114c9dea2844dce6d0ee2d792a9aae846be8cf53d5b19dc2988b5a0e8fec26e  /tmp/helm.tgz" | sha256sum -c -
+        tar -xzf /tmp/helm.tgz -C /tmp linux-amd64/helm
+        install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+        command -v jq && docker buildx version && docker info >/dev/null
+  build:
+    commands:
+      - |
+        set -euo pipefail
+        cd "$CODEBUILD_SRC_DIR/harness"
+        if [[ -n "${CI_RELEASE_VERSION:-}" ]]; then cd "$CODEBUILD_SRC_DIR/release"; fi
+        command="$CI_SUITE"
+        if [[ "${CI_MODE:-}" == cleanup ]]; then command=cleanup; fi
+        python3 -u "$CODEBUILD_SRC_DIR/harness/.github/ci/aws/run.py" "$command"
+artifacts:
+  base-directory: ci-results
+  files:
+    - '**/*.xml'
+    - '**/summary.json'
+  enable-symlinks: no

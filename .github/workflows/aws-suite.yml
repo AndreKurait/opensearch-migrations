@@ -1,0 +1,139 @@
+name: Run an AWS integration suite
+on:
+  workflow_call:
+    inputs:
+      sha: {type: string, required: true}
+      ref: {type: string, required: true}
+      suite: {type: string, required: true}
+      lane: {type: number, required: true}
+      pr: {type: string, default: ''}
+      parameters: {type: string, default: '{}'}
+      release: {type: string, default: ''}
+permissions: {}
+concurrency:
+  group: aws-oregon-lane-${{ inputs.lane }}
+  queue: max
+jobs:
+  start:
+    concurrency:
+      group: aws-oregon-admission
+      queue: max
+    if: >-
+      github.workflow_ref == 'AndreKurait/opensearch-migrations/.github/workflows/aws-integration.yml@refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'issue_comment' ||
+      github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+    environment:
+      name: aws-ci
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 260
+    permissions:
+      contents: read
+      id-token: write
+      statuses: write
+    outputs:
+      build-id: ${{ steps.start.outputs.build_id }}
+    steps:
+      - name: Mask the sandbox identifier
+        env:
+          AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}
+        run: |
+          account=$(jq -er '.account | select(test("^[0-9]{12}$"))' <<< "$AWS_CI_CONFIG")
+          echo "::add-mask::$account"
+      - name: Publish pending status on the approved commit
+        if: inputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+          SUITE: ${{ inputs.suite }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$SHA" -X POST -f state=pending \
+            -f context="aws-integration/$SUITE" -f description='Starting the approved AWS test' \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-region: us-west-2
+          role-to-assume: ${{ format('arn:aws:iam::{0}:role/MigrationsGitHubLauncher', fromJSON(secrets.AWS_CI_CONFIG).account) }}
+          mask-aws-account-id: true
+          role-duration-seconds: 18000
+          allowed-account-ids: ${{ fromJSON(secrets.AWS_CI_CONFIG).account }}
+          role-session-name: gha-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Start disposable worker
+        id: start
+        env:
+          AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}
+          SHA: ${{ inputs.sha }}
+          REF: ${{ inputs.ref }}
+          SUITE: ${{ inputs.suite }}
+          RELEASE: ${{ inputs.release }}
+          PARAMETERS: ${{ inputs.parameters }}
+        run: python3 .github/ci/controller/build.py start "$SUITE" "$SHA" "$REF" "$RELEASE" "$PARAMETERS"
+  watch:
+    needs: start
+    uses: ./.github/workflows/aws-watch.yml
+    permissions: {contents: read, id-token: write}
+    with:
+      build-id: ${{ needs.start.outputs.build-id }}
+      suite: ${{ inputs.suite }}
+  watch-2:
+    needs: [start, watch]
+    if: ${{ !cancelled() && needs.watch.result == 'success' && needs.watch.outputs.state == 'IN_PROGRESS' }}
+    uses: ./.github/workflows/aws-watch.yml
+    permissions: {contents: read, id-token: write}
+    with:
+      build-id: ${{ needs.start.outputs.build-id }}
+      suite: ${{ inputs.suite }}
+      cursor: ${{ needs.watch.outputs.cursor }}
+  watch-3:
+    needs: [start, watch-2]
+    if: ${{ !cancelled() && needs.watch-2.result == 'success' && needs.watch-2.outputs.state == 'IN_PROGRESS' }}
+    uses: ./.github/workflows/aws-watch.yml
+    permissions: {contents: read, id-token: write}
+    with:
+      build-id: ${{ needs.start.outputs.build-id }}
+      suite: ${{ inputs.suite }}
+      cursor: ${{ needs.watch-2.outputs.cursor }}
+  watch-4:
+    needs: [start, watch-3]
+    if: ${{ !cancelled() && needs.watch-3.result == 'success' && needs.watch-3.outputs.state == 'IN_PROGRESS' }}
+    uses: ./.github/workflows/aws-watch.yml
+    permissions: {contents: read, id-token: write}
+    with:
+      build-id: ${{ needs.start.outputs.build-id }}
+      suite: ${{ inputs.suite }}
+      cursor: ${{ needs.watch-3.outputs.cursor }}
+  outcome:
+    needs: [start, watch, watch-2, watch-3, watch-4]
+    if: >-
+      always() &&
+      github.workflow_ref == 'AndreKurait/opensearch-migrations/.github/workflows/aws-integration.yml@refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'issue_comment' ||
+      github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - name: Record the final suite result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+          SUITE: ${{ inputs.suite }}
+          PR: ${{ inputs.pr }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          state=failure
+          if jq -e 'all(.[]; .result == "success" or .result == "skipped") and any(.[]; .outputs.state == "SUCCEEDED")' <<< "$NEEDS" >/dev/null; then
+            state=success
+          fi
+          if [[ -n "$PR" ]]; then
+            gh api "repos/$GITHUB_REPOSITORY/statuses/$SHA" -X POST -f state="$state" \
+              -f context="aws-integration/$SUITE" -f description="AWS test $state" \
+              -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi
+          echo "**$SUITE** · \`$SHA\` · **$state**" >> "$GITHUB_STEP_SUMMARY"
+          test "$state" = success

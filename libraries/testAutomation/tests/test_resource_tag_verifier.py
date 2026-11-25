@@ -6,10 +6,13 @@ without ever consulting a tag -- are all testable offline.
 """
 
 import json
+import io
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -34,7 +37,9 @@ from testAutomation.resource_tag_verifier import (
     format_report,
     is_create_event,
     parse_tag_spec,
+    verify_cloudtrail_creates,
 )
+from testAutomation.tag_event_pages import iter_tag_event_pages
 
 
 class TestParseTagSpec:
@@ -158,6 +163,45 @@ class TestCloudTrailOracle:
             "mode": "adaptive",
             "total_max_attempts": 12,
         }
+
+    def test_sandbox_projection_paginates_even_if_a_page_contains_no_cluster_events(self, monkeypatch):
+        monkeypatch.setenv('CI_TAG_ORACLE_FUNCTION', 'migrations-ci-tag-events')
+        bounds = datetime.now(timezone.utc)
+        pages = [{'Events': [], 'ScannedCount': 50, 'NextToken': 'following'},
+                 {'Events': [{'CloudTrailEvent': '{}'}], 'ScannedCount': 10}]
+        client = Mock()
+        client.invoke.side_effect = [{'Payload': io.BytesIO(json.dumps(page).encode())} for page in pages]
+        with patch('boto3.client', return_value=client) as factory:
+            assert list(iter_tag_event_pages('us-west-2', 'cluster', bounds, bounds, None)) == pages
+        factory.assert_called_once_with('lambda', region_name='us-west-2', config=None)
+        requests = [json.loads(call.kwargs['Payload']) for call in client.invoke.call_args_list]
+        assert requests[0] == dict(cluster='cluster', start_time=bounds.isoformat(), end_time=bounds.isoformat())
+        assert requests[1] == dict(requests[0], next_token='following')
+
+    def test_other_environments_use_the_native_cloudtrail_paginator(self, monkeypatch):
+        monkeypatch.delenv('CI_TAG_ORACLE_FUNCTION', raising=False)
+        bounds = datetime.now(timezone.utc)
+        client = Mock()
+        paginator = client.get_paginator.return_value
+        paginator.paginate.return_value = [{'Events': []}]
+        with patch('boto3.client', return_value=client) as factory:
+            assert list(iter_tag_event_pages('us-west-2', 'cluster', bounds, bounds, None)) == [{'Events': []}]
+        factory.assert_called_once_with('cloudtrail', region_name='us-west-2', config=None)
+        paginator.paginate.assert_called_once_with(
+            LookupAttributes=[{'AttributeKey': 'ReadOnly', 'AttributeValue': 'false'}],
+            StartTime=bounds, EndTime=bounds)
+
+    def test_filtered_events_still_count_toward_strict_cloudtrail_scan_limit(self):
+        result = VerificationResult()
+        oracle = 'testAutomation.resource_tag_verifier'
+        pages = [{'Events': [], 'ScannedCount': 50}]
+        client = Mock()
+        client.describe_cluster.return_value = {'cluster': {'roleArn': 'cluster-role'}}
+        with patch('boto3.client', return_value=client):
+            with patch(f'{oracle}.detect_test_enforcement', return_value=(False, set())):
+                with patch('testAutomation.tag_event_pages.iter_tag_event_pages', return_value=pages):
+                    verify_cloudtrail_creates(result, {}, 'us-west-2', 'cluster', None, None, max_events=49)
+        assert any('coverage is incomplete' in note for note in result.unreadable)
 
     @pytest.mark.parametrize("name", [
         "RunInstances", "CreateVolume", "CreateLoadBalancer",

@@ -110,7 +110,7 @@ class TestFailureDetection:
     def test_zero_expected_tests_succeeds(self):
         """Version pair with no compatible tests (expected=0) should not fail.
 
-        Reproduces the OS_1.3 → OS_2.19 Jenkins failure: conftest.py reports
+        Reproduces the OS_1.3 → OS_2.19 integration failure: conftest.py reports
         expected=0, passed=0, failed=0 — this is a legitimately empty version
         pair, not a test failure.
         """

@@ -1,0 +1,66 @@
+name: Stream AWS test output
+on:
+  workflow_call:
+    inputs:
+      build-id: {type: string, required: true}
+      suite: {type: string, required: true}
+      cursor: {type: string, default: ''}
+    outputs:
+      state:
+        value: ${{ jobs.watch.outputs.state }}
+      cursor:
+        value: ${{ jobs.watch.outputs.cursor }}
+permissions: {}
+jobs:
+  watch:
+    if: >-
+      github.workflow_ref == 'AndreKurait/opensearch-migrations/.github/workflows/aws-integration.yml@refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'issue_comment' ||
+      github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+    environment:
+      name: aws-ci
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 345
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      state: ${{ steps.watch.outputs.state }}
+      cursor: ${{ steps.watch.outputs.cursor }}
+    steps:
+      - name: Mask the sandbox identifier
+        env:
+          AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}
+        run: |
+          account=$(jq -er '.account | select(test("^[0-9]{12}$"))' <<< "$AWS_CI_CONFIG")
+          echo "::add-mask::$account"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-region: us-west-2
+          role-to-assume: ${{ format('arn:aws:iam::{0}:role/MigrationsGitHubLauncher', fromJSON(secrets.AWS_CI_CONFIG).account) }}
+          mask-aws-account-id: true
+          role-session-name: gha-${{ github.run_id }}-${{ github.run_attempt }}
+          allowed-account-ids: ${{ fromJSON(secrets.AWS_CI_CONFIG).account }}
+          role-duration-seconds: 21600
+      - name: Stream build phases and test logs
+        id: watch
+        env:
+          AWS_RETRY_MODE: standard
+          AWS_MAX_ATTEMPTS: 6
+          AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}
+          BUILD_ID: ${{ inputs.build-id }}
+          CURSOR: ${{ inputs.cursor }}
+        run: python3 .github/ci/controller/build.py watch "$BUILD_ID" "$CURSOR"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: ${{ !cancelled() && steps.watch.outputs.artifact == 'true' }}
+        with:
+          name: aws-${{ inputs.suite }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aws-test-results.zip
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

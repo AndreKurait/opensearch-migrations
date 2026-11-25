@@ -182,9 +182,7 @@ To deploy the solution on Google Cloud, use the GCP Terraform module to provisio
 
 
 ## Continuous Integration and Deployment
-We use a combination of GitHub actions and Jenkins so that we can publish releases on a weekly basis and allow users to provide attestation for migration tooling.
-
-Jenkins pipelines are available [here](https://migrations.ci.opensearch.org/)
+GitHub Actions runs the build, pull request integration suites, and release workflows. See [Testing](TESTING.md#integration-tests-on-github-actions) for the local compatibility matrix and [AWS integration tests](TESTING.md#aws-integration-tests) for running an approved pull request revision on EKS.
 
 ## Contributing
 

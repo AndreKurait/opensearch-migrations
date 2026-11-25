@@ -138,7 +138,7 @@ charts:
       # instead of the shared logs PVC (a ReadWriteOnce volume only one node's Fluent Bit could
       # mount), and the console reads that directory. kindTesting.sh mounts one directory on this
       # machine there on every node, so the console sees every node's logs. On a cluster without
-      # that mount (Jenkins creates its own), it's a local directory on each node; the console sees
+      # that mount (CI creates its own), it's a local directory on each node; the console sees
       # its own node's, which is every node on a single-node cluster. Lists replace whole, so the
       # OUTPUT_FORMAT and lua-scripts entries from values.yaml are repeated.
       env:

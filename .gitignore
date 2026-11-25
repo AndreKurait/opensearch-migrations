@@ -17,7 +17,6 @@ test_report.json
 
 **/build/
 **/builds/
-jenkinsdocker/**/nextBuildNumber
 **/bin/
 
 # The whole plugins directory needs to be removed
