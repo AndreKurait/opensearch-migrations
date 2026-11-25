@@ -43,11 +43,22 @@ runs:
         # Probe the same allowed HTTPS address before and inside the restricted shell.
         ip=$(getent ahostsv4 api.github.com | awk 'NR==1 {address=$1} END {print address}')
         test -n "$ip"
-        curl --retry 2 -fsS --connect-timeout 5 --resolve "api.github.com:443:$ip" https://api.github.com/ -o /dev/null
-        CI_DEPENDENCY_STRICT_READ=1 bash "$GITHUB_ACTION_PATH/test-shell.sh" -c '
-          if curl -fsS --connect-timeout 3 --resolve "api.github.com:443:$1" https://api.github.com/ -o /dev/null; then
-            echo "::error::External HTTPS reached from a cache-only test process"
-            exit 1
-          fi
-          curl -fsS --max-time 5 "${CI_DEPENDENCY_PROXY_URL%/}/v2/" >/dev/null
-        ' bash "$ip"
+        tcp_probe='import socket,sys; socket.create_connection((sys.argv[1],443),timeout=4).close()'
+        python3 -c "$tcp_probe" "$ip"
+        if CI_DEPENDENCY_STRICT_READ=1 bash "$GITHUB_ACTION_PATH/test-shell.sh" -c 'python3 -c "$1" "$2"' bash "$tcp_probe" "$ip"; then
+          echo "::error::An external TCP connection succeeded from a cache-only test process"
+          exit 1
+        fi
+        CI_DEPENDENCY_STRICT_READ=1 bash "$GITHUB_ACTION_PATH/test-shell.sh" -c 'curl -fsS --max-time 5 "${CI_DEPENDENCY_PROXY_URL%/}/v2/" >/dev/null'
+
+        # Reuse the verified local image. Probe the Docker bridge with the host's Python.
+        image=$(jq -er .postgres <<< "$CI_BOOTSTRAP_IMAGE_IDS")
+        probe=$(docker run --pull=never -d --network bridge --entrypoint sleep "$image" 30)
+        trap 'docker rm -f "$probe" >/dev/null' EXIT
+        pid=$(docker inspect --format '{{.State.Pid}}' "$probe")
+        sudo nsenter --net --target "$pid" /usr/bin/curl -fsS --max-time 5 "http://$CI_DEPENDENCY_REGISTRY_ENDPOINT/v2/" >/dev/null
+        if sudo nsenter --net --target "$pid" /usr/bin/python3 -c "$tcp_probe" "$ip"; then
+          echo "::error::An external TCP connection succeeded from a cache-only container"
+          exit 1
+        fi
+        echo "The local dependency broker was reachable and external TCP was denied from the test process and container." >> "$GITHUB_STEP_SUMMARY"
