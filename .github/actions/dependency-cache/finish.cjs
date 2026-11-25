@@ -23,7 +23,18 @@ async function finish() {
     const metrics = await fs.readFile(path.join(dir,'openartifact-metrics.json'),'utf8').catch(() => null);
     if (metrics) console.log(`OpenArtifact storage ${metrics}`);
     const transfer = await fs.readFile(path.join(dir, 'transfer-metrics.json'), 'utf8').catch(() => null);
-    if (transfer) console.log(`Dependency archive and cold-origin transfers ${transfer}`);
+    if (transfer) {
+      console.log(`Dependency archive and cold-origin transfers ${transfer}`);
+      if (process.env.GITHUB_STEP_SUMMARY) {
+        const { archiveTransfers, archivePayloadBytes, originLookups, originPayloadBytes } = JSON.parse(transfer);
+        await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, [
+          '### Dependency proxy reads', '',
+          '| Source | Transfers | Payload bytes |', '| --- | ---: | ---: |',
+          `| GitHub cache archives | ${archiveTransfers} | ${archivePayloadBytes} |`,
+          `| Public dependency origins | ${originLookups} | ${originPayloadBytes} |`, '',
+        ].join('\n'));
+      }
+    }
     const serviceLog = await fs.readFile(path.join(dir, 'service.log'), 'utf8').catch(() => '');
     const gradle = serviceLog.match(/^Gradle remote cache (\{[^\n]+\})$/m);
     if (gradle) console.log(`Gradle remote cache ${gradle[1]}`);
