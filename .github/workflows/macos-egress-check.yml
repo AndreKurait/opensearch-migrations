@@ -31,30 +31,15 @@ jobs:
         with: {node-version: '22.x'}
       - name: Install trusted dependency broker client
         run: npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund
+      - uses: ./.github/actions/dependency-cache
+        with: {mode: record, catalog-token: '${{ github.token }}'}
       - name: Fetch and verify the pinned platform-specific Corretto JDK
         id: corretto
-        run: |
-          node <<'JS'
-          const root = './.github/ci/dependency-cache';
-          const {fetchPublic, startProxy} = require(root + '/proxy.cjs');
-          const {openLocalRecorder} = require(root + '/receipts.cjs');
-          const {fetchJdk} = require(root + '/corretto.cjs');
-          const fs = require('node:fs/promises');
-          const path = require('node:path');
-          (async () => {
-            const temp = process.env.RUNNER_TEMP;
-            const store = await openLocalRecorder({receiptFile: path.join(temp, 'jdk-receipt.json'), fetchArtifact: fetchPublic});
-            const proxy = await startProxy({resolve: (key) => store.resolve(key)});
-            try {
-              const archive = await fetchJdk(proxy.url, temp);
-              await fs.appendFile(process.env.GITHUB_OUTPUT, `archive=${archive}\n`);
-            } finally { await proxy.close(); await store.close(); }
-          })().catch(e => { console.error(e.message); process.exitCode = 1; });
-          JS
+        run: node .github/ci/dependency-cache/corretto.cjs
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
         with:
           distribution: jdkfile
-          java-version: '21'
+          java-version: ${{ steps.corretto.outputs.java-version }}
           jdkFile: ${{ steps.corretto.outputs.archive }}
       - uses: ./.github/actions/dependency-cache
         env: {CI_DEPENDENCY_STRICT_READ: '1'}
