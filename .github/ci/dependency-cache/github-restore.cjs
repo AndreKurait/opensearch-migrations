@@ -39,7 +39,8 @@ async function extractOne(source, member, destination, maxBytes) {
   // zstd bounds its window before allocating decompression memory. The validating reader bounds expanded content, headers and padding.
   const zstd = spawn('zstd', ['-d', '-q', '-c', '--long=30'], {
     stdio: ['pipe', 'pipe', 'ignore'],
-    env: {PATH: '/usr/bin:/bin'},
+    // Standard macOS hosted images ship zstd in Homebrew. Never inherit a candidate-controlled PATH.
+    env: {PATH: process.platform === 'darwin' ? '/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin' : '/usr/bin:/bin'},
   });
   const parser = spawn(
     'python3',
