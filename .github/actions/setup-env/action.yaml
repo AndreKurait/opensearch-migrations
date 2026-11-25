@@ -75,21 +75,20 @@ runs:
         set -euo pipefail
         archive="$RUNNER_TEMP/dependency-service-images"
         pins=.github/ci/dependency-cache/openartifact/images.json
+        ids=$(jq -ce --arg arch "$RUNNER_ARCH" 'map_values(.[$arch] | select(type == "string")) | select(length == 2)' "$pins")
         if [[ "$CACHE_HIT" == true ]]; then
           docker load --input "$archive/images.tar"
         else
           mkdir -p "$archive"
-          ids='{}'
           for name in openartifact postgres; do
-            pin=$(jq -er --arg name "$name" '.[$name]' "$pins")
+            pin=$(jq -er --arg name "$name" '.[$name].pin' "$pins")
             docker pull "$pin"
             id=$(docker image inspect --format '{{.Id}}' "$pin")
-            ids=$(jq -c --arg name "$name" --arg id "$id" '.[$name] = $id' <<<"$ids")
+            test "$id" = "$(jq -er --arg name "$name" '.[$name]' <<<"$ids")"
           done
-          echo "$ids" > "$archive/ids.json"
-          docker save --output "$archive/images.tar" "$(jq -er .openartifact "$archive/ids.json")" "$(jq -er .postgres "$archive/ids.json")"
+          docker save --output "$archive/images.tar" "$(jq -er .openartifact <<<"$ids")" "$(jq -er .postgres <<<"$ids")"
         fi
-        echo "CI_BOOTSTRAP_IMAGE_IDS=$(jq -ce . "$archive/ids.json")" >> "$GITHUB_ENV"
+        echo "CI_BOOTSTRAP_IMAGE_IDS=$ids" >> "$GITHUB_ENV"
 
     - name: Save pinned Linux dependency service images
       if: inputs.dependency-proxy-enabled == 'true' && runner.os == 'Linux' && steps.service-images.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && env.CI_DEPENDENCY_STRICT_READ != '1'

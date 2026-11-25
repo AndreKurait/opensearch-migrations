@@ -76,7 +76,7 @@ async function startStack({ mode = 'record', storage = { type: 'filesystem' }, s
     throw new Error('Invalid OpenArtifact worker configuration');
   validateRows(snapshot);
   const bootstrap = process.env.CI_BOOTSTRAP_IMAGE_IDS;
-  const localImages = bootstrap ? JSON.parse(bootstrap) : images;
+  const localImages = bootstrap ? JSON.parse(bootstrap) : Object.fromEntries(Object.entries(images).map(([name, image]) => [name, image.pin]));
   if (bootstrap && !Object.keys(images).every(name => /^sha256:[a-f0-9]{64}$/.test(localImages[name])))
     throw new Error('Invalid local bootstrap image IDs');
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'openartifact-stack-'));
