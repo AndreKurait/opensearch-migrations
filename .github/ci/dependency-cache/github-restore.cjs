@@ -111,9 +111,17 @@ async function safeRestore(
   if (lookupOnly) return response.matchedKey;
   const url = new URL(response.signedDownloadUrl);
   if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Invalid cache archive URL');
-  const data = await request(url, {redirect: 'error', signal: AbortSignal.timeout(15 * 60 * 1000)});
-  if (!data.ok || !data.body) throw new Error(`GitHub cache archive download failed (HTTP ${data.status})`);
-  await extractOne(Readable.fromWeb(data.body), paths[0], destination || path.resolve(paths[0]), maxBytes);
+  try {
+    const data = await request(url, {redirect: 'error', signal: AbortSignal.timeout(15 * 60 * 1000)});
+    if (!data.ok || !data.body) throw new Error(`GitHub cache archive download failed (HTTP ${data.status})`);
+    await extractOne(Readable.fromWeb(data.body), paths[0], destination || path.resolve(paths[0]), maxBytes);
+  } catch (error) {
+    // The hostname and system error code are sufficient to diagnose blocked cache backends without
+    // exporting the signed URL (which grants temporary access), headers, or caller-controlled strings.
+    const values = [error?.cause?.code, error?.code, error?.name].filter(x => typeof x === 'string' && /^[a-z0-9_]+$/i.test(x));
+    console.warn(`Cache archive at ${url.hostname} failed (${values.join(',') || 'archive rejected'}).`);
+    throw error;
+  }
   return response.matchedKey;
 }
 module.exports = {safeRestore, extractOne, INDEX_BYTES};
