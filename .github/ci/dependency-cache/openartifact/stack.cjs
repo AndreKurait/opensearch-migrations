@@ -12,7 +12,7 @@ const { repositories } = require('./repos.cjs');
 const openartifact =
   'ghcr.io/openartifact/openartifact:0.25.0@sha256:f2ca2bf2d0bf83f2d7c2ba272f8fa9c17ec87de9c9fdab54c2878c7251cd0b48';
 const postgres =
-  'docker.io/postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5';
+  'mirror.gcr.io/library/postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5';
 const session = () => randomBytes(32).toString('hex');
 const ref = /^[a-f0-9]{64}$/;
 const approved = new Set(repositories.filter((r) => r.repo_type === 'proxy').map((r) => r.name));
