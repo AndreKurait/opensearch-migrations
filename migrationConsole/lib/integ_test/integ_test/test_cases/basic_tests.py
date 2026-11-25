@@ -91,7 +91,7 @@ class Test0001SingleDocumentBackfill(MATestBase):
         # whose name contained '__' was silently unmigratable because the work-item id
         # parser split on the first two occurrences of the separator.
         self.index_name = f"test__0001__{self.unique_id}-{uuid.uuid4().hex[:4]}"
-        self.doc_id = "test_0001_doc"
+        self.doc_id = "test_0001_doc__round_trip"
         self.doc_type = "sample_type"
         self.source_cluster = None
         self.target_cluster = None
@@ -114,8 +114,10 @@ class Test0001SingleDocumentBackfill(MATestBase):
 
     def verify_clusters(self):
         # Validate single document exists on target
-        self.target_operations.get_document(cluster=self.target_cluster, index_name=self.index_name,
-                                            doc_id=self.doc_id, max_attempts=10, delay=3.0)
+        document = self.target_operations.get_document(cluster=self.target_cluster, index_name=self.index_name,
+                                                       doc_id=self.doc_id, max_attempts=10, delay=3.0).json()
+        if document.get("_id") != self.doc_id:
+            raise AssertionError(f"Backfilled document ID {document.get('_id')!r} differs from {self.doc_id!r}")
         self._verify_failed_document_stream_disabled()
 
     def _verify_failed_document_stream_disabled(self):
