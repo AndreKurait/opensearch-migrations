@@ -49,20 +49,24 @@ function readModel(entries) {
 }
 
 async function openPackageTransport({ mode, reader, coldAllowed = false, reportMiss = () => {} }) {
-  let stack, adapter;
+  let stack, adapter, starting;
   const observed = new Map();
   const published = new Map((reader?.entries || []).map((e) => [e.key, e]));
-  if (reader?.entries) {
-    const plan = readModel(reader.entries);
-    adapter = await startAdapter({ entries: plan.blobs, resolve: (key) => reader.resolve(key) });
-    try {
-      stack = await startStack({ mode, storage: { type: 's3', ...adapter }, snapshot: plan.snapshot });
-    } catch (error) {
-      await adapter.close();
-      throw error;
-    }
-  } else if (mode === 'record') stack = await startStack({ mode: 'record' });
-  else throw new Error('An immutable published catalog is required for OpenArtifact playback');
+  async function start() {
+    const imageIds = await require('./bootstrap.cjs').serviceImages(mode);
+    if (reader?.entries) {
+      const plan = readModel(reader.entries);
+      adapter = await startAdapter({ entries: plan.blobs, resolve: (key) => reader.resolve(key) });
+      try {
+        stack = await startStack({ imageIds, mode, storage: { type: 's3', ...adapter }, snapshot: plan.snapshot });
+      } catch (error) {
+        await adapter.close();
+        adapter = undefined;
+        throw error;
+      }
+    } else if (mode === 'record') stack = await startStack({ imageIds, mode: 'record' });
+    else throw new Error('An immutable published catalog is required for OpenArtifact playback');
+  }
   return {
     async handle(req, res, key) {
       const target = nativePath(key);
@@ -73,6 +77,8 @@ async function openPackageTransport({ mode, reader, coldAllowed = false, reportM
         if (coldAllowed) return false; // The fixed-origin job-local resolver may fetch this one dependency.
         throw Object.assign(new Error('Missing published dependency'), { code: 'CACHE_MISS' });
       }
+      starting ??= start();
+      await starting;
       const headers = {};
       for (const h of ['accept', 'if-none-match', 'range', 'if-range'])
         if (req.headers[h]) headers[h] = req.headers[h];
@@ -110,7 +116,7 @@ async function openPackageTransport({ mode, reader, coldAllowed = false, reportM
       return true;
     },
     async observations() {
-      if (mode !== 'record') return [];
+      if (mode !== 'record' || !observed.size) return [];
       const rows = await stack.snapshot();
       const byNative = new Map(rows.map((row) => [`${row.repo}/${row.key}`, row]));
       const output = [];
@@ -126,12 +132,12 @@ async function openPackageTransport({ mode, reader, coldAllowed = false, reportM
     },
     async close() {
       try {
-        await stack.close();
+        await stack?.close();
       } finally {
         await adapter?.close();
       }
     },
-    metrics: adapter?.metrics,
+    get metrics() { return adapter?.metrics; },
   };
 }
 

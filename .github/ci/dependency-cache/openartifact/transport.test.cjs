@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { readModel, nativePath } = require('./transport.cjs');
+const { openPackageTransport, readModel, nativePath } = require('./transport.cjs');
 const { validateRows } = require('./stack.cjs');
 const { openColdStore, openReadStore } = require('./cold.cjs');
 
@@ -87,4 +87,15 @@ test('unpublished public dependencies coalesce, are bounded and disappear with t
   await assert.rejects(cold.resolve('/maven/example/c.jar'), /budget/);
   await cold.close();
   await assert.rejects(fs.stat(items[0].path), { code: 'ENOENT' });
+});
+
+test('non-native requests and unpublished strict misses never start Docker services', async () => {
+  for (const mode of ['record', 'read']) {
+    const transport = await openPackageTransport({mode, reader: {entries: []}});
+    assert.equal(await transport.handle({}, {}, '/pypi/simple/build'), false);
+    if (mode === 'read') await assert.rejects(transport.handle({}, {}, '/maven/missing.pom'), {code: 'CACHE_MISS'});
+    assert.deepEqual(await transport.observations(), []);
+    assert.equal(transport.metrics, undefined);
+    await transport.close();
+  }
 });
