@@ -2,6 +2,7 @@ name: Local integration checks
 on:
   workflow_call:
     inputs:
+      cache-only: {type: boolean, default: false}
       suite: {type: string, default: standard}
       source: {type: string, default: all}
       target: {type: string, default: all}
@@ -90,6 +91,7 @@ jobs:
       matrix: ${{ fromJSON(needs.select-tests.outputs.matrix) }}
     uses: ./.github/workflows/k8s-local-test.yml
     with:
+      cache-only: ${{ inputs.cache-only }}
       source-version: ${{ matrix.source }}
       target-version: ${{ matrix.target }}
       test-ids: ${{ matrix.ids }}
@@ -101,6 +103,8 @@ jobs:
     if: github.event_name != 'schedule' && inputs.suite != 'matrix' && (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      CI_DEPENDENCY_STRICT_READ: ${{ inputs.cache-only && '1' || '0' }}
     steps:
       # BEGIN generated network guard
       - name: Restrict runner and container egress
@@ -145,22 +149,22 @@ jobs:
         with:
           gradle-cache-enabled: true
           gradle-cache-read-only: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+          dependency-proxy-enabled: ${{ inputs.cache-only || vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
           dependency-proxy-docker: 'true'
 
       - name: Get registry cache key
         id: registry-cache-key
-        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
+        if: ${{ !inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true' }}
         # Must match k8s-local-test.yml, which saves the cache.
         run: echo "key=local-integ-registry-cache-v1-$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
       - name: Restore registry cache
-        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
+        if: ${{ !inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true' }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: ${{ runner.temp }}/registry-cache
           key: ${{ steps.registry-cache-key.outputs.key }}
       - name: Start registry cache
-        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
+        if: ${{ !inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true' }}
         run: ./.github/scripts/registry-cache.sh start
 
       - name: Build Docker images
@@ -205,5 +209,5 @@ jobs:
           path: logs/
           retention-days: 30
       - name: Stop registry cache
-        if: always() && vars.DEPENDENCY_PROXY_ENABLED != 'true'
+        if: always() && !inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true'
         run: ./.github/scripts/registry-cache.sh stop

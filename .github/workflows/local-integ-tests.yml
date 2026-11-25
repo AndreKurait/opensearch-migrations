@@ -14,6 +14,10 @@ on:
     - cron: '47 */6 * * *'   # Release candidate canaries
   workflow_dispatch:
     inputs:
+      cache-only:
+        type: boolean
+        default: true
+        description: Require dependency broker reads from the published cache
       suite:
         type: choice
         options: [standard, matrix]
@@ -44,17 +48,18 @@ cache-mode: read
 
 jobs:
   checks:
-    if: github.ref != 'refs/heads/main' || !contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)
+    if: (github.event_name == 'workflow_dispatch' && inputs.cache-only) || github.ref != 'refs/heads/main' || !contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)
     cache-mode: read
     uses: ./.github/workflows/local-integ-jobs.yml
     with:
+      cache-only: ${{ github.event_name == 'workflow_dispatch' && inputs.cache-only }}
       suite: ${{ inputs.suite || 'standard' }}
       source: ${{ inputs.source || 'all' }}
       target: ${{ inputs.target || 'all' }}
       test-ids: ${{ inputs.test-ids || '' }}
 
   main:
-    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)
+    if: github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs.cache-only) && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)
     cache-mode: write
     uses: ./.github/workflows/local-integ-jobs.yml
     with:

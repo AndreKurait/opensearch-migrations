@@ -5,6 +5,7 @@ name: K8s Local Test
 on:
   workflow_call:
     inputs:
+      cache-only: {type: boolean, default: false}
       source-version:
         description: 'Source version, e.g. ES_7.10'
         required: true
@@ -51,6 +52,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ inputs.timeout-minutes }}
     env:
+      CI_DEPENDENCY_STRICT_READ: ${{ inputs.cache-only && '1' || '0' }}
       SOURCE_VERSION: ${{ inputs.source-version }}
       TARGET_VERSION: ${{ inputs.target-version }}
       TEST_IDS: ${{ inputs.test-ids }}
@@ -101,7 +103,7 @@ jobs:
         with:
           gradle-cache-enabled: true
           gradle-cache-read-only: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+          dependency-proxy-enabled: ${{ inputs.cache-only || vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
           dependency-proxy-docker: 'true'
 
       - name: Stage runner helpers
@@ -119,12 +121,12 @@ jobs:
 
       - name: Get registry cache key
         id: registry-cache-key
-        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
+        if: (!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true')
         # Rotates monthly so stale image layers don't accumulate in one cache entry.
         run: echo "key=local-integ-registry-cache-v1-$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
       - name: Restore registry cache
         id: registry-cache
-        if: vars.DEPENDENCY_PROXY_ENABLED != 'true'
+        if: (!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true')
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: ${{ runner.temp }}/registry-cache
@@ -155,7 +157,7 @@ jobs:
           exit 1
 
       - name: Start registry cache
-        if: vars.DEPENDENCY_PROXY_ENABLED != 'true' || env.CI_DEPENDENCY_REGISTRY_ENDPOINT != ''
+        if: (!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true') || env.CI_DEPENDENCY_REGISTRY_ENDPOINT != ''
         # With an active dependency proxy the helper configures the existing kind nodes.
         run: |
           "$RUNNER_TEMP/local-integ-scripts/registry-cache.sh" start
@@ -249,12 +251,12 @@ jobs:
           path: ${{ env.TEST_REPO_DIR }}/libraries/testAutomation/logs/
 
       - name: Stop registry cache
-        if: always() && vars.DEPENDENCY_PROXY_ENABLED != 'true'
+        if: always() && (!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true')
         run: '"$RUNNER_TEMP/local-integ-scripts/registry-cache.sh" stop'
       - name: Save registry cache
         # Only one matrix entry saves, and never from PRs or the merge queue.
         if: >-
-          !cancelled() && vars.DEPENDENCY_PROXY_ENABLED != 'true' && inputs.save-registry-cache &&
+          !cancelled() && (!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true') && inputs.save-registry-cache &&
           steps.registry-cache.outputs.cache-hit != 'true' &&
           contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
