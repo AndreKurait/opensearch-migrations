@@ -68,16 +68,25 @@ if [[ -n "${CI_HERMETIC_OUTPUT_DIR:-}" ]]; then
   mkdir -m 700 -- "$output"
   args+=(--bind "$output" /export --setenv CI_HERMETIC_OUTPUT_DIR /export)
 fi
+library_dirs=()
 if [[ "$python_prefix" != /usr ]]; then
-  # Bind only the Python installation, never the hosted runner's HOME or credential/config directories.
-  args+=(--ro-bind "$python_prefix" /tools/python --symlink /tools/python/bin/python3 /tools/bin/python3)
+  # Hosted CPython uses its installation path to locate its shared library and venv base interpreter.
+  args+=(--ro-bind "$python_prefix" "$python_prefix" --symlink "$python_prefix/bin/python3" /tools/bin/python3)
+  library_dirs+=("$python_prefix/lib")
 fi
 [[ ! -d /usr/lib64 ]] || args+=(--symlink usr/lib64 /lib64)
 # Select only the local, public runtime data these binaries need; never mount all of /etc.
 for dir in /etc/java /etc/ssl/certs /etc/crypto-policies /etc/pki/java /etc/pki/ca-trust/extracted/java /etc/ssl/certs/java; do
   [[ ! -e "$dir" ]] || args+=(--ro-bind "$(realpath "$dir")" "$dir")
 done
-if [[ -n "${CI_DEPENDENCY_TOOL_LIB_DIR:-}" ]]; then args+=(--ro-bind "$(realpath "$CI_DEPENDENCY_TOOL_LIB_DIR")" /tools/lib --setenv LD_LIBRARY_PATH /tools/lib); fi
+if [[ -n "${CI_DEPENDENCY_TOOL_LIB_DIR:-}" ]]; then
+  args+=(--ro-bind "$(realpath "$CI_DEPENDENCY_TOOL_LIB_DIR")" /tools/lib)
+  library_dirs+=(/tools/lib)
+fi
+if (( ${#library_dirs[@]} )); then
+  library_path=$(IFS=:; echo "${library_dirs[*]}")
+  args+=(--setenv LD_LIBRARY_PATH "$library_path")
+fi
 if [[ -n "${GRADLE_BIN:-}" ]]; then
   gradle_dir=$(dirname "$(dirname "$(realpath "$GRADLE_BIN")")")
   args+=(--ro-bind "$gradle_dir" /tools/gradle --setenv GRADLE_BIN /tools/gradle/bin/gradle)
