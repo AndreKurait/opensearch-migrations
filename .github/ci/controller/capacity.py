@@ -59,7 +59,13 @@ def quotas(call):
     def read(service, code):
         return int(call('service-quotas', 'get-service-quota', '--service-code', service,
                         '--quota-code', code)['Quota']['Value'])
-    return parallel({k: (lambda s=s, c=c: read(s, c)) for k, (s, c) in QUOTAS.items()})
+    tasks = {k: (lambda s=s, c=c: read(s, c)) for k, (s, c) in QUOTAS.items()}
+    limits = parallel(dict(tasks, project=lambda: call('codebuild', 'batch-get-projects', '--names', PROJECT)))
+    project = limits.pop('project')['projects'][0]
+    # Both the regional size quota and the project's own running limit apply to cleanup workers.
+    ceiling = project.get('concurrentBuildLimit') or limits['builds']
+    limits['builds'] = max(0, min(limits['builds'], ceiling) - 1)
+    return limits
 
 
 def active_builds(call):
@@ -123,11 +129,13 @@ def usage(call, ignore_active=False):
         target = by_stage[stage] if stage in by_stage else other
         target[key] += count
 
-    for key in ('vpcs', 'enis', 'igws', 'egws'):
+    for key in ('vpcs', 'igws', 'egws'):
         for row in rows[key]:
             attachments = row.get('Attachments', [])
             parent = vpcs.get(attachments[0].get('VpcId')) if attachments else None
             charge(row, key, parent=parent)
+    for eni in rows['enis']:
+        charge(eni, 'eni:' + eni['AvailabilityZone'])
     zones = {r['SubnetId']: r['AvailabilityZone'] for r in rows['subnets']}
     nat_eips = {}
     for nat in rows['nats']:
@@ -151,6 +159,7 @@ def usage(call, ignore_active=False):
     for counter in [other, *by_stage.values()]:
         counter['vcpus'] = sum(counter['type:' + name] * size for name, size in sizes.items())
         counter['nat_per_az'] = max((n for k, n in counter.items() if k.startswith('nat:')), default=0)
+        counter['enis'] = max((n for k, n in counter.items() if k.startswith('eni:')), default=0)
     other['builds'] = 0 if ignore_active else len(rows['builds'])
     if not ignore_active:
         for stage, suite in stages.items():
@@ -193,7 +202,6 @@ def config():
 def admit(suite, call, cfg, wait_seconds=4 * 3600):
     deadline = time.monotonic() + wait_seconds
     limits = quotas(call)
-    limits['builds'] = max(0, limits['builds'] - 1)  # keep one managed worker available for recovery
     while True:
         used = usage(call)
         short = [k for k, n in RESERVATIONS[suite].items() if n + used[k] > limits[k] or n > cfg['room'][k]]
@@ -236,7 +244,6 @@ if __name__ == '__main__':
     aws = client(opts.profile)
     measured = parallel({'limits': lambda: quotas(aws), 'used': lambda: usage(aws, ignore_active=True)})
     room = {k: max(0, measured['limits'][k] - measured['used'][k]) for k in QUOTAS}
-    room['builds'] = max(0, min(12, room['builds'] - 1))
     account = aws('sts', 'get-caller-identity')['Account']
     cfg = dict(account=account, region=REGION, room=room)
     print('Oregon capacity after background usage:', json.dumps(room, sort_keys=True))
