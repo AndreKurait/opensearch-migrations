@@ -13,7 +13,9 @@ Statement:
   - Sid: BoundedClusterController
     Effect: Allow
     Action: ['iam:CreateRole', 'iam:PutRolePolicy', 'iam:DeleteRolePolicy', 'iam:AttachRolePolicy', 'iam:DetachRolePolicy', 'iam:DeleteRole']
-    Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ci-*-EKSInfraMigrationsEKSClusterRole-*'
+    Resource:
+      - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ci-*-eks-control'
+      - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ci-*-EKSInfraMigrationsEKSC*-*'
     Condition: {ArnEquals: {'iam:PermissionsBoundary': !Ref ControlPlaneBoundary}}
   - Sid: InspectSandboxRoles
     Effect: Allow
