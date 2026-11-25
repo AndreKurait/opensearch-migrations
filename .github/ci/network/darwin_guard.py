@@ -21,6 +21,7 @@ import urllib.parse
 import urllib.request
 
 PF = '/sbin/pfctl'
+GUEST_UID = 47577  # An unmapped, non-admin UID on the disposable macOS worker.
 ANCHOR = 'com.apple/migrations-egress'
 OS_READ = [
     '/bin',
@@ -119,7 +120,7 @@ def install():
         str(ipaddress.ip_address(value.split('%')[0]))
         for value in re.findall(r'nameserver\[\d+\]\s*:\s*(\S+)', dns)
     }
-    policy = ['pass quick on lo0 all']
+    policy = ['anchor "gradle-ipc" quick on lo0', 'pass quick on lo0 all']
     if resolvers:
         policy.append(
             'pass out quick proto { udp tcp } to { ' + ', '.join(sorted(resolvers)) + ' } port 53 keep state'
@@ -143,6 +144,8 @@ def local_ipc():
     # Gradle's incoming worker connector binds port zero. Restrict this ephemeral VM's allocator
     # to an unused short interval and give Seatbelt those exact TCP ports (one rule per port).
     # PF still rejects public inbound TCP; the worker profile accepts and connects on loopback.
+    if sys.platform != 'darwin' or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
+        raise RuntimeError('Expected a disposable GitHub macOS worker')
     keys = ['net.inet.ip.portrange.' + key for key in ('first', 'last')]
     old = {key: command(['/usr/sbin/sysctl', '-n', key], capture_output=True).stdout.strip() for key in keys}
     listeners = ['/usr/bin/sudo', '-n', '/usr/sbin/lsof', '-nP', '-iTCP', '-sTCP:LISTEN', '-Fn']
@@ -158,8 +161,19 @@ def local_ipc():
     try:
         set_key(keys[0], first)
         set_key(keys[1], ports[-1])
+        anchor = ANCHOR + '/gradle-ipc'
+        # PF_IN resolves the receiving TCP listener UID. Candidates in a distinct uid cannot
+        # reach a runner-owned TCP listener that appears in their permitted range after preflight.
+        existing = subprocess.run(['/usr/bin/pgrep', '-u', str(GUEST_UID)], capture_output=True)
+        if existing.returncode != 1:
+            raise RuntimeError('Expected an unused non-administrative UID for the worker')
+        rules = (f'pass out quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{ports[-1]} no state\n'
+                 f'block drop in quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{ports[-1]} '
+                 f'user != {GUEST_UID}\n')
+        command(['/usr/bin/sudo', '-n', PF, '-a', anchor, '-f', '-'], input=rules)
         yield ports
     finally:
+        command(['/usr/bin/sudo', '-n', PF, '-a', ANCHOR + '/gradle-ipc', '-F', 'rules'], capture_output=True)
         set_key(keys[1], old[keys[1]])
         set_key(keys[0], old[keys[0]])
 
@@ -204,6 +218,15 @@ def seatbelt(temp, java, port, ipc):
     )
 
 
+@contextmanager
+def guest_directory(prefix):
+    directory = tempfile.mkdtemp(prefix=prefix, dir='/private/tmp')
+    try:
+        yield directory
+    finally:
+        command(['/usr/bin/sudo', '-n', '/bin/rm', '-rf', '--', directory])
+
+
 def build(ipc, command_line=None):
     command_line = command_line or ['build']
     if sys.platform != 'darwin' or not shutil.which('sandbox-exec'):
@@ -213,7 +236,7 @@ def build(ipc, command_line=None):
         raise RuntimeError('Expected one loopback dependency broker')
     source = Path(os.environ['CI_DEPENDENCY_TEST_SOURCE']).resolve(strict=True)
     java = Path(os.environ['JAVA_HOME']).resolve(strict=True)
-    with tempfile.TemporaryDirectory(prefix='migrations-seatbelt-', dir='/private/tmp') as directory:
+    with guest_directory('migrations-seatbelt-') as directory:
         temp = Path(directory).resolve()
         work = temp / 'candidate'
         work.mkdir()
@@ -231,8 +254,15 @@ def build(ipc, command_line=None):
             file = Path(os.environ['CI_DEPENDENCY_GRADLE_WRAPPER_JAR']).with_suffix(suffix)
             shutil.copy(file, wrapper / file.name)
         profile = temp / 'candidate.sb'
+        # setup-java normally installs under the runner's private home. Copy the verified JDK
+        # into the job workspace before dropping to the separate non-administrative UID.
+        guest_java = temp / 'jdk'
+        command(['/usr/bin/ditto', str(java), str(guest_java)])
+        java = guest_java
         profile.write_text(seatbelt(temp, java, proxy.port, ipc))
-        prefix = ['/usr/bin/sandbox-exec', '-f', str(profile)]
+        command(['/usr/bin/sudo', '-n', '/usr/sbin/chown', '-R', str(GUEST_UID), str(profile.parent)])
+        command(['/usr/bin/sudo', '-n', '/bin/chmod', '0755', str(temp)])
+        prefix = ['/usr/bin/sudo', '-n', '-u', f'#{GUEST_UID}', '-g', '#65534', '/usr/bin/env', '-i']
         env = {
             'PATH': f'{java}/bin:/usr/bin:/bin:/usr/sbin:/sbin',
             'HOME': str(home),
@@ -252,6 +282,7 @@ def build(ipc, command_line=None):
         if 'CI_GRADLE_BUILD_CACHE_URL' in os.environ:
             env['CI_GRADLE_BUILD_CACHE_URL'] = f'{proxy.geturl().rstrip("/")}/gradle-build-cache/'
             env['CI_GRADLE_BUILD_CACHE_PUSH'] = 'false'
+        prefix += [f'{key}={value}' for key, value in env.items()] + ['/usr/bin/sandbox-exec', '-f', str(profile)]
         command(prefix + ['/usr/bin/nc', '-z', '-w', '3', '127.0.0.1', str(proxy.port)], env=env, cwd=work)
         for target in ('1.1.1.1', '2606:4700:4700::1111'):
             result = subprocess.run(prefix + ['/usr/bin/nc', '-z', '-w', '2', target, '443'], env=env, cwd=work)
@@ -270,6 +301,7 @@ def build(ipc, command_line=None):
             print('Java sandbox diagnostics:', '\n'.join(denials[-12:]), flush=True)
             raise
         if command_line != ['build']:
+            command(['/usr/bin/sudo', '-n', '/usr/sbin/chown', '-R', str(os.getuid()), str(temp)])
             result = work / '.github/ci/network/gradle-fixture/build/classes/java/main/network/Probe.class'
             if not result.is_file() or result.read_bytes()[:4] != bytes.fromhex('cafebabe'):
                 raise RuntimeError('Expected a compiled Java class from the clean Seatbelt build')
@@ -286,10 +318,9 @@ def fixture(ipc):
             self.end_headers()
             self.wfile.write(b'local broker')
 
-    with http.server.HTTPServer(('127.0.0.1', 0), Marker) as server, socket.socket() as private_tcp, \
-            tempfile.TemporaryDirectory(
-        dir='/private/tmp'
-    ) as staged, tempfile.NamedTemporaryFile(dir='/private/tmp') as private:
+    with http.server.HTTPServer(('127.0.0.1', 30071), Marker) as server, socket.socket() as private_tcp, \
+            guest_directory('migrations-ipc-proof-') as staged, \
+            tempfile.NamedTemporaryFile(dir='/private/tmp') as private:
         for candidate in range(29000, 29500):
             try:
                 private_tcp.bind(('127.0.0.1', candidate))
@@ -304,8 +335,12 @@ def fixture(ipc):
         temporary = Path(staged).resolve()
         profile = temporary / 'candidate.sb'
         profile.write_text(seatbelt(temporary, Path('/Library/Java'), port, ipc))
-        prefix = ['/usr/bin/sandbox-exec', '-f', str(profile)]
+        command(['/bin/chmod', '0755', str(temporary)])
+        command(['/usr/bin/sudo', '-n', '/usr/sbin/chown', str(GUEST_UID), str(temporary)])
+        prefix = ['/usr/bin/sudo', '-n', '-u', f'#{GUEST_UID}', '-g', '#65534', '/usr/bin/env', '-i']
         env = {'HOME': str(temporary), 'PATH': '/usr/bin:/bin', 'TMPDIR': str(temporary)}
+
+        prefix += [f'{key}={value}' for key, value in env.items()] + ['/usr/bin/sandbox-exec', '-f', str(profile)]
 
         def execute(argv):
             return subprocess.run(
@@ -320,6 +355,13 @@ def fixture(ipc):
                                    predicate], capture_output=True, text=True, timeout=15)
             print('Native process diagnostics:', logs.stdout[-2500:], flush=True)
             raise RuntimeError(f'Seatbelt native exec failed ({baseline.returncode}): {baseline.stderr}')
+        # Bind a runner-owned service inside the allowed range AFTER the empty-port preflight.
+        # Seatbelt permits this port. PF must deny it based on the receiving socket's ownership.
+        with socket.socket() as host_after:
+            host_after.bind(('127.0.0.1', ipc[0]))
+            host_after.listen()
+            if execute(['/usr/bin/nc', '-z', '-w', '2', '127.0.0.1', str(ipc[0])]).returncode == 0:
+                raise RuntimeError('Candidate connected to a later host-owned listener inside its IPC range')
         response = execute(['/usr/bin/curl', '-fsS', '--max-time', '5', f'http://127.0.0.1:{port}/fixture'])
         if response.returncode or response.stdout != 'local broker':
             raise RuntimeError(f'Candidate could not reach its broker ({response.returncode}): {response.stderr}')
@@ -328,8 +370,10 @@ def fixture(ipc):
             host_udp.settimeout(0.5)
             # /usr/bin/python3 launches Xcode on macOS. Compile this fixed trusted probe outside
             # Seatbelt and run its small system-libc binary inside the same profile as the candidate.
-            source = temporary / 'udp.c'
             binary = temporary / 'udp'
+            fd, filename = tempfile.mkstemp(prefix='migrations-udp-', suffix='.c', dir='/private/tmp')
+            os.close(fd)
+            source = Path(filename)
             source.write_text(r'''#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -344,7 +388,11 @@ int main(int argc, char **argv) {
     return 0;
 }
 ''')
-            command(['/usr/bin/xcrun', 'clang', '-Wall', '-Werror', str(source), '-o', str(binary)])
+            try:
+                command(['/usr/bin/xcrun', 'clang', '-Wall', '-Werror', str(source), '-o', str(source) + '.out'])
+                command(['/usr/bin/sudo', '-n', '/bin/mv', str(source) + '.out', str(binary)])
+            finally:
+                source.unlink()
             udp = execute([str(binary), str(host_udp.getsockname()[1])])
             if udp.returncode or 'udp-bound' not in udp.stdout:
                 raise RuntimeError(f'Candidate UDP bind failed ({udp.returncode}): ' + udp.stderr[-350:])
