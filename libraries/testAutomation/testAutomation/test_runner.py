@@ -356,7 +356,7 @@ class TestRunner:
         Returns True when cleanup is fully clean: 'kyverno-ma' and the main
         namespace are both fully deleted, AND step 5 left no residual PVCs.
         Returns False if any of those signal incomplete cleanup. The CLI
-        entrypoint translates False into a non-zero exit code so the Jenkins
+        entrypoint translates False into a non-zero exit code so the CI
         post block surfaces the incomplete cleanup as UNSTABLE.
         Outer infra teardown (EKS/kind delete) still handles any residue.
 
@@ -383,7 +383,7 @@ class TestRunner:
              list signals a stuck finalizer and propagates to the bool return.
           6. delete_namespace — webhook cleanup + kubectl delete namespace.
           7. wait_for_namespace_deleted — warn-only. Raising here previously
-             aborted the Jenkins post block and left CFN stacks behind; the
+             aborted CI cleanup and left CFN stacks behind; the
              outer infra teardown (EKS/kind delete) finishes the job.
 
         Raises HelmCommandFailed if step 3 or step 3b fails, naming the

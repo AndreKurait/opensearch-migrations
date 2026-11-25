@@ -1,0 +1,126 @@
+Version: '2012-10-17'
+Statement:
+  - Sid: BoundaryRequiredForChildRoles
+    Effect: Allow
+    Action: iam:CreateRole
+    Resource: &roles [!Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ci-*', !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/OpenSearch-ci-*', !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/migration-eks-cluster-ci-*']
+    Condition: {ArnEquals: {'iam:PermissionsBoundary': !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/MigrationsGitHubSandboxBoundary-${AWS::Region}'}}
+  - Sid: ManageSandboxRoles
+    Effect: Allow
+    Action: ['iam:PutRolePolicy', 'iam:DeleteRolePolicy', 'iam:AttachRolePolicy', 'iam:DetachRolePolicy', 'iam:DeleteRole']
+    Resource: *roles
+    Condition: {ArnEquals: {'iam:PermissionsBoundary': !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/MigrationsGitHubSandboxBoundary-${AWS::Region}'}}
+  - Sid: BoundedClusterController
+    Effect: Allow
+    Action: ['iam:CreateRole', 'iam:PutRolePolicy', 'iam:DeleteRolePolicy', 'iam:AttachRolePolicy', 'iam:DetachRolePolicy', 'iam:DeleteRole']
+    Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ci-*-EKSInfraMigrationsEKSClusterRole-*'
+    Condition: {ArnEquals: {'iam:PermissionsBoundary': !Ref ControlPlaneBoundary}}
+  - Sid: InspectSandboxRoles
+    Effect: Allow
+    Action: ['iam:GetRole', 'iam:GetRolePolicy', 'iam:ListRolePolicies', 'iam:ListAttachedRolePolicies', 'iam:ListRoleTags', 'iam:ListInstanceProfilesForRole']
+    Resource: *roles
+  - Sid: TagSandboxRoles
+    Effect: Allow
+    Action: iam:TagRole
+    Resource: *roles
+    Condition: {StringEquals: {'aws:RequestTag/MigrationCI': github}}
+  - Sid: UntagSandboxRoles
+    Effect: Allow
+    Action: iam:UntagRole
+    Resource: *roles
+    Condition: {StringEquals: {'aws:ResourceTag/MigrationCI': github}}
+  - Sid: PassSandboxRoles
+    Effect: Allow
+    Action: iam:PassRole
+    Resource: *roles
+    Condition:
+      StringEquals: {'iam:PassedToService': [eks.amazonaws.com, ec2.amazonaws.com, pods.eks.amazonaws.com, es.amazonaws.com, lambda.amazonaws.com]}
+  - Sid: IdentifyAccessPrincipal
+    Effect: Allow
+    Action: iam:GetRole
+    Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/MigrationsGitHubWorker-${AWS::Region}'
+  - Sid: NamedSandboxStacks
+    Effect: Allow
+    Action: ['cloudformation:CreateStack', 'cloudformation:UpdateStack', 'cloudformation:DeleteStack', 'cloudformation:CreateChangeSet', 'cloudformation:ExecuteChangeSet', 'cloudformation:DeleteChangeSet', 'cloudformation:Describe*', 'cloudformation:GetTemplate*', 'cloudformation:ListStack*', 'cloudformation:TagResource', 'cloudformation:UntagResource']
+    Resource: [!Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/ci-*/*', !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/OpenSearch-ci-*/*']
+  - Sid: RegionalAmazonImages
+    Effect: Allow
+    Action: ssm:GetParameter*
+    Resource: [!Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}::parameter/aws/service/*', !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cdk-bootstrap/mactest01/version']
+  - Sid: PrivateEndpointBroker
+    Effect: Allow
+    Action: lambda:InvokeFunction
+    Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:migrations-ci-private-endpoint'
+  - Sid: DiscoverSandboxResources
+    Effect: Allow
+    Action: ['cloudformation:ListStacks', 'cloudformation:ListExports', 'cloudformation:ValidateTemplate', 'ecr:DescribeRepositories', 'elasticloadbalancing:DescribeLoadBalancers', 'elasticloadbalancing:DescribeTargetGroups', 'elasticloadbalancing:DescribeTags', 'elasticloadbalancing:DescribeListeners', 'tag:GetResources']
+    Resource: '*'
+    Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
+  - Sid: SuiteCustomResourceFunctions
+    Effect: Allow
+    Action: ['lambda:CreateFunction', 'lambda:UpdateFunction*', 'lambda:DeleteFunction', 'lambda:GetFunction*', 'lambda:InvokeFunction', 'lambda:TagResource', 'lambda:UntagResource']
+    Resource: [!Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:ci-*', !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:OpenSearch-ci-*']
+  - Sid: KubectlReadyBarrier
+    Effect: Allow
+    Action: ['ssm:PutParameter', 'ssm:GetParameter', 'ssm:DeleteParameter', 'ssm:AddTagsToResource', 'ssm:RemoveTagsFromResource', 'ssm:ListTagsForResource']
+    Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/migrations-ci/ci-*/kubectl-ready'
+  # Each entry permits creation of the new resource type only. Dependencies such
+  # as an existing VPC, subnet or security group must independently be CI tagged.
+  - Effect: Allow
+    Action: ec2:CreateVpc
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:vpc/*'
+    Condition: &createSandbox {StringEquals: {'aws:RequestTag/MigrationCI': github}}
+  - Effect: Allow
+    Action: ec2:CreateSubnet
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:subnet/*'
+    Condition: *createSandbox
+  - Effect: Allow
+    Action: ec2:CreateRouteTable
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:route-table/*'
+    Condition: *createSandbox
+  - Effect: Allow
+    Action: ec2:CreateInternetGateway
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:internet-gateway/*'
+    Condition: *createSandbox
+  - Effect: Allow
+    Action: ec2:CreateEgressOnlyInternetGateway
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:egress-only-internet-gateway/*'
+    Condition: *createSandbox
+  - Effect: Allow
+    Action: ec2:CreateNatGateway
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:natgateway/*'
+    Condition: *createSandbox
+  - Effect: Allow
+    Action: ec2:AllocateAddress
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:elastic-ip/*'
+    Condition: *createSandbox
+  - Effect: Allow
+    Action: ec2:CreateVpcEndpoint
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:vpc-endpoint/*'
+    Condition: *createSandbox
+  - Effect: Allow
+    Action: ec2:CreateSecurityGroup
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:security-group/*'
+    Condition: *createSandbox
+  - Effect: Allow
+    Action: ec2:CreateNetworkInterface
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:network-interface/*'
+    Condition: *createSandbox
+  - Sid: ObserveOwnClusterTagEvents
+    Effect: Allow
+    Action: lambda:InvokeFunction
+    Resource: !GetAtt TagOracle.Arn
+  - Sid: ReadOperatorRecovery
+    Effect: Allow
+    Action: s3:GetObject
+    Resource: !Sub '${Artifacts.Arn}/recovery/*.tar.gz'
+  - Sid: WorkerLogAndArtifactOutput
+    Effect: Allow
+    Action: ['logs:CreateLogStream', 'logs:PutLogEvents']
+    Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/migrations-github-eks:log-stream:*'
+  - Effect: Allow
+    Action: ['s3:PutObject', 's3:AbortMultipartUpload']
+    Resource: !Sub '${Artifacts.Arn}/builds/*/results.zip'
+  - Effect: Allow
+    Action: ['s3:GetBucketAcl', 's3:GetBucketLocation']
+    Resource: !GetAtt Artifacts.Arn

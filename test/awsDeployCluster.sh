@@ -58,8 +58,8 @@ write_cluster_outputs() {
 }
 
 script_abs_path=$(readlink -f "$0")
-TEST_DIR_PATH=$(dirname "$script_abs_path")
-ROOT_REPO_PATH=$(dirname "$TEST_DIR_PATH")
+SCRIPT_REPO_PATH=$(dirname "$(dirname "$script_abs_path")")
+ROOT_REPO_PATH="${MIGRATIONS_TEST_REPO_PATH:-$SCRIPT_REPO_PATH}"
 CLUSTER_CDK_PATH="$ROOT_REPO_PATH/test/amazon-opensearch-service-sample-cdk"
 CLUSTER_CDK_CONTEXT_FILE_PATH="$CLUSTER_CDK_PATH/cdk.context.json"
 
@@ -113,13 +113,17 @@ fi
 
 SAMPLE_CDK_REPO="https://github.com/aws-samples/amazon-opensearch-service-sample-cdk.git"
 SAMPLE_CDK_VERSION="v0.4.2"
+SAMPLE_CDK_COMMIT="5f3e2b7d7459f7435bd9a1539ff7360663dded6f"
 echo "Using sample CDK version: $SAMPLE_CDK_VERSION"
 if [ ! -d "amazon-opensearch-service-sample-cdk" ]; then
   git clone "$SAMPLE_CDK_REPO"
 else
   echo "Repo already exists, skipping clone."
 fi
-cd amazon-opensearch-service-sample-cdk && git checkout -- . && git fetch --tags && git checkout "$SAMPLE_CDK_VERSION"
+cd amazon-opensearch-service-sample-cdk
+git checkout -- .
+git fetch --tags
+git checkout --detach "$SAMPLE_CDK_COMMIT"
 npm ci
 npm run build
 
@@ -162,23 +166,25 @@ while read -r entry; do
 done < <(jq -c '.clusters[]' "$PROVIDED_CONTEXT_FILE_PATH")
 
 # Delete any ROLLBACK_COMPLETE stacks from a prior failed deploy — CDK cannot update these.
-rollback_stacks=$(aws cloudformation list-stacks \
-  --stack-status-filter ROLLBACK_COMPLETE \
-  --query "StackSummaries[?contains(StackName, '${STAGE}')].StackName" \
-  --output text 2>/dev/null || true)
-for stack in $rollback_stacks; do
-  echo "Deleting ROLLBACK_COMPLETE stack: $stack"
-  aws cloudformation delete-stack --stack-name "$stack"
-  aws cloudformation wait stack-delete-complete --stack-name "$stack"
-done
+stack_name="OpenSearch-${STAGE}-${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region)}}"
+stack_status=$(aws cloudformation describe-stacks --stack-name "$stack_name" \
+  --query 'Stacks[0].StackStatus' --output text 2>/dev/null || true)
+if [[ "$stack_status" == "ROLLBACK_COMPLETE" ]]; then
+  aws cloudformation delete-stack --stack-name "$stack_name"
+  aws cloudformation wait stack-delete-complete --stack-name "$stack_name"
+fi
 
 cd amazon-opensearch-service-sample-cdk
+cdk_options=()
+if [[ -n "${CI_ROLE_BOUNDARY_ARN:-}" ]]; then
+  cdk_options+=(--app "node \"$SCRIPT_REPO_PATH/.github/ci/aws/domains-app.cjs\"")
+fi
 
 if [[ "$DESTROY" == true ]]; then
-  npx cdk destroy "*" --force
+  npx cdk destroy "*" --force "${cdk_options[@]}"
 else
   CDK_OUTPUTS_FILE=$(mktemp)
-  npx cdk deploy "*" --require-approval never --concurrency 3 --outputs-file "$CDK_OUTPUTS_FILE"
+  npx cdk deploy "*" --require-approval never --concurrency 3 --outputs-file "$CDK_OUTPUTS_FILE" "${cdk_options[@]}"
 
   CLUSTER_DETAILS_OUTPUT_FILE_PATH="$ROOT_REPO_PATH/test/tmp/cluster-details-${STAGE}.json"
   mkdir -p "$(dirname "$CLUSTER_DETAILS_OUTPUT_FILE_PATH")"

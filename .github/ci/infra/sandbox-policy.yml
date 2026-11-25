@@ -1,0 +1,121 @@
+Version: '2012-10-17'
+Statement:
+  # This is the ceiling on generated service roles and the worker. The worker
+  # additionally needs identity permissions; no role may remove this boundary.
+  - Sid: DiscoverRegionalInfrastructure
+    Effect: Allow
+    Action:
+      - ec2:Describe*
+      - eks:ListClusters
+      - es:ListDomainNames
+      - ecr:GetAuthorizationToken
+      - cloudwatch:ListMetrics
+      - cloudwatch:DescribeAlarmsForMetric
+    Resource: '*'
+    Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
+  - Sid: NamedWorkloads
+    Effect: Allow
+    Action: ['eks:*', 'eks-auth:AssumeRoleForPodIdentity', 'ecr:*', 'es:*', 'cloudwatch:*Dashboard*', 'cloudwatch:*Alarm*', 'logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents', 'logs:DeleteLogGroup', 'logs:DescribeLogStreams', 'logs:PutRetentionPolicy', 'logs:TagResource', 'logs:FilterLogEvents']
+    Resource:
+      - !Sub 'arn:${AWS::Partition}:eks:${AWS::Region}:${AWS::AccountId}:cluster/migration-eks-cluster-ci-*'
+      - !Sub 'arn:${AWS::Partition}:eks:${AWS::Region}:${AWS::AccountId}:*/migration-eks-cluster-ci-*/*'
+      - !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/migration-ecr-ci-*'
+      - !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/cdk-mactest01-container-assets-${AWS::AccountId}-${AWS::Region}'
+      - !Sub 'arn:${AWS::Partition}:es:${AWS::Region}:${AWS::AccountId}:domain/ci-*'
+      - !Sub 'arn:${AWS::Partition}:cloudwatch::${AWS::AccountId}:dashboard/MA-ci-*'
+      - !Sub 'arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:MA-ci-*'
+      - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/eks/migration-eks-cluster-ci-*'
+      - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/ci-*'
+      - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/OpenSearch-ci-*'
+      - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/migration-assistant-ci-*'
+  - Sid: NoPublicResourcePolicies
+    Effect: Deny
+    Action: ['ecr:SetRepositoryPolicy', 'ecr:PutRegistryPolicy', 's3:PutBucketPolicy', 's3:PutBucketAcl', 's3:PutObjectAcl', 's3:PutBucketPublicAccessBlock', 'lambda:AddPermission']
+    Resource: '*'
+  - Sid: TagAtCreation
+    Effect: Allow
+    Action: ec2:CreateTags
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:*'
+    Condition: {'Null': {'ec2:CreateAction': 'false'}}
+  - Sid: UseSandboxNetwork
+    Effect: Allow
+    Action: ['ec2:Create*', 'ec2:AllocateAddress', 'ec2:Associate*', 'ec2:Attach*', 'ec2:Detach*', 'ec2:Disassociate*', 'ec2:Delete*', 'ec2:Modify*', 'ec2:RevokeSecurityGroup*', 'ec2:AuthorizeSecurityGroup*', 'ec2:ReleaseAddress', 'ec2:ReplaceRoute*', 'ec2:RunInstances', 'ec2:TerminateInstances', 'ec2:Assign*IpAddresses', 'ec2:Unassign*IpAddresses']
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:*'
+    Condition: {StringEquals: {'ec2:ResourceTag/MigrationCI': github}}
+  - Sid: UseImages
+    Effect: Allow
+    Action: ['ec2:RunInstances', 'ec2:CreateFleet']
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}::image/ami-*'
+  - Sid: SandboxData
+    Effect: Allow
+    Action: ['s3:CreateBucket', 's3:DeleteBucket', 's3:GetBucket*', 's3:ListBucket*', 's3:GetObject*', 's3:PutObject', 's3:DeleteObject*', 's3:AbortMultipartUpload', 's3:ListMultipartUploadParts']
+    Resource: [!Sub 'arn:${AWS::Partition}:s3:::migrations-default-${AWS::AccountId}-ci-*', !Sub 'arn:${AWS::Partition}:s3:::cdk-mactest01-assets-${AWS::AccountId}-${AWS::Region}', !Sub 'arn:${AWS::Partition}:s3:::cdk-mactest01-assets-${AWS::AccountId}-${AWS::Region}/*']
+  # Published chart hooks probe credentials with an unfiltered `aws s3 ls`.
+  - Sid: BucketDiscovery
+    Effect: Allow
+    Action: s3:ListAllMyBuckets
+    Resource: '*'
+  - Sid: FixtureIndex
+    Effect: Allow
+    Action: s3:ListBucket
+    Resource: !Sub 'arn:${AWS::Partition}:s3:::migrations-ci-fixtures-${AWS::AccountId}-${AWS::Region}'
+    Condition:
+      StringLike:
+        's3:prefix': ['ma_osb_data/es7x-osb-data/*', 'aoss-osb-data/os1x-aoss-osb-data/*', 'large-snapshot-es5x/*', 'large-snapshot-es6x/*', 'large-snapshot-es7x/*', 'another_set/large-snapshot-es5x/*']
+  - Sid: FixtureObjects
+    Effect: Allow
+    Action: s3:GetObject
+    Resource:
+      - !Sub 'arn:${AWS::Partition}:s3:::migrations-ci-fixtures-${AWS::AccountId}-${AWS::Region}/ma_osb_data/es7x-osb-data/*'
+      - !Sub 'arn:${AWS::Partition}:s3:::migrations-ci-fixtures-${AWS::AccountId}-${AWS::Region}/aoss-osb-data/os1x-aoss-osb-data/*'
+      - !Sub 'arn:${AWS::Partition}:s3:::migrations-ci-fixtures-${AWS::AccountId}-${AWS::Region}/large-snapshot-es5x/*'
+      - !Sub 'arn:${AWS::Partition}:s3:::migrations-ci-fixtures-${AWS::AccountId}-${AWS::Region}/large-snapshot-es6x/*'
+      - !Sub 'arn:${AWS::Partition}:s3:::migrations-ci-fixtures-${AWS::AccountId}-${AWS::Region}/large-snapshot-es7x/*'
+      - !Sub 'arn:${AWS::Partition}:s3:::migrations-ci-fixtures-${AWS::AccountId}-${AWS::Region}/another_set/large-snapshot-es5x/*'
+  - Sid: TaggedTestServices
+    Effect: Allow
+    Action: ['aoss:DeleteCollection*', 'aoss:BatchGetCollection*', 'aoss:UpdateCollection*', 'aoss:APIAccessAll', 'aoss:AddCollectionToCollectionGroup', 'aoss:ListTagsForResource', 'aoss:TagResource']
+    Resource: '*'
+    Condition: {StringEquals: {'aws:ResourceTag/MigrationCI': github, 'aws:RequestedRegion': !Ref 'AWS::Region'}}
+  - Sid: CreateTaggedTestServices
+    Effect: Allow
+    Action: ['aoss:CreateCollection', 'aoss:CreateCollectionGroup']
+    Resource: '*'
+    Condition: {StringEquals: {'aws:RequestTag/MigrationCI': github, 'aws:RequestedRegion': !Ref 'AWS::Region'}}
+  - Sid: ServerlessPolicies
+    Effect: Allow
+    Action: ['aoss:*AccessPolicy', 'aoss:*SecurityPolicy', 'aoss:APIAccessAll']
+    Resource: '*'
+    Condition: {StringLike: {'aoss:collection': 'ci-*'}, StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
+  # RunInstances evaluates the subnet, security group and launch template independently.
+  # Only previously tagged sandbox dependencies may pass the separate existing-resource checks.
+  - Sid: AutoModeCreate
+    Effect: Allow
+    Action: ['ec2:CreateFleet', 'ec2:CreateLaunchTemplate', 'ec2:RunInstances', 'ec2:CreateNetworkInterface', 'ec2:CreateVolume', 'ec2:CreateSnapshot']
+    Resource:
+      - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:fleet/*'
+      - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:launch-template/*'
+      - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/*'
+      - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:volume/*'
+      - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:snapshot/*'
+      - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:network-interface/*'
+    Condition: {StringLike: {'aws:RequestTag/eks:eks-cluster-name': 'migration-eks-cluster-ci-*'}}
+  - Sid: AutoModeManage
+    Effect: Allow
+    Action: ['ec2:CreateFleet', 'ec2:RunInstances', 'ec2:CreateTags', 'ec2:Delete*', 'ec2:Attach*', 'ec2:Detach*', 'ec2:TerminateInstances', 'ec2:Assign*IpAddresses', 'ec2:Unassign*IpAddresses']
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:*'
+    Condition: {StringLike: {'ec2:ResourceTag/eks:eks-cluster-name': 'migration-eks-cluster-ci-*'}}
+  - Sid: EksManagedSecurityGroup
+    Effect: Allow
+    Action: ['ec2:RunInstances', 'ec2:CreateFleet', 'ec2:*SecurityGroup*']
+    Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:security-group/*'
+    Condition: {StringLike: {'aws:ResourceTag/aws:eks:cluster-name': 'migration-eks-cluster-ci-*'}}
+  - Sid: NodeInstanceProfile
+    Effect: Allow
+    Action: ['iam:CreateInstanceProfile', 'iam:TagInstanceProfile', 'iam:GetInstanceProfile', 'iam:AddRoleToInstanceProfile', 'iam:RemoveRoleFromInstanceProfile', 'iam:DeleteInstanceProfile']
+    Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:instance-profile/eks*'
+  - Sid: NodeAndSnapshotRole
+    Effect: Allow
+    Action: iam:PassRole
+    Resource: [!Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ci-*', !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/migration-eks-cluster-ci-*']
+    Condition: {StringEquals: {'iam:PassedToService': [ec2.amazonaws.com, es.amazonaws.com]}}

@@ -37,7 +37,6 @@ ignore:
   - "**/migrationAssistantWithArgo/**"
   - "**/dashboardsSanitizer/**"
   - "**/DocumentsFromSnapshotMigration/docker/**"
-  - "**/jenkinsdocker/**"
   - "**/__init__.py"
   - "**/testAutomation/**"
   - "**/integ_test/**"

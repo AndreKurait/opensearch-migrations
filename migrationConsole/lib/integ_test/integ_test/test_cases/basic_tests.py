@@ -592,7 +592,7 @@ class Test0008OptionalSnapshotStages(MATestBase):
         outer_json = self.argo_service._get_workflow_status_json(wf_name)
         outer_phase = outer_json.get("status", {}).get("phase")
         # Log both workflows' node phases before asserting so a failure here is
-        # diagnosable from the Jenkins console alone, without a live cluster.
+        # diagnosable from the CI logs alone, without a live cluster.
         logger.info("%s: outer workflow %s ended in phase=%s; node phases: %s",
                     label, wf_name, outer_phase,
                     json.dumps(self._node_phases_by_display_name(outer_json), indent=2, sort_keys=True))

@@ -33,7 +33,7 @@ ext {
     finalVersion = buildSnapshot ? "${buildVersion}-SNAPSHOT" : buildVersion
 
     // ECR pull-through cache: auto-derive from environment if not explicitly passed via -P flag.
-    // The ECR_PULL_THROUGH_ENDPOINT env var is set on Jenkins hosts (via /etc/profile.d/ecr-pull-through.sh).
+    // The ECR_PULL_THROUGH_ENDPOINT env var can be set by the build environment.
     if (!project.hasProperty('pullThroughCacheEndpoint')) {
         pullThroughCacheEndpoint = System.getenv('ECR_PULL_THROUGH_ENDPOINT') ?: ''
     }

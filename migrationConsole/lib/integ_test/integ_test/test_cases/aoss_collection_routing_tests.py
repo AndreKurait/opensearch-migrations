@@ -59,6 +59,7 @@ def build_routed_migration_config(
     collection_prefix: str,
     s3_role_arn: str = "",
     s3_endpoint: str = "",
+    pod_replicas: int = RFS_POD_REPLICAS,
 ) -> dict:
     """One collection-routed target and one migration whose routing table covers every index."""
     repo_config = {
@@ -115,7 +116,7 @@ def build_routed_migration_config(
                     "documentBackfillConfig": {
                         "failedDocumentStream": {"type": "disabled"},
                         "indexAllowlist": indices,
-                        "podReplicas": RFS_POD_REPLICAS,
+                        "podReplicas": pod_replicas,
                     },
                 }]
             },
@@ -195,6 +196,7 @@ class Test0024AossCollectionRouting(Test0021AossCollectionMigrations):
             collection_prefix=self.collection_prefix,
             s3_role_arn=snapshot_config.get("SNAPSHOT_ROLE_ARN", ""),
             s3_endpoint=snapshot_config.get("ENDPOINT", ""),
+            pod_replicas=self.pod_replicas or RFS_POD_REPLICAS,
         )
         self.workflow_template = "full-migration-with-workflow-cli"
         self.parameters = {

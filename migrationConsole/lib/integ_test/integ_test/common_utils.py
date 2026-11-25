@@ -44,7 +44,7 @@ def execute_api_call(cluster: Cluster, path: str, method=HttpMethod.GET, data=No
     timeout defaults to 30s per attempt because this is called from test
     lifecycle code (verify_clusters, display_final_cluster_state, ...) where
     a silently-stuck HTTP socket would otherwise hang pytest until the outer
-    Jenkins pipeline timeout fires. Any caller that legitimately needs longer
+    CI job timeout fires. Any caller that legitimately needs longer
     (slow reindex, large snapshot restore) passes an explicit timeout=.
     Pass timeout=None to opt out (not recommended for test paths).
     """

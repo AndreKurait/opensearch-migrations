@@ -1,0 +1,14 @@
+# Keep the sandbox and its test-only credentials local to this disposable runner.
+services:
+  kafka:
+    ports: !override ['127.0.0.1:9092:9092']
+  elasticsearch:
+    ports: !override ['127.0.0.1:19200:9200']
+  capture-proxy:
+    ports: !override ['127.0.0.1:9200:9200']
+  opensearchtarget:
+    ports: !override ['127.0.0.1:29200:9200']
+  migration-console:
+    volumes: !override
+      - sharedLogsVolume:/shared-logs-output
+      - ./services.yaml:/config/migration_services.yaml:ro

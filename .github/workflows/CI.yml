@@ -134,12 +134,21 @@ jobs:
           echo "Recording Docker images. These include standard images pre-cached by GitHub Actions when Docker is run as root."
           docker image list --format '{{ if ne .Repository "<none>" }}{{ .Repository }}{{ if ne .Tag "<none>" }}:{{ .Tag }}{{ end }}{{ else }}{{ .ID }}{{ end }}'
 
-  jenkins-kind-setup-script-tests:
+  kind-setup-script-tests:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Test Jenkins kind setup scripts
-        run: ./jenkins/tests/configureKindClusterTest.sh
+      - name: Test kind setup scripts
+        run: ./.github/scripts/tests/configureKindClusterTest.sh
+
+  aws-controller-tests:
+    runs-on: ubuntu-24.04
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - run: python3 -m unittest discover -s .github/ci/controller -v
+      - run: python3 -m unittest discover -s .github/ci/aws -v
 
   gradle-repository-tests:
     runs-on: ubuntu-22.04
@@ -524,8 +533,9 @@ jobs:
   all-ci-checks-pass:
     needs:
       - python-tests
-      - jenkins-kind-setup-script-tests
+      - kind-setup-script-tests
       - gradle-repository-tests
+      - aws-controller-tests
       - seed-gradle-test-docker-cache
       - gradle-tests
       - link-checker

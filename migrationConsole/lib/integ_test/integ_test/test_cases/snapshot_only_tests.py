@@ -68,7 +68,7 @@ class Test0010ExternalSnapshotMigration(MATestBase):
             raise ValueError(
                 f"{type(self).__name__} requires the environment variable(s) {', '.join(missing)}. "
                 f"This test migrates from a pre-existing external S3 snapshot and can only run in a "
-                f"pipeline that supplies one (see vars/eksBYOSIntegPipeline.groovy). It is not runnable "
+                f"pipeline that supplies one (see the byos suite in .github/ci/aws/run.py). It is not runnable "
                 f"in the local k8s jobs, which deploy their own source cluster."
             )
         self.snapshot_name = os.environ['BYOS_SNAPSHOT_NAME']

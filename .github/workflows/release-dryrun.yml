@@ -23,6 +23,7 @@ on:
 env:
   java-version: '21'
   gradle-version: '8.12.1'
+  RELEASE_TAG: ${{ inputs.version }}
 
 permissions:
   contents: read
@@ -30,13 +31,16 @@ permissions:
 jobs:
   release-dryrun:
     name: Build all release artifacts (dry-run)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     services:
       registry:
         image: registry:2
         ports:
-          - 5000:5000
+          - 127.0.0.1:5000:5000
     steps:
+      - name: Validate version
+        run: '[[ "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]'
+
       - name: Alias docker-registry to 127.0.0.1
         run: |
           echo "127.0.0.1 docker-registry" | sudo tee -a /etc/hosts
@@ -44,6 +48,8 @@ jobs:
           curl -sS http://docker-registry:5000/v2/ || true
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-env
 
       - name: Set up QEMU (for arm64 emulation)
@@ -74,8 +80,11 @@ jobs:
         run: |
           ./gradlew publishMavenJavaPublicationToMavenRepository \
             -Dbuild.snapshot=false \
-            -Dbuild.version=0.${{ inputs.version }} \
-          && tar -C build -cvf opensearch-migrations-build.tar.gz repository
+            -Dbuild.version="0.$RELEASE_TAG" \
+          && tar -C build -czf opensearch-migrations-build.tar.gz repository
+
+      - name: Rehearse source signing and Maven Central packaging with an ephemeral key
+        run: .github/scripts/release-rehearsal.sh
 
       - name: Build Docker images to local registry
         env:
@@ -85,10 +94,10 @@ jobs:
             -Pbuilder=local-remote-builder \
             -PintermediateRegistry=localhost:5000 \
             -PregistryEndpoint=localhost:5000 \
-            -PimageVersion=${{ inputs.version }} \
+            -PimageVersion="$RELEASE_TAG" \
             -PpublishStyle='separateRepos' \
             -Dbuild.snapshot=false \
-            -Dbuild.version=0.${{ inputs.version }} \
+            -Dbuild.version="0.$RELEASE_TAG" \
             --no-build-cache \
             --no-daemon \
             --no-continue \
@@ -107,7 +116,7 @@ jobs:
         run: |
           ./gradlew \
             :deployment:k8s:packageMigrationAssistantHelmChart \
-            -PhelmChartVersion="${{ inputs.version }}"
+            -PhelmChartVersion="$RELEASE_TAG"
 
       - name: Build Migration Companion image to local registry
         env:
@@ -117,27 +126,29 @@ jobs:
             -Pbuilder=local-remote-builder \
             -PregistryEndpoint=localhost:5000 \
             -PpublishStyle='separateRepos' \
-            -PimageVersion=${{ inputs.version }} \
+            -PimageVersion="$RELEASE_TAG" \
             --no-build-cache \
             --no-daemon \
             --no-continue \
             --info
 
+      - name: Promote all six image indexes to local version and latest tags
+        env:
+          STAGING_REGISTRY: localhost:5000
+          DESTINATION_REGISTRY: localhost:5000/promoted
+        run: .github/scripts/release-promote-images.sh
+
       - name: Export Docker images as tarballs
         run: |
           mkdir -p docker-images
-          # List all images in the local registry
-          REPOS=$(curl -sS http://localhost:5000/v2/_catalog | jq -r '.repositories[]')
-          for repo in $REPOS; do
-            TAGS=$(curl -sS "http://localhost:5000/v2/${repo}/tags/list" | jq -r '.tags[]' 2>/dev/null || true)
-            for tag in $TAGS; do
-              safe_name=$(echo "${repo}_${tag}" | tr '/' '_')
-              echo "Pulling localhost:5000/${repo}:${tag}"
-              docker pull "localhost:5000/${repo}:${tag}" || true
-              docker save "localhost:5000/${repo}:${tag}" | gzip > "docker-images/${safe_name}.tar.gz" || true
-            done
-          done
-          ls -lh docker-images/ || echo "No images exported"
+          # The promoted namespace contains exactly the six release image indexes.
+          curl -fsS 'http://localhost:5000/v2/_catalog?n=1000' | jq -er '.repositories[] | select(startswith("promoted/"))' > "$RUNNER_TEMP/image-names"
+          while IFS= read -r repo; do
+            name=${repo#promoted/}
+            # The registry check verifies both architectures. Export the runner's image for docker load.
+            docker pull "localhost:5000/$repo:$RELEASE_TAG"
+            docker save "localhost:5000/$repo:$RELEASE_TAG" | gzip > "docker-images/$name.tar.gz"
+          done < "$RUNNER_TEMP/image-names"
 
       - name: Assemble self-contained aws-bootstrap.sh
         run: |
@@ -178,4 +189,4 @@ jobs:
         with:
           name: docker-images
           path: docker-images/*.tar.gz
-          if-no-files-found: warn
+          if-no-files-found: error

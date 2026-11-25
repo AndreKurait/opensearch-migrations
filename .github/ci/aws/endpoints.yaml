@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Private endpoints for migration integration fixtures in an EKS VPC
+Parameters:
+  Stage: {Type: String}
+  VpcId: {Type: 'AWS::EC2::VPC::Id'}
+  Subnets: {Type: 'List<AWS::EC2::Subnet::Id>'}
+  ClusterGroup: {Type: 'AWS::EC2::SecurityGroup::Id'}
+  Classic: {Type: String, AllowedValues: ['true', 'false']}
+  NextGen: {Type: String, AllowedValues: ['true', 'false']}
+Conditions:
+  UseClassic: !Equals [!Ref Classic, 'true']
+  UseNextGen: !Equals [!Ref NextGen, 'true']
+Resources:
+  ClientAccess:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTPS from the migration test cluster
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, SourceSecurityGroupId: !Ref ClusterGroup}
+  ClassicEndpoint:
+    Condition: UseClassic
+    Type: Custom::SandboxAossVpcEndpoint
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:migrations-ci-private-endpoint'
+      Name: !Sub '${Stage}-classic'
+      VpcId: !Ref VpcId
+      SubnetIds: !Ref Subnets
+      SecurityGroupIds: [!Ref ClientAccess]
+  NextGenEndpoint:
+    Condition: UseNextGen
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.aoss-data'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: !Ref Subnets
+      SecurityGroupIds: [!Ref ClientAccess]
+Outputs:
+  SecurityGroup: {Value: !Ref ClientAccess}
+  ClassicEndpoint: {Condition: UseClassic, Value: !Ref ClassicEndpoint}
+  NextGenEndpoint: {Condition: UseNextGen, Value: !Ref NextGenEndpoint}

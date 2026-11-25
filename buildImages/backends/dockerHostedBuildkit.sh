@@ -15,8 +15,7 @@ set_docker_hosted_defaults() {
 }
 
 # Rewrite an image reference through the ECR pull-through cache when
-# ECR_PULL_THROUGH_ENDPOINT is set (e.g. on Jenkins hosts via
-# /etc/profile.d/ecr-pull-through.sh). Mirrors PullThroughCacheHelper.groovy
+# ECR_PULL_THROUGH_ENDPOINT is set. Mirrors PullThroughCacheHelper.groovy
 # and the ptc_rewrite in deployment/k8s/.../mirrorToEcr.sh. Falls back to the
 # original reference when the endpoint is unset or the registry isn't mapped.
 ptc_rewrite_image() {
@@ -146,13 +145,12 @@ ensure_registry_container() {
   state="$(docker inspect -f '{{.State.Running}}' "${EXTERNAL_REGISTRY_NAME}" 2>/dev/null || true)"
   if [[ -z "${state}" ]]; then
     registry_image="$(ptc_rewrite_image registry:2)"
-    # Bind on 0.0.0.0 so the registry is reachable at the host gateway IP from
-    # inside any cluster node container, without docker network connect.
+    # The host CLI uses loopback; containerd and BuildKit use private bridge networks.
     # The registry-data volume persists across runs so image layers are reused.
     if ! run_output="$(docker run -d \
       --name "${EXTERNAL_REGISTRY_NAME}" \
       --network "${EXTERNAL_DOCKER_NETWORK}" \
-      -p "${EXTERNAL_REGISTRY_PORT}:5000" \
+      -p "127.0.0.1:${EXTERNAL_REGISTRY_PORT}:5000" \
       -v "${EXTERNAL_REGISTRY_VOLUME}:/var/lib/registry" \
       --restart=always \
       "${registry_image}" 2>&1)"; then
@@ -178,8 +176,8 @@ ensure_registry_container() {
   done
 
   # An existing registry must match this run's settings. Fail rather than replace it.
-  if ! docker port "${EXTERNAL_REGISTRY_NAME}" 5000/tcp 2>/dev/null | grep -q "^0.0.0.0:${EXTERNAL_REGISTRY_PORT}\$"; then
-    echo "Registry container ${EXTERNAL_REGISTRY_NAME} doesn't publish port ${EXTERNAL_REGISTRY_PORT} on 0.0.0.0, so cluster nodes can't reach it." >&2
+  if [[ "$(docker port "${EXTERNAL_REGISTRY_NAME}" 5000/tcp)" != "127.0.0.1:${EXTERNAL_REGISTRY_PORT}" ]]; then
+    echo "Registry container ${EXTERNAL_REGISTRY_NAME} must publish port ${EXTERNAL_REGISTRY_PORT} on loopback only." >&2
     echo "Set EXTERNAL_REGISTRY_PORT to match it, or replace it with teardown_registry_container (this interrupts other builds and clusters using it)." >&2
     return 1
   fi
@@ -197,38 +195,29 @@ ensure_registry_container() {
   return 1
 }
 
-# Configure containerd on each cluster node to pull from the host-bound
-# registry port. No docker network connect is used: the registry is bound on
-# 0.0.0.0 so it is reachable at the node's default gateway IP (the host).
-#
-# Steps per node:
-#  1. Resolve the host gateway IP from inside the node (default route next-hop).
-#  2. Add an /etc/hosts entry mapping EXTERNAL_REGISTRY_NAME to that IP so
-#     containerd/cri-dockerd can resolve the name without Docker bridge DNS.
-#  3. Write a hosts.toml pointing containerd at http://<name>:EXTERNAL_REGISTRY_PORT
-#     so plain-HTTP pulls are accepted.
-#
-# Args: <cluster-docker-network> <node-container-name>...
+# kind nodes resolve the registry on their existing Docker network. Map the
+# image's host-facing name:port to the registry's private container port in
+# containerd; BuildKit continues to use its own shared builder network.
 connect_cluster_to_registry_network() {
   local cluster_network="$1"
   shift
-  local nodes=("$@")
-
   set_docker_hosted_defaults
-
-  if ! docker network inspect "${cluster_network}" >/dev/null 2>&1; then
-    echo "Cluster docker network '${cluster_network}' does not exist" >&2
+  if ! docker network inspect "${cluster_network}" >/dev/null; then
     return 1
   fi
-
+  if ! docker inspect -f '{{range $key, $_ := .NetworkSettings.Networks}}{{println $key}}{{end}}' \
+      "${EXTERNAL_REGISTRY_NAME}" | grep -Fxq "${cluster_network}"; then
+    # Another builder may attach this shared registry after the inspect.
+    docker network connect "${cluster_network}" "${EXTERNAL_REGISTRY_NAME}" ||
+      docker inspect -f '{{range $key, $_ := .NetworkSettings.Networks}}{{println $key}}{{end}}' \
+        "${EXTERNAL_REGISTRY_NAME}" | grep -Fxq "${cluster_network}" || return 1
+  fi
   local registry_dir="/etc/containerd/certs.d/${EXTERNAL_REGISTRY_NAME}:${EXTERNAL_REGISTRY_PORT}"
-  local node host_gw
-  for node in "${nodes[@]}"; do
-    host_gw="$(docker exec "${node}" sh -c "ip route show default | awk '/default/ {print \$3}'")"
-    docker exec -i "${node}" sh -c "echo '${host_gw} ${EXTERNAL_REGISTRY_NAME}' >> /etc/hosts"
+  local node
+  for node in "$@"; do
     docker exec "${node}" mkdir -p "${registry_dir}"
-    cat <<EOF | docker exec -i "${node}" cp /dev/stdin "${registry_dir}/hosts.toml"
-server = "http://${EXTERNAL_REGISTRY_NAME}:${EXTERNAL_REGISTRY_PORT}"
+    docker exec -i "${node}" cp /dev/stdin "${registry_dir}/hosts.toml" <<EOF
+server = "http://${EXTERNAL_REGISTRY_NAME}:5000"
 EOF
   done
 }

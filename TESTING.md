@@ -26,3 +26,62 @@ The `isolatedTest` task (for each project) will run each of the tagged tests in 
 ## Traffic Capture Memory Leak Detections
 
 TrafficCapture overrides the test and slowTest targets to enable netty leak detection only for slowTest.  The regular test targets for the TrafficCapture subprojects sets and environment variable to disable leak detection and the `slowTest` target for those subprojects leaves the `disableMemoryLeakTests` unset but alters the tag definition to include all tests but those tagged with isolatedTest.
+
+## Integration tests on GitHub Actions
+
+**Local Integ Tests** runs ten source/target suites in separate kind clusters and the Docker Compose replay suite on PRs, the merge queue, and pushes to `main`. These GitHub-hosted jobs use a read-only repository token. The check uses the tests and fixtures from the checked-out revision. Job logs stream during runs. The job summary lists case outcomes, and the run's artifacts contain test reports and collected application logs for 30 days.
+
+For a compatibility run, dispatch **Local Integ Tests** with `suite=matrix`. Select one source, one target, or leave both as `all` to run all 30 configured combinations. Optionally pass `test-ids` as comma-separated four-digit IDs (or `all`). For example:
+
+```bash
+gh workflow run local-integ-tests.yml --ref YOUR_BRANCH \
+  -f suite=matrix -f source=ES_6.8 -f target=OS_2.19 -f test-ids=0036
+```
+
+The default IDs and scheduled groups are in [.github/scripts/local-integ-matrix.py](.github/scripts/local-integ-matrix.py). The hourly run covers Elasticsearch and OpenSearch sources. The six-hour run covers Solr 8 and 9. The compatibility matrix includes Solr 6 and 7, which require filesystem backup. Every six hours the compatibility matrix and additional standard kind suites exercise the latest published upstream Migration Assistant release. Set the repository Actions variable `LOCAL_INTEG_CANARY_REF` to a tag or commit SHA in this repository to test a different release candidate.
+
+## AWS integration tests
+
+PRs run local integration tests automatically. To run a PR against AWS, review the entire change that will execute, including test code, setup scripts, Gradle tasks and dependency changes. On the PR, a collaborator with current write, maintain or admin access can comment `/aws-test FULL_HEAD_SHA eks`. Copy the 40-character SHA from the PR’s **Commits** tab. A push to the PR requires a new approval. `/aws-test FULL_HEAD_SHA` uses the PR’s `run-eks-tests`, `run-cfn-tests`, or `run-eks-isolated-tests` labels if present. With no matching labels, it runs all seven enabled suites. Labels alone never start an AWS build.
+
+| Suite | Default test coverage | Worker timeout |
+| --- | --- | --- |
+| `eks` | Managed Elasticsearch 7.10 → OpenSearch 1.3, cases `0001,0002` | 3 h |
+| `aoss` (paused) | OpenSearch 1.3 snapshots → classic and NextGen Serverless collections, `0021,0024` | 3 h |
+| `byos` (paused) | S3 snapshot → OpenSearch 2.19, `0010` | 18 h |
+| `cdc` | Capture and replay, `0031,0032,0033,0040,0042` | 5 h |
+| `cdc-aoss` | Capture and replay to Serverless, `0034,0041` | 4 h |
+| `cdc-k6` | k6 traffic replay, `0080` | 5 h |
+| `cfn-create`, `cfn-import` | Install and verify the solution with a new or existing VPC | 3 h each |
+| `isolated` | Build in one cluster, deploy in an isolated VPC and run `0040` | 4 h |
+
+To run a specific changed test before merge, dispatch **AWS integration tests** from `main` with the PR number and reviewed head SHA. A dispatch without a PR runs `main`. Inputs are passed as data. Each suite supports its own subset of parameters, validated in [.github/ci/controller/parameters.py](.github/ci/controller/parameters.py).
+
+```bash
+gh workflow run aws-integration.yml --ref main \
+  -f suite=cdc -f pr=123 -f sha=FULL_REVIEWED_40_CHARACTER_SHA \
+  -f parameters='{"TEST_IDS":"0040,0042","TARGET_VERSION":"OS_2.19","SPEEDUP_FACTOR":20}'
+```
+
+- Change a test implementation or add fixtures in the PR, select its ID, and run that revision. To make it a default, update the suite in [.github/ci/aws/suites.py](.github/ci/aws/suites.py). The protected controller learns new suite names when that change reaches `main`.
+- The two suites that read pre-existing S3 snapshots, `byos` and `aoss` (including its two aliases), are paused until the fixture bucket moves or grants the test account read access. The worker and controller both enforce this. `cdc-aoss` creates its own data and remains enabled.
+- `cdc-tests` selects the three CDC suites. Set `release` to a published numeric version such as `3.4.2` to exercise the release source and assets. The k6 canary builds its images from the release source. All seven enabled suites run on pushes to `main`. Scheduled groups and the six-hour release canary are in [.github/ci/controller/plan.py](.github/ci/controller/plan.py).
+- The PR commit receives one `aws-integration/<suite>` status per suite. Open **Details** for the GitHub Actions run. The watch job streams CodeBuild logs to the Actions log and lists case outcomes in its job summary. Download `aws-<suite>-<attempt>` for the JUnit report and machine-readable summary. A long job hands its CloudWatch cursor to the next GitHub runner.
+
+### AWS identity and runner setup
+
+GitHub’s orchestration code comes from `main`. It verifies current collaborator permission, PR state, target branch and head SHA before requesting a build. The launcher exchanges a GitHub OIDC token for a short-lived role session. Its trust checks the audience, repository and owner IDs, main ref, subject and reusable workflow. Keep `main` and workflow changes under review. Use GitHub-hosted runners for credential-free fork PRs. Keep secrets for release and publishing in separately protected environments.
+
+The disposable CodeBuild worker checks out the approved SHA and runs the PR’s code with `MigrationsGitHubWorker-us-west-2`. Approval gives that revision and its dependencies temporary access to the CI sandbox. Their output streams to public GitHub logs, and the test reports are downloadable. Review code that can print credentials or fixture data, and give the worker access only to fixtures suitable for public disclosure. The builds share a test account and an IAM role across runs. Separate projects and roles are required if suites must be mutually isolated. Worker cleanup runs after tests. An EventBridge rule starts a fresh cleanup worker on terminal failure or cancellation. Check its result in CodeBuild if the original worker was interrupted.
+
+Provision the Oregon (`us-west-2`) stack using an operator profile and the expected sandbox account ID supplied locally. It needs PyYAML. Refresh the account configuration after provisioning or changing quotas. The discovery command without `--publish` prints available capacity and suite queues. With `--publish`, it writes a single `AWS_CI_CONFIG` secret to the `aws-ci` GitHub environment restricted to `main`.
+
+```bash
+python3 .github/ci/infra/deploy.py --profile github-actions-test --region us-west-2 \
+  --expected-account "$AWS_CI_ACCOUNT_ID"
+python3 .github/ci/controller/capacity.py --profile github-actions-test --publish
+```
+
+The environment secret contains the account ID, region, and numeric capacity for Linux/Large CodeBuild, VPCs, ENIs, Elastic IPs, internet and egress-only gateways, NAT gateways per availability zone and Standard On-Demand EC2 vCPUs. GitHub obtains temporary credentials through OIDC. The launcher cannot deploy the IAM stack.
+
+The controller subtracts background resource usage and assigns suites to shared GitHub concurrency groups across all PRs, pushes and schedules. It serializes launches, checks current usage before each build and reserves resources for active stages during startup and teardown. With five Elastic IPs and 32 vCPUs, one `cfn-import` run can share capacity with one other suite. The `isolated` run reserves four EIPs and two VPCs. Local GitHub-hosted tests run independently. The Linux/Large project caps running workers at 12. EC2 and ENI reservations estimate peak usage for autoscaling workloads. If a suite’s footprint changes, update its reservation in [.github/ci/controller/capacity.py](.github/ci/controller/capacity.py) and refresh the environment secret. Other sandbox clients and AWS quotas can still affect provisioning after admission.

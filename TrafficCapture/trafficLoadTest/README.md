@@ -830,7 +830,7 @@ over the tag. Without the argument the reference is derived from `--registry-pre
 the local kind jobs use (`docker-registry:5001/` → `docker-registry:5001/migrations/k6_runner`).
 
 CI runs this on EKS as the `eks-cdc-k6-load-test` job
-(`jenkins/migrationIntegPipelines/eksCdcK6LoadTestCover.groovy`): post-merge on `main`, on a 6-hour
+(the `cdc-k6` suite in `.github/workflows/aws-integration.yml`): post-merge on `main`, on a 6-hour
 cadence, and on a PR labelled `run-eks-tests`. It reuses `eksCdcIntegPipeline`, which passes
 `--k6-runner-image=<registryEndpoint>:migrations_k6_runner_latest`. The `_latest` tag matches how
 every other MA image is referenced on EKS, and the ECR registry is created per run

@@ -93,7 +93,12 @@ static TaskProvider<Sync> getMigrationConsoleSyncTask(Project project, String do
 
 
 dockerCompose {
-    useComposeFiles = ['src/main/docker/docker-compose.yml']
+    useComposeFiles = project.hasProperty('ciCompose')
+        ? ['src/main/docker/docker-compose.yml', 'src/main/docker/docker-compose.ci.yml']
+        : ['src/main/docker/docker-compose.yml']
+    if (project.hasProperty('ciCompose')) {
+        environment.put('SERVICES_HOST', '127.0.0.1')
+    }
     def kafkaRunId = UUID.randomUUID().toString()
     environment.put(
         'KAFKA_TRAFFIC_TOPIC',

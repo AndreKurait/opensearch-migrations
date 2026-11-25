@@ -3,7 +3,7 @@
 The combined test submits three concurrent migration branches with disjoint
 index allowlists. It expects AOSS_SEARCH_ENDPOINT, AOSS_TIMESERIES_ENDPOINT,
 AOSS_VECTOR_ENDPOINT, AOSS_SNAPSHOT_NAME, and AOSS_S3_REPO_URI. The optional
-AOSS_S3_REGION and AOSS_MONITOR_RETRY_LIMIT variables override their defaults.
+AOSS_S3_REGION, AOSS_MONITOR_RETRY_LIMIT and AOSS_POD_REPLICAS variables override their defaults.
 """
 
 import base64
@@ -135,6 +135,7 @@ def build_aoss_migration_config(
     target_endpoints: dict,
     s3_role_arn: str = "",
     s3_endpoint: str = "",
+    pod_replicas: int | None = None,
 ) -> dict:
     """Build one source and one concurrent migration branch per AOSS target."""
     repo_config = {
@@ -162,16 +163,16 @@ def build_aoss_migration_config(
     snapshot_migrations = []
     for target_name, collection in AOSS_COLLECTIONS.items():
         indices = collection["expected_indices"]
+        backfill_config = {"failedDocumentStream": {"type": "disabled"}, "indexAllowlist": indices}
+        if pod_replicas is not None:
+            backfill_config["podReplicas"] = pod_replicas
         snapshot_migrations.append({
             "fromSource": "source",
             "toTarget": target_name,
             "perSnapshotConfig": {
                 snapshot_name: [{
                     "metadataMigrationConfig": {"indexAllowlist": indices},
-                    "documentBackfillConfig": {
-                        "failedDocumentStream": {"type": "disabled"},
-                        "indexAllowlist": indices,
-                    },
+                    "documentBackfillConfig": backfill_config,
                 }]
             },
         })
@@ -229,6 +230,10 @@ class Test0021AossCollectionMigrations(MATestBase):
             os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
         )
         self.monitor_retry_limit = int(os.environ.get("AOSS_MONITOR_RETRY_LIMIT", "33"))
+        replica_count = os.environ.get("AOSS_POD_REPLICAS")
+        self.pod_replicas = int(replica_count) if replica_count else None
+        if self.pod_replicas is not None and self.pod_replicas < 1:
+            raise ValueError("AOSS_POD_REPLICAS must be a positive integer")
 
     def import_existing_clusters(self):
         self._load_snapshot_config()
@@ -284,6 +289,7 @@ class Test0021AossCollectionMigrations(MATestBase):
             target_endpoints=self.target_endpoints,
             s3_role_arn=snapshot_config.get("SNAPSHOT_ROLE_ARN", ""),
             s3_endpoint=snapshot_config.get("ENDPOINT", ""),
+            pod_replicas=self.pod_replicas,
         )
         self.workflow_template = "full-migration-with-workflow-cli"
         self.parameters = {

@@ -8,7 +8,7 @@ These tests deploy an ES 7.10 source cluster (via CDK) and an AOSS collection
 and no source cluster, these tests deploy a live source and route traffic
 through the capture proxy.
 
-Required environment variables (injected by Jenkins pipeline):
+Required environment variables (provided by the integration runner):
 - AOSS_CDC_ENDPOINT: AOSS search collection endpoint
 """
 import logging

@@ -31,7 +31,7 @@ run_with_optional_timeout() {
 kubectl() { record "kubectl $*"; [[ "$*" != "config current-context" ]] || echo "${AMBIENT_CONTEXT:-}"; }
 docker() {
   record "docker $*"
-  # Match the older Kubernetes driver on Jenkins: unknown options fail at create.
+  # Match the older Kubernetes Buildx driver: unknown options fail at create.
   if [[ "$1 $2" == "buildx create" ]]; then
     record "create-kubeconfig ${KUBECONFIG-}"
     local arg

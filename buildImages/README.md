@@ -66,7 +66,7 @@ Or customized to use a specific registry endpoint
 
 ### How multiple kind clusters reach the same registry
 
-Each cluster's nodes are joined to `local-migrations-network` (`docker network connect`) so containers in the cluster can resolve `docker-registry:5000` via Docker's bridge DNS. Pods reference images by that in-cluster name. On kind (containerd), `connect_cluster_to_registry_network` writes a `hosts.toml` so the plain-HTTP endpoint is accepted. Host-side `docker buildx` push goes to `localhost:5001` (the bind-mounted host port), so the pushed image and the pulled image refer to the same registry by two URLs.
+The registry publishes on `127.0.0.1:5001` for host-side image pushes. It also joins the kind Docker network. Each node's containerd maps `docker-registry:5001` image references to the registry at `http://docker-registry:5000` on that private network. Existing registries bound to all host interfaces must be recreated before reuse.
 
 ## Using EKS (using the cloud-Kubernetes BuildKit backend)
 

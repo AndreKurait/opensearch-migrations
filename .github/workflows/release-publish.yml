@@ -1,0 +1,157 @@
+name: Publish prerelease artifacts
+
+on:
+  workflow_call:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      central_deployment_id:
+        description: Existing Central deployment from a previous attempt (optional)
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publish-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      vars.RELEASE_PUBLISH_ENABLED == 'true' && github.ref_type == 'tag' && github.ref_protected &&
+      (github.event_name != 'release' || github.event.release.prerelease)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    environment: release-publish
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      release-tag: ${{ steps.validated.outputs.tag }}
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_S3_URI: ${{ vars.RELEASE_S3_URI }}
+      STAGING_REGISTRY: ${{ vars.RELEASE_STAGING_REGISTRY }}
+      DESTINATION_REGISTRY: ${{ vars.RELEASE_PUBLIC_ECR_REGISTRY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check release and destinations
+        id: validated
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]
+          [[ "$RELEASE_S3_URI" =~ ^s3://[a-z0-9.-]+(/[a-zA-Z0-9._/-]+)?$ ]]
+          [[ "$DESTINATION_REGISTRY" =~ ^public\.ecr\.aws/[a-z0-9-]+$ ]]
+          : "${STAGING_REGISTRY:?Set RELEASE_STAGING_REGISTRY}"
+          gh release view "$RELEASE_TAG" --json isDraft,isPrerelease | jq -e '(.isDraft | not) and .isPrerelease'
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/promote"
+          gh release download "$RELEASE_TAG" --pattern 'opensearch-migrations-source.tar.gz' \
+            --pattern 'opensearch-migrations-build.tar.gz' --dir "$RUNNER_TEMP/promote"
+          # Check both downloaded bytes against the digests recorded in the release API.
+          for name in opensearch-migrations-{source,build}.tar.gz; do
+            expected=$(gh release view "$RELEASE_TAG" --json assets | jq -er --arg name "$name" '.assets[] | select(.name == $name) | .digest')
+            actual=$(sha256sum "$RUNNER_TEMP/promote/$name" | cut -d' ' -f1)
+            [[ "$expected" == "sha256:$actual" ]]
+          done
+          python3 .github/scripts/release-bundle.py unpack "$RUNNER_TEMP/promote/opensearch-migrations-build.tar.gz" \
+            "$RUNNER_TEMP/promote/repository" "0.$RELEASE_TAG"
+      - name: Check out the approved OpenSearch signing client
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: opensearch-project/opensearch-signer-client
+          ref: ${{ vars.RELEASE_SIGNER_CLIENT_SHA }}
+          token: ${{ secrets.RELEASE_SIGNER_CLIENT_READ_TOKEN }}
+          path: signer
+          persist-credentials: false
+      - name: Prepare signer
+        env:
+          EXPECTED_SHA: ${{ vars.RELEASE_SIGNER_CLIENT_SHA }}
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^[[:xdigit:]]{40}$ && "$(git -C signer rev-parse HEAD)" == "$EXPECTED_SHA" ]]
+          (cd signer/src && ./bootstrap && rm -f config.cfg)
+          install -d -m 0700 "$RUNNER_TEMP/release-gnupg"
+          echo "GNUPGHOME=$RUNNER_TEMP/release-gnupg" >> "$GITHUB_ENV"
+          for key in opensearch opensearch-release; do
+            curl -fsS "https://artifacts.opensearch.org/publickeys/$key.pgp" -o "$RUNNER_TEMP/$key.pgp"
+            case $key in
+              opensearch) expected=C5B7498965EFD1C2924BA9D539D319879310D3FC ;;
+              opensearch-release) expected=A8B2D9E04CD51FEF6AA2DB53BA81D99981191457 ;;
+            esac
+            primary=$(gpg --batch --with-colons --show-keys "$RUNNER_TEMP/$key.pgp" | awk -F: '$1=="pub" {primary=1} $1=="fpr" && primary {print $10; primary=0}')
+            [[ "$primary" == "$expected" ]]
+            gpg --homedir "$RUNNER_TEMP/release-gnupg" --batch --import "$RUNNER_TEMP/$key.pgp"
+          done
+      - name: Authenticate to the release account
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+        with:
+          role-to-assume: ${{ vars.RELEASE_PUBLISH_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Sign source and Maven artifacts with the OpenSearch signer
+        env:
+          ROLE: ${{ vars.RELEASE_SIGNER_ROLE_ARN }}
+          EXTERNAL_ID: ${{ secrets.RELEASE_SIGNER_EXTERNAL_ID }}
+          UNSIGNED_BUCKET: ${{ vars.RELEASE_SIGNER_UNSIGNED_BUCKET }}
+          SIGNED_BUCKET: ${{ vars.RELEASE_SIGNER_SIGNED_BUCKET }}
+        run: |
+          .github/scripts/release-sign.sh "$RUNNER_TEMP/promote" "$PWD/signer/src"
+          python3 .github/scripts/release-bundle.py bundle "$RUNNER_TEMP/promote/repository" "$RUNNER_TEMP/promote/central.zip"
+      - name: Publish Maven Central deployment
+        env:
+          CENTRAL_USER: ${{ secrets.RELEASE_CENTRAL_USER }}
+          CENTRAL_TOKEN: ${{ secrets.RELEASE_CENTRAL_TOKEN }}
+          CENTRAL_DEPLOYMENT_ID: ${{ inputs.central_deployment_id }}
+        run: .github/scripts/release-central.sh "$RUNNER_TEMP/promote/central.zip"
+      - name: Refresh AWS credentials after Central validation
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+        with:
+          role-to-assume: ${{ vars.RELEASE_PUBLISH_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Publish signed source
+        run: |
+          source="$RUNNER_TEMP/promote/opensearch-migrations-source.tar.gz"
+          destination="${RELEASE_S3_URI%/}/$RELEASE_TAG/opensearch-migrations-$RELEASE_TAG.tar.gz"
+          aws s3 cp "$source" "$destination" --only-show-errors
+          aws s3 cp "$source.sig" "$destination.sig" --only-show-errors
+      - name: Publish image indexes to public ECR
+        run: |
+          aws ecr-public get-login-password --region us-east-1 | skopeo login --username AWS --password-stdin public.ecr.aws
+          .github/scripts/release-promote-images.sh
+      - name: Release summary
+        run: |
+          echo "Published the signed source, Maven Central deployment and six image indexes for $RELEASE_TAG. Review the published artifacts before marking the GitHub prerelease as a full release." >> "$GITHUB_STEP_SUMMARY"
+
+  notify-maintainers:
+    needs: publish
+    if: always() && needs.publish.outputs.release-tag != '' && contains(fromJSON('["success","failure"]'), needs.publish.result)
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Record promotion result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.publish.outputs.release-tag }}
+          RESULT: ${{ needs.publish.result }}
+        run: |
+          title="[Release] Publish $RELEASE_TAG"
+          if [[ "$RESULT" == success ]]; then
+            message="Production artifacts are published. Review them and mark the GitHub prerelease as a full release."
+          else
+            message="Production publication failed. Inspect the failed step and Central deployment status before retrying."
+          fi
+          printf '%s\n\n%s/releases/tag/%s\n\n%s/actions/runs/%s\n' "$message" \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$RELEASE_TAG" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > "$RUNNER_TEMP/release-issue.md"
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" \
+            --json number,title | jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')
+          if [[ -n "$number" ]]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/release-issue.md"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$RUNNER_TEMP/release-issue.md"
+          fi
