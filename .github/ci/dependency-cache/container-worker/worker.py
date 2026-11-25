@@ -194,8 +194,7 @@ def prepare(base, output):
         with boot(directory, None) as (ssh, child):
             with (HERE / "prepare.sh").open("rb") as script:
                 run(ssh + ["sudo bash -se"], stdin=script)
-            # Returning the SSH channel before shutdown avoids mistaking a successful poweroff for an SSH disconnect.
-            run(ssh + ["sudo sync; sudo systemd-run --quiet --on-active=2s /usr/sbin/poweroff"])
+            # The preparation script schedules shutdown while its original SSH channel is still authenticated.
             child.wait(timeout=120)
         os.link(disk, output)
     with output.open("rb") as f:
@@ -227,7 +226,8 @@ def run_candidate(image, digest, source, socket_path, command):
                 "MAVEN_REPOSITORY_URL": "http://127.0.0.1:7777/maven/",
                 "PIP_INDEX_URL": "http://127.0.0.1:7777/pypi/simple/",
                 "npm_config_registry": "http://127.0.0.1:7777/npm/",
-                "GRADLE_BUILD_CACHE_URL": "http://127.0.0.1:7777/gradle-build-cache/",
+                "CI_GRADLE_BUILD_CACHE_URL": "http://127.0.0.1:7777/gradle-build-cache/",
+                "CI_GRADLE_BUILD_CACHE_PUSH": "false",
                 "CI_DEPENDENCY_PROXY_URL": "http://127.0.0.1:7777",
             }
             if command == ["@smoke"]:

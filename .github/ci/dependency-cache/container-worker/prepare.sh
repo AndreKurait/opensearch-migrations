@@ -30,3 +30,6 @@ rm -f /home/runner/.ssh/authorized_keys /etc/ssh/ssh_host_*
 # Atomic cloud-init reseeding clears authorized keys; allow cloud-init to regenerate the SSH host keys.
 systemctl enable ssh.service
 cloud-init clean --logs --machine-id
+sync
+# Schedule shutdown before this authenticated channel closes; the preparation key has just been removed.
+systemd-run --quiet --on-active=3s /usr/sbin/poweroff
