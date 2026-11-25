@@ -24,3 +24,6 @@ jobs:
       # END generated network guard
       - name: Verify candidate network, filesystem, and process boundaries
         run: /usr/bin/python3 "$RUNNER_TEMP/darwin_guard.py" fixture
+      - name: Release the fixture firewall after candidate execution
+        if: always()
+        run: sudo -n /sbin/pfctl -a com.apple/migrations-egress -F rules

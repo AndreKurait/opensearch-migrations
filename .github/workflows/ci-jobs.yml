@@ -122,6 +122,9 @@ jobs:
         run: /usr/bin/python3 "$RUNNER_TEMP/darwin_guard.py" build
         env:
           CI_DEPENDENCY_TEST_SOURCE: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/candidate', github.workspace) || github.workspace }}
+      - name: Release the runner firewall after candidate execution
+        if: always()
+        run: sudo -n /sbin/pfctl -a com.apple/migrations-egress -F rules
 
   python-lint:
     if: *run_ci
