@@ -125,6 +125,11 @@ tasks.register('checkArtifacts') {
     if (createHash('sha256').update(bytes).digest('hex') !== rawDigest || !/^[a-f0-9]{64}$/.test(bytes.toString())) {
       throw new Error('kubectl checksum fixture differs from its approved digest');
     }
+    const fs = require('node:fs');
+    if (Object.keys(process.env).some(key => /^(ACTIONS_|AWS_|GITHUB_TOKEN$)/.test(key)) || fs.existsSync('/var/run/docker.sock')) {
+      throw new Error('Candidate can access host credentials or Docker');
+    }
+    console.log('PR-modified assertion passed inside the offline worker.');
     console.log('Verified the pinned Corretto JDK, Gradle transitive dependencies, npm and Python packages, OCI image layers, and the kubectl checksum through the proxy.');
   } finally {
     await rm(dir, {recursive: true, force: true});
