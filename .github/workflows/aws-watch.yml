@@ -59,6 +59,8 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
+      - name: Keep S3 requests on the permitted regional endpoint
+        run: aws configure set default.s3.addressing_style path
       - uses: ./.github/actions/aws-sandbox
         with:
           config: ${{ secrets.AWS_CI_CONFIG }}

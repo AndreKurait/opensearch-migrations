@@ -88,6 +88,10 @@
       "codebuild.us-west-2.amazonaws.com:443",
       "ssm.us-west-2.amazonaws.com:443"
     ],
+    "aws-capacity": [
+      "servicequotas.us-west-2.amazonaws.com:443",
+      "ec2.us-west-2.amazonaws.com:443"
+    ],
     "aws-watch": [
       "sts.us-west-2.amazonaws.com:443",
       "sts.amazonaws.com:443",
@@ -373,7 +377,8 @@
     "aws-suite.yml/start": {
       "purposes": [
         "github",
-        "aws-launch"
+        "aws-launch",
+        "aws-capacity"
       ],
       "nativePrivileges": false
     },

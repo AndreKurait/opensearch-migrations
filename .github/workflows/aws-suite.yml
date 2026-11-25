@@ -34,8 +34,7 @@ jobs:
       build-id: ${{ steps.start.outputs.build_id }}
     steps:
       # BEGIN generated network guard
-      - &network_1
-        name: Restrict runner and container egress
+      - name: Restrict runner and container egress
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
@@ -43,6 +42,7 @@ jobs:
           allowed-endpoints: >-
             api.github.com:443 github.com:443 raw.githubusercontent.com:443
             sts.us-west-2.amazonaws.com:443 sts.amazonaws.com:443 codebuild.us-west-2.amazonaws.com:443 ssm.us-west-2.amazonaws.com:443
+            servicequotas.us-west-2.amazonaws.com:443 ec2.us-west-2.amazonaws.com:443
       - &enforce_unprivileged
         name: Enforce Linux network policy before candidate checkout
         shell: bash
@@ -176,7 +176,14 @@ jobs:
     permissions: {actions: write}
     steps:
       # BEGIN generated network guard
-      - *network_1
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            sts.us-west-2.amazonaws.com:443 sts.amazonaws.com:443 codebuild.us-west-2.amazonaws.com:443 ssm.us-west-2.amazonaws.com:443
       - *enforce_unprivileged
       # END generated network guard
 
