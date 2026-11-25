@@ -193,17 +193,7 @@ def build(command_line=None):
         wrapper.mkdir()
         for suffix in ['.jar', '.properties']:
             file = Path(os.environ['CI_DEPENDENCY_GRADLE_WRAPPER_JAR']).with_suffix(suffix)
-            copied = wrapper / file.name
-            shutil.copy(file, copied)
-            if suffix == '.properties':
-                # The broker first materializes and verifies the entire distribution before serving bytes.
-                # A cold 130+ MiB download can exceed the repository wrapper's direct-origin timeout.
-                properties = copied.read_text()
-                key = re.compile(r'^networkTimeout=(\d+)$', re.MULTILINE)
-                properties = key.sub(lambda match: 'networkTimeout=' + str(max(120000, int(match[1]))), properties)
-                if not key.search(properties):
-                    properties += '\nnetworkTimeout=120000\n'
-                copied.write_text(properties)
+            shutil.copy(file, wrapper / file.name)
         profile = temp / 'candidate.sb'
         profile.write_text(seatbelt(temp, java, proxy.port))
         prefix = ['/usr/bin/sandbox-exec', '-f', str(profile)]

@@ -38,7 +38,7 @@ jobs:
             objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
             repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
             azure.archive.ubuntu.com:80 azure.archive.ubuntu.com:443 us-west-2.ec2.archive.ubuntu.com:80 us-west-2.ec2.archive.ubuntu.com:443 archive.ubuntu.com:80 archive.ubuntu.com:443 security.ubuntu.com:80 security.ubuntu.com:443 packages.microsoft.com:443 packages.cloud.google.com:443
-            auth.docker.io:443 registry-1.docker.io:443 production.cloudflare.docker.com:443 production.cloudfront.docker.com:443 docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443
+            mirror.gcr.io:443 storage.googleapis.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443
       - &enforce_native
         name: Enforce Linux network policy before candidate checkout
         shell: bash
@@ -105,7 +105,7 @@ jobs:
           set -euo pipefail
           guard="$RUNNER_TEMP/darwin_guard.py"
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/darwin_guard.py" -o "$guard"
-          expected=269b095beec7121d9a87e99139d5df0e5440a6e63052bf49b09a42de433afc9e
+          expected=6b1d48800d113dbe6d50a86074c7d8d898babc4b40e0a7361a9bec15969543f9
           test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
           /usr/bin/python3 "$guard" install
       # END generated network guard

@@ -19,7 +19,7 @@ jobs:
           set -euo pipefail
           guard="$RUNNER_TEMP/darwin_guard.py"
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/darwin_guard.py" -o "$guard"
-          expected=269b095beec7121d9a87e99139d5df0e5440a6e63052bf49b09a42de433afc9e
+          expected=6b1d48800d113dbe6d50a86074c7d8d898babc4b40e0a7361a9bec15969543f9
           test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
           /usr/bin/python3 "$guard" install
       # END generated network guard
@@ -33,7 +33,7 @@ jobs:
         run: npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund
       - uses: ./.github/actions/dependency-cache
         with: {mode: record, catalog-token: '${{ github.token }}'}
-      - name: Fetch and verify the pinned macOS Corretto JDK through the broker
+      - name: Fetch and verify the pinned platform-specific Corretto JDK
         id: corretto
         run: node .github/ci/dependency-cache/corretto.cjs
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
@@ -41,9 +41,17 @@ jobs:
           distribution: jdkfile
           java-version: ${{ steps.corretto.outputs.java-version }}
           jdkFile: ${{ steps.corretto.outputs.archive }}
+      - uses: ./.github/actions/dependency-cache
+        env: {CI_DEPENDENCY_STRICT_READ: '1'}
+        with: {mode: read, catalog-token: '${{ github.token }}'}
       - name: Compile and execute Java with the repository wrapper in Seatbelt
         env: {CI_DEPENDENCY_TEST_SOURCE: '${{ github.workspace }}'}
         run: /usr/bin/python3 "$RUNNER_TEMP/darwin_guard.py" gradle-fixture
+      - name: Show sanitized cache backend diagnostics
+        if: failure() && env.CI_DEPENDENCY_PROXY_SOCKET != ''
+        run: |
+          log="$(dirname "$CI_DEPENDENCY_PROXY_SOCKET")/service.log"
+          grep -E '^Cache archive at [a-zA-Z0-9.-]+ failed \([a-zA-Z0-9_, ]+\)\.$' "$log" || true
       - name: Release the fixture firewall after candidate execution
         if: always()
         run: sudo -n /sbin/pfctl -a com.apple/migrations-egress -F rules
