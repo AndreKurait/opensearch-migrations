@@ -286,13 +286,28 @@ def fixture():
         with socket.socket(type=socket.SOCK_DGRAM) as host_udp:
             host_udp.bind(('127.0.0.1', 0))
             host_udp.settimeout(0.5)
-            udp_probe = (
-                "import socket,sys; s=socket.socket(type=socket.SOCK_DGRAM); s.bind(('',0));"
-                "print('udp-bound',flush=True); s.sendto(b'candidate',('127.0.0.1',int(sys.argv[1])))"
-            )
-            udp = execute(['/usr/bin/python3', '-I', '-c', udp_probe, str(host_udp.getsockname()[1])])
-            if 'udp-bound' not in udp.stdout:
-                raise RuntimeError('Candidate UDP bind failed: ' + udp.stderr[-350:])
+            # /usr/bin/python3 launches Xcode on macOS. Compile this fixed trusted probe outside
+            # Seatbelt and run its small system-libc binary inside the same profile as the candidate.
+            source = temporary / 'udp.c'
+            binary = temporary / 'udp'
+            source.write_text(r'''#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+int main(int argc, char **argv) {
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    struct sockaddr_in addr = {.sin_family=AF_INET};
+    if (argc != 2 || sock < 0 || bind(sock, (struct sockaddr *)&addr, sizeof(addr))) return 1;
+    puts("udp-bound"); fflush(stdout);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); addr.sin_port = htons(atoi(argv[1]));
+    (void)sendto(sock, "candidate", 9, 0, (struct sockaddr *)&addr, sizeof(addr));
+    return 0;
+}
+''')
+            command(['/usr/bin/xcrun', 'clang', '-Wall', '-Werror', str(source), '-o', str(binary)])
+            udp = execute([str(binary), str(host_udp.getsockname()[1])])
+            if udp.returncode or 'udp-bound' not in udp.stdout:
+                raise RuntimeError(f'Candidate UDP bind failed ({udp.returncode}): ' + udp.stderr[-350:])
             try:
                 host_udp.recv(128)
                 raise RuntimeError('Candidate sent a datagram to a private host service')
