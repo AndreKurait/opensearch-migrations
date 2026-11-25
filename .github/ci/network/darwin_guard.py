@@ -31,6 +31,8 @@ OS_READ = [
     '/Library/Apple',
     '/Library/Developer',
     '/private/etc',
+    '/private/preboot/Cryptexes/OS',
+    '/private/var/db/dyld',
     '/dev',
     '/opt/homebrew',
 ]
@@ -246,11 +248,24 @@ def fixture():
 
         baseline = execute(['/usr/bin/true'])
         if baseline.returncode:
-            predicate = ('(process == "sandboxd" OR subsystem == "com.apple.sandbox.reporting") '
-                         'AND eventMessage CONTAINS "deny"')
+            # Select this probe's diagnostics. The macOS log is otherwise dominated by unrelated system apps.
+            predicate = '(eventMessage CONTAINS "Sandbox: true(" OR process == "true")'
             logs = subprocess.run(['/usr/bin/log', 'show', '--style', 'compact', '--last', '1m', '--predicate',
                                    predicate], capture_output=True, text=True, timeout=15)
-            print('Seatbelt system diagnostics:', logs.stdout[-1800:], flush=True)
+            print('Native process diagnostics:', logs.stdout[-2500:], flush=True)
+            # Isolate the failing OS subsystem without running candidate code or relaxing the actual profile.
+            production = profile.read_text()
+            probes = {
+                'system': '(version 1)\n(allow default)',
+                'file-read': '(deny file-read* file-write* file-map-executable)',
+                'signal': '(deny process-info* signal mach-lookup)',
+                'network': '(deny network*)',
+            }
+            for label, rule in probes.items():
+                profile.write_text(rule if label == 'system' else production.replace(rule, ''))
+                probe = execute(['/usr/bin/true'])
+                print(f'Trusted native startup diagnostic {label}: {probe.returncode} {probe.stderr[:300]}', flush=True)
+            profile.write_text(production)
             raise RuntimeError(f'Seatbelt native exec failed ({baseline.returncode}): {baseline.stderr}')
         response = execute(['/usr/bin/curl', '-fsS', '--max-time', '5', f'http://127.0.0.1:{port}/fixture'])
         if response.returncode or response.stdout != 'local broker':
