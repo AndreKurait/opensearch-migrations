@@ -35,10 +35,6 @@ phases:
             echo "Release $CI_RELEASE_VERSION at $(git -C "$CODEBUILD_SRC_DIR/release" rev-parse HEAD)"
           fi
         fi
-        if [[ "${CI_MODE:-}" != cleanup ]] && ! command -v skopeo >/dev/null; then
-          apt-get update -qq
-          apt-get install -y -qq skopeo
-        fi
         cat > /tmp/migrations-native-suite.sh <<'WORKER'
         #!/usr/bin/env bash
         set -euo pipefail
