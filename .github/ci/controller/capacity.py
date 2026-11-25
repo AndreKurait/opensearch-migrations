@@ -2,6 +2,7 @@
 import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
 from datetime import datetime
 import hashlib
 import json
@@ -9,6 +10,8 @@ import os
 import re
 import subprocess
 import time
+
+from parameters import SUITES
 
 REGION = 'us-west-2'
 PROJECT = 'migrations-github-eks'
@@ -19,16 +22,7 @@ QUOTAS = {
     'igws': ('vpc', 'L-A4707A72'), 'egws': ('vpc', 'L-45FE3B85'), 'nat_per_az': ('vpc', 'L-FE5A380F'),
     'enis': ('vpc', 'L-DF5E4CA3'), 'vcpus': ('ec2', 'L-1216C47A'),
 }
-# CloudFormation fixes network counts. ENIs and vCPUs reserve capacity for autoscaled nodes and workloads.
-# The isolated test temporarily has two clusters and imports a second VPC.
-RESERVATIONS = {
-    suite: dict(zip(QUOTAS, values)) for suite, values in {
-        'isolated': (1, 4, 2, 2, 1, 2, 128, 24), 'cfn-import': (1, 1, 1, 1, 0, 1, 32, 8),
-        'cdc-k6': (1, 3, 1, 1, 1, 1, 128, 24), 'cdc-aoss': (1, 3, 1, 1, 1, 1, 96, 24),
-        'cdc': (1, 3, 1, 1, 1, 1, 96, 24), 'eks': (1, 3, 1, 1, 1, 1, 64, 16),
-        'cfn-create': (1, 3, 1, 1, 1, 1, 64, 8),
-    }.items()
-}
+RESERVATIONS = {name: asdict(suite.reservation) for name, suite in SUITES.items() if suite.reservation is not None}
 
 
 def cli(*args, payload=None):
@@ -59,7 +53,13 @@ def quotas(call):
     def read(service, code):
         return int(call('service-quotas', 'get-service-quota', '--service-code', service,
                         '--quota-code', code)['Quota']['Value'])
-    return parallel({k: (lambda s=s, c=c: read(s, c)) for k, (s, c) in QUOTAS.items()})
+    tasks = {k: (lambda s=s, c=c: read(s, c)) for k, (s, c) in QUOTAS.items()}
+    limits = parallel(dict(tasks, project=lambda: call('codebuild', 'batch-get-projects', '--names', PROJECT)))
+    project = limits.pop('project')['projects'][0]
+    # Both the regional size quota and the project's own running limit apply to cleanup workers.
+    ceiling = project.get('concurrentBuildLimit') or limits['builds']
+    limits['builds'] = max(0, min(limits['builds'], ceiling) - 1)
+    return limits
 
 
 def active_builds(call):
@@ -123,11 +123,13 @@ def usage(call, ignore_active=False):
         target = by_stage[stage] if stage in by_stage else other
         target[key] += count
 
-    for key in ('vpcs', 'enis', 'igws', 'egws'):
+    for key in ('vpcs', 'igws', 'egws'):
         for row in rows[key]:
             attachments = row.get('Attachments', [])
             parent = vpcs.get(attachments[0].get('VpcId')) if attachments else None
             charge(row, key, parent=parent)
+    for eni in rows['enis']:
+        charge(eni, 'eni:' + eni['AvailabilityZone'])
     zones = {r['SubnetId']: r['AvailabilityZone'] for r in rows['subnets']}
     nat_eips = {}
     for nat in rows['nats']:
@@ -151,6 +153,7 @@ def usage(call, ignore_active=False):
     for counter in [other, *by_stage.values()]:
         counter['vcpus'] = sum(counter['type:' + name] * size for name, size in sizes.items())
         counter['nat_per_az'] = max((n for k, n in counter.items() if k.startswith('nat:')), default=0)
+        counter['enis'] = max((n for k, n in counter.items() if k.startswith('eni:')), default=0)
     other['builds'] = 0 if ignore_active else len(rows['builds'])
     if not ignore_active:
         for stage, suite in stages.items():
@@ -165,7 +168,12 @@ def lanes(room):
     # Sum of the per-resource maxima in every lane must fit for *any* selection, including overlapping runs.
     buckets = []
     assignment = {}
-    for suite, need in RESERVATIONS.items():
+    # Place overlapping VPCs first, then suites that can share the remaining EIPs.
+    # The largest ENI and CPU reservations get first choice of available lanes.
+    order = sorted(RESERVATIONS, key=lambda name: (RESERVATIONS[name]['vpcs'], -RESERVATIONS[name]['eips'],
+                   RESERVATIONS[name]['enis'], RESERVATIONS[name]['vcpus'], name), reverse=True)
+    for suite in order:
+        need = RESERVATIONS[suite]
         if any(need[k] > room[k] for k in QUOTAS):
             continue
         for idx in [len(buckets), *range(len(buckets))]:
@@ -193,7 +201,6 @@ def config():
 def admit(suite, call, cfg, wait_seconds=4 * 3600):
     deadline = time.monotonic() + wait_seconds
     limits = quotas(call)
-    limits['builds'] = max(0, limits['builds'] - 1)  # keep one managed worker available for recovery
     while True:
         used = usage(call)
         short = [k for k, n in RESERVATIONS[suite].items() if n + used[k] > limits[k] or n > cfg['room'][k]]
@@ -236,7 +243,6 @@ if __name__ == '__main__':
     aws = client(opts.profile)
     measured = parallel({'limits': lambda: quotas(aws), 'used': lambda: usage(aws, ignore_active=True)})
     room = {k: max(0, measured['limits'][k] - measured['used'][k]) for k in QUOTAS}
-    room['builds'] = max(0, min(12, room['builds'] - 1))
     account = aws('sts', 'get-caller-identity')['Account']
     cfg = dict(account=account, region=REGION, room=room)
     print('Oregon capacity after background usage:', json.dumps(room, sort_keys=True))

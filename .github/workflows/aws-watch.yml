@@ -1,6 +1,8 @@
 name: Stream AWS test output
 on:
   workflow_call:
+    secrets:
+      AWS_CI_CONFIG: {required: true}
     inputs:
       build-id: {type: string, required: true}
       suite: {type: string, required: true}
@@ -17,9 +19,7 @@ jobs:
       github.workflow_ref == 'AndreKurait/opensearch-migrations/.github/workflows/aws-integration.yml@refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'issue_comment' ||
       github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
-    environment:
-      name: aws-ci
-      deployment: false
+    environment: aws-ci
     runs-on: ubuntu-24.04
     timeout-minutes: 345
     permissions:
@@ -29,24 +29,14 @@ jobs:
       state: ${{ steps.watch.outputs.state }}
       cursor: ${{ steps.watch.outputs.cursor }}
     steps:
-      - name: Mask the sandbox identifier
-        env:
-          AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}
-        run: |
-          account=$(jq -er '.account | select(test("^[0-9]{12}$"))' <<< "$AWS_CI_CONFIG")
-          echo "::add-mask::$account"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      - uses: ./.github/actions/aws-sandbox
         with:
-          aws-region: us-west-2
-          role-to-assume: ${{ format('arn:aws:iam::{0}:role/MigrationsGitHubLauncher', fromJSON(secrets.AWS_CI_CONFIG).account) }}
-          mask-aws-account-id: true
-          role-session-name: gha-${{ github.run_id }}-${{ github.run_attempt }}
-          allowed-account-ids: ${{ fromJSON(secrets.AWS_CI_CONFIG).account }}
-          role-duration-seconds: 21600
+          config: ${{ secrets.AWS_CI_CONFIG }}
+          duration: '21600'
       - name: Stream build phases and test logs
         id: watch
         env:

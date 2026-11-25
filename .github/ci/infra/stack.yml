@@ -78,6 +78,7 @@ Resources:
         ImagePullCredentialsType: CODEBUILD
         PrivilegedMode: true
         EnvironmentVariables:
+          - {Name: CODEBUILD_CONFIG_AUTO_DISCOVER, Value: 'false'}
           - {Name: CI_WORKER_ROLE_ARN, Value: !GetAtt Worker.Arn}
           - {Name: CI_ROLE_BOUNDARY_ARN, Value: !Ref SandboxBoundary}
           - {Name: CI_CONTROL_PLANE_BOUNDARY_ARN, Value: !Ref ControlPlaneBoundary}
@@ -133,12 +134,12 @@ Resources:
                     'codebuild:environment.fleet.fleetArn': 'true'
                     'codebuild:environment.registryCredential.credential': 'true'
                   'ForAllValues:StringEquals':
-                    'codebuild:environment.environmentVariables.name': [CI_SUITE, CI_GIT_SHA, CI_GIT_REF, CI_STAGE, CI_RELEASE_VERSION, TEST_IDS, SOURCE_VERSION, TARGET_VERSION, S3_REPO_URI, SNAPSHOT_NAME, RFS_WORKERS, MONITOR_RETRY_LIMIT, AOSS_TEST_IDS, TEST_PRESET, TARGET_CLUSTER_SIZE, SPEEDUP_FACTOR]
+                    'codebuild:environment.environmentVariables.name': [CI_GH_RUN_ID, CI_GH_RUN_ATTEMPT, CI_SUITE, CI_GIT_SHA, CI_GIT_REF, CI_STAGE, CI_RELEASE_VERSION, TEST_IDS, SOURCE_VERSION, TARGET_VERSION, S3_REPO_URI, SNAPSHOT_NAME, RFS_WORKERS, MONITOR_RETRY_LIMIT, AOSS_TEST_IDS, TEST_PRESET, TARGET_CLUSTER_SIZE, SPEEDUP_FACTOR]
 
               - Effect: Allow
                 Action: ['codebuild:BatchGetBuilds', 'codebuild:StopBuild']
                 Resource: [!GetAtt Project.Arn, !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:build/migrations-github-eks:*']
-              - {Effect: Allow, Action: 'codebuild:ListBuildsForProject', Resource: !GetAtt Project.Arn}
+              - {Effect: Allow, Action: ['codebuild:ListBuildsForProject', 'codebuild:BatchGetProjects'], Resource: !GetAtt Project.Arn}
               - Effect: Allow
                 Action: ['servicequotas:GetServiceQuota', 'ec2:DescribeVpcs', 'ec2:DescribeNetworkInterfaces', 'ec2:DescribeAddresses', 'ec2:DescribeInternetGateways', 'ec2:DescribeEgressOnlyInternetGateways', 'ec2:DescribeNatGateways', 'ec2:DescribeSubnets', 'ec2:DescribeInstances', 'ec2:DescribeInstanceTypes']
                 Resource: '*'
@@ -156,7 +157,7 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - {Effect: Allow, Action: ['codebuild:StartBuild', 'codebuild:ListBuildsForProject'], Resource: !GetAtt Project.Arn}
-              - {Effect: Allow, Action: 'codebuild:BatchGetBuilds', Resource: [!GetAtt Project.Arn, !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:build/migrations-github-eks:*']}
+              - {Effect: Allow, Action: ['codebuild:BatchGetBuilds', 'codebuild:StopBuild'], Resource: [!GetAtt Project.Arn, !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:build/migrations-github-eks:*']}
               - {Effect: Allow, Action: ['logs:CreateLogStream', 'logs:PutLogEvents'], Resource: !GetAtt RecoveryLogs.Arn}
   RecoveryLogs:
     Type: AWS::Logs::LogGroup
@@ -185,7 +186,7 @@ Resources:
   ReconcileInterrupted:
     Type: AWS::Events::Rule
     Properties:
-      ScheduleExpression: rate(1 hour)
+      ScheduleExpression: rate(15 minutes)
       Targets: [{Id: Reconcile, Arn: !GetAtt Recovery.Arn}]
   AllowReconcile:
     Type: AWS::Lambda::Permission

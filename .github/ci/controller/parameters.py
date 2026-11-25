@@ -5,9 +5,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'aws'))
-from suites import ALIASES, AOSS_SNAPSHOT_PREFIX, PRESETS, SNAPSHOT_BUCKET, SUITES
+from suites import ALIASES, PRESETS, SNAPSHOT_BUCKET, SUITES
 
-SNAPSHOT_SUITES = {'byos', 'aoss'}
 SOURCE_VERSIONS = ('ES_7.10', 'ES_1.5', 'ES_2.4', 'ES_5.6', 'ES_6.8', 'ES_8.19', 'OS_1.3', 'OS_2.19')
 
 
@@ -30,10 +29,9 @@ def parameters(suites, raw):
         choices['SOURCE_VERSION'] = SOURCE_VERSIONS if suite == 'byos' else (config.source,)
         if config.target != 'AOSS':
             choices['TARGET_VERSION'] = ('OS_2.19', 'OS_3.1') if suite == 'byos' else ('OS_1.3', 'OS_2.19', 'OS_3.1')
-    if suite in SNAPSHOT_SUITES:
-        buckets = (SNAPSHOT_BUCKET,)
-        prefixes = [AOSS_SNAPSHOT_PREFIX] if suite == 'aoss' else [preset[0] for preset in PRESETS.values()]
-        choices['S3_REPO_URI'] = {f'{b}/{p}{end}' for b in buckets for p in prefixes for end in ('', '/')}
+    if config.snapshot_prefixes:
+        choices['S3_REPO_URI'] = {f'{SNAPSHOT_BUCKET}/{prefix}{end}'
+                                  for prefix in config.snapshot_prefixes for end in ('', '/')}
         patterns.update(SNAPSHOT_NAME=r'[A-Za-z0-9_-][A-Za-z0-9._-]{0,254}', RFS_WORKERS=r'[1-9][0-9]*',
                         MONITOR_RETRY_LIMIT=r'[1-9][0-9]*')
     if suite == 'aoss':

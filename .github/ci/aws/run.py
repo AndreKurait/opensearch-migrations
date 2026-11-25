@@ -241,9 +241,6 @@ class Worker:
 
     def build(self):
         if self.source_build:
-            if not self.suite.startswith('cfn-'):
-                with phase('source build', 60):
-                    command('./gradlew', 'clean', 'build', '-x', 'test', '--no-daemon', '--stacktrace')
             command('./deployment/k8s/aws/assemble-bootstrap.sh')
             self.bootstrap_script = self.root / 'deployment/k8s/aws/dist/aws-bootstrap.sh'
         else:

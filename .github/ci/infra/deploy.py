@@ -136,29 +136,36 @@ def main():
             raise RuntimeError(result.stderr.decode())
     archive = recovery_archive()
     digest = hashlib.sha256(archive).hexdigest()
-    # Publish before updating the digest that CodeBuild will consume. For a new
-    # installation the bucket is created by the initial stack, before any PR jobs.
+    # Create the private artifacts bucket in this same stack first. CloudFormation
+    # accepts the full template by S3 URL, including templates over 51,200 bytes.
     existing = subprocess.run([*aws, 'cloudformation', 'describe-stacks', '--stack-name', 'migrations-github-ci',
                                '--output', 'json'], capture_output=True)
-    bucket = None
-    if not existing.returncode:
-        outputs = json.loads(existing.stdout)['Stacks'][0]['Outputs']
-        bucket = next(o['OutputValue'] for o in outputs if o['OutputKey'] == 'ArtifactBucketName')
-        publish_recovery(aws, bucket, digest, archive)
-    elif b'does not exist' not in existing.stderr:
-        raise RuntimeError(existing.stderr.decode())
+    if existing.returncode:
+        if b'does not exist' not in existing.stderr:
+            raise RuntimeError(existing.stderr.decode())
+        full = json.loads(template)
+        initial = {'Resources': {'Artifacts': full['Resources']['Artifacts']},
+                   'Outputs': {'ArtifactBucketName': full['Outputs']['ArtifactBucketName']}}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as file:
+            json.dump(initial, file)
+            file.flush()
+            subprocess.run([*aws, 'cloudformation', 'deploy', '--stack-name', 'migrations-github-ci',
+                            '--template-file', file.name, '--no-fail-on-empty-changeset'], check=True)
+        stack = call('cloudformation', 'describe-stacks', '--stack-name', 'migrations-github-ci')['Stacks'][0]
+    else:
+        stack = json.loads(existing.stdout)['Stacks'][0]
+    bucket = next(o['OutputValue'] for o in stack['Outputs'] if o['OutputKey'] == 'ArtifactBucketName')
+    # Every project revision must be able to read its own recovery archive as soon
+    # as CloudFormation applies it, including an interrupted initial deployment.
+    publish_recovery(aws, bucket, digest, archive)
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as file:
         file.write(template)
         file.flush()
         subprocess.run([*aws, 'cloudformation', 'deploy', '--stack-name', 'migrations-github-ci',
-                        '--template-file', file.name, '--capabilities', 'CAPABILITY_NAMED_IAM',
+                        '--template-file', file.name, '--s3-bucket', bucket, '--s3-prefix', 'infrastructure/templates',
+                        '--capabilities', 'CAPABILITY_NAMED_IAM',
                         '--parameter-overrides', f'ProviderArn={arn}', f'RecoveryDigest={digest}',
-                        f'WorkerLimit={args.worker_limit}',
-                        '--no-fail-on-empty-changeset'], check=True)
-    if bucket is None:
-        stack = call('cloudformation', 'describe-stacks', '--stack-name', 'migrations-github-ci')['Stacks'][0]
-        bucket = next(o['OutputValue'] for o in stack['Outputs'] if o['OutputKey'] == 'ArtifactBucketName')
-        publish_recovery(aws, bucket, digest, archive)
+                        f'WorkerLimit={args.worker_limit}', '--no-fail-on-empty-changeset'], check=True)
 
 
 if __name__ == '__main__':

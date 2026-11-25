@@ -11,13 +11,12 @@ import subprocess
 import sys
 import time
 
-from capacity import admit, client, config
+from capacity import PROJECT, admit, client, config
 from parameters import ALIASES, SUITES, parameters
 from plan import RELEASE, SHA, select
 from report import public_text, render
 
-PROJECT = 'migrations-github-eks'
-LOG_GROUP = '/aws/codebuild/migrations-github-eks'
+LOG_GROUP = f'/aws/codebuild/{PROJECT}'
 UUID = r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}'
 BUILD_ID = rf'{PROJECT}:{UUID}'
 TERMINAL = {'SUCCEEDED', 'FAILED', 'FAULT', 'STOPPED', 'TIMED_OUT'}
@@ -50,11 +49,13 @@ def start(suite, sha, ref, release, options):
         raise ValueError('Unsupported git ref')
     if release and not re.fullmatch(RELEASE, release):
         raise ValueError('Invalid release version')
-    run_key = (f"{os.environ['GITHUB_REPOSITORY']}/{os.environ['GITHUB_RUN_ID']}/"
-               f"{os.environ['GITHUB_RUN_ATTEMPT']}/{suite}")
+    run_id = os.environ['GITHUB_RUN_ID']
+    attempt = os.environ['GITHUB_RUN_ATTEMPT']
+    run_key = f"{os.environ['GITHUB_REPOSITORY']}/{run_id}/{attempt}/{suite}"
     digest = hashlib.sha256(run_key.encode()).hexdigest()
     stage = 'ci-' + digest[:12]
-    values = {'CI_SUITE': suite, 'CI_GIT_SHA': sha, 'CI_GIT_REF': ref, 'CI_STAGE': stage}
+    values = {'CI_SUITE': suite, 'CI_GIT_SHA': sha, 'CI_GIT_REF': ref, 'CI_STAGE': stage,
+              'CI_GH_RUN_ID': run_id, 'CI_GH_RUN_ATTEMPT': attempt}
     values.update(parameters((suite,), options))
     if release:
         values['CI_RELEASE_VERSION'] = release

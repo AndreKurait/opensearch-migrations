@@ -1,0 +1,31 @@
+name: Connect to the Oregon CI sandbox
+description: Mask the private account identifier and acquire a short-lived launcher session through GitHub OIDC.
+inputs:
+  config:
+    description: Protected aws-ci environment configuration
+    required: true
+  duration:
+    description: AWS session duration in seconds
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Mask the sandbox identifier
+      shell: bash
+      env:
+        AWS_CI_CONFIG: ${{ inputs.config }}
+      run: |
+        if [[ -z "$AWS_CI_CONFIG" ]]; then
+          echo '::error::The aws-ci environment configuration is unavailable to this job.'
+          exit 1
+        fi
+        account=$(jq -er '.account | select(test("^[0-9]{12}$"))' <<< "$AWS_CI_CONFIG")
+        echo "::add-mask::$account"
+    - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      with:
+        aws-region: us-west-2
+        role-to-assume: ${{ format('arn:aws:iam::{0}:role/MigrationsGitHubLauncher', fromJSON(inputs.config).account) }}
+        allowed-account-ids: ${{ fromJSON(inputs.config).account }}
+        mask-aws-account-id: true
+        role-session-name: gha-${{ github.run_id }}-${{ github.run_attempt }}
+        role-duration-seconds: ${{ inputs.duration }}

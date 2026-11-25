@@ -31,6 +31,25 @@ class TestCloudWorker(unittest.TestCase):
                 self.assertEqual((worker.classic, worker.nextgen), expected)
                 self.assertEqual(worker.results, self.temp / 'ci-results')
 
+    def test_source_suites_prepare_only_the_production_bootstrap(self):
+        for suite, release in [('eks', ''), ('cfn-create', ''), ('cfn-import', ''), ('cdc-k6', '3.4.2')]:
+            with self.subTest(suite=suite, release=release), patch.dict(os.environ, CI_RELEASE_VERSION=release):
+                worker = Worker(suite, self.temp)
+                with patch('run.command') as execute:
+                    worker.build()
+                execute.assert_called_once_with('./deployment/k8s/aws/assemble-bootstrap.sh')
+                self.assertEqual(worker.bootstrap_script, worker.root / 'deployment/k8s/aws/dist/aws-bootstrap.sh')
+
+    def test_published_release_suite_fetches_only_its_tagged_bootstrap(self):
+        with patch.dict(os.environ, CI_RELEASE_VERSION='3.4.2'), patch('run.command') as execute:
+            worker = Worker('eks', self.temp)
+            worker.build()
+        self.assertEqual(worker.bootstrap_script, self.temp / 'aws-bootstrap.sh')
+        execute.assert_called_once_with(
+            'curl', '--fail', '--silent', '--show-error', '--location', '--output', worker.bootstrap_script,
+            'https://github.com/opensearch-project/opensearch-migrations/releases/download/3.4.2/aws-bootstrap.sh',
+        )
+
     def test_isolated_recovery_includes_both_clusters_and_the_external_vpc(self):
         worker = Worker('isolated', self.temp)
         with patch.object(worker, 'remove_ma') as ma, patch.object(worker, 'remove_stack') as stack:

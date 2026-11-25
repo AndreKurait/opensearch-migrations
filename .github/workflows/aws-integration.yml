@@ -13,10 +13,8 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        type: choice
-        description: Integration suite or group
-        default: all
-        options: [all, eks, cdc, cdc-aoss, cdc-k6, cfn-create, cfn-import, isolated, cdc-tests]
+        type: string
+        description: Suite, group, or comma-separated selections (default is the deployment check)
       release:
         type: string
         description: Optional published Migration Assistant release version (default builds from source)
@@ -33,8 +31,13 @@ on:
 permissions: {}
 jobs:
   select:
+    concurrency:
+      group: aws-integration-pr-status
+      queue: max
     if: >-
       github.ref == 'refs/heads/main' &&
+      (vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' ||
+      (github.event_name != 'push' && github.event_name != 'schedule')) &&
       (github.event_name != 'issue_comment' ||
       (github.event.issue.pull_request && startsWith(github.event.comment.body, '/aws-test ')))
     environment:
@@ -45,6 +48,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      statuses: write
     outputs:
       sha: ${{ steps.plan.outputs.sha }}
       ref: ${{ steps.plan.outputs.ref }}
@@ -63,6 +67,24 @@ jobs:
           AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/ci/controller/plan.py
+      - name: Save the approved PR status plan
+        if: steps.plan.outputs.pr != ''
+        env:
+          SHA: ${{ steps.plan.outputs.sha }}
+          MATRIX: ${{ steps.plan.outputs.matrix }}
+        run: python3 .github/ci/controller/status.py plan
+      - if: steps.plan.outputs.pr != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: aws-approved-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/approved-plan.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Link the queued suites to the approved PR commit
+        if: steps.plan.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/ci/controller/status.py pending
   test:
     needs: select
     strategy:
@@ -75,6 +97,8 @@ jobs:
       id-token: write
       statuses: write
     uses: ./.github/workflows/aws-suite.yml
+    secrets:
+      AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}
     with:
       sha: ${{ needs.select.outputs.sha }}
       ref: ${{ needs.select.outputs.ref }}
