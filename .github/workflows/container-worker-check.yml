@@ -1,0 +1,74 @@
+name: Verify the nested Docker network boundary
+on: [workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  kvm:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      # BEGIN generated network guard
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            azure.archive.ubuntu.com:80 azure.archive.ubuntu.com:443 archive.ubuntu.com:80 archive.ubuntu.com:443 security.ubuntu.com:80 security.ubuntu.com:443 packages.microsoft.com:443 packages.cloud.google.com:443
+            cloud-images.ubuntu.com:443
+            auth.docker.io:443 registry-1.docker.io:443 production.cloudflare.docker.com:443 production.cloudfront.docker.com:443 docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443 ghcr.io:443 pkg-containers.githubusercontent.com:443
+      - name: Enforce Linux network policy before candidate checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          guard="$RUNNER_TEMP/linux_guard.py"
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/linux_guard.py" -o "$guard"
+          expected=147c831165a485bd0ac53d4c0caff7414122d5e99c7677afeef451993d427afd
+          test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
+          sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install
+          /usr/bin/python3 "$guard" probe
+      # END generated network guard
+      - name: Check hosted KVM availability before downloading any image
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -c /dev/kvm ]]; then
+            echo 'The selected hosted runner does not expose KVM.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
+            sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          fi
+          python3 - <<'PY'
+          import fcntl, os
+          fd = os.open('/dev/kvm', os.O_RDWR | os.O_CLOEXEC)
+          assert fcntl.ioctl(fd, 0xAE00) == 12, 'KVM_GET_API_VERSION must report version 12'
+          os.close(fd)
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - name: Install Ubuntu guest tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils openssh-client socat
+      - name: Prepare the trusted image and verify native Testcontainers against the read-only broker
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend=.github/ci/dependency-cache/container-worker
+          dir=$(mktemp -d "$RUNNER_TEMP/nested-docker.XXXXXX")
+          release() { if [[ -n "${broker_pid:-}" ]]; then kill "$broker_pid" 2>/dev/null || true; wait "$broker_pid" || true; fi; }
+          trap release EXIT
+          node "$backend/probe-broker.cjs" "$dir" & broker_pid=$!
+          for n in {1..60}; do [[ ! -f "$dir/ready" ]] || break; kill -0 "$broker_pid"; sleep 1; done
+          test -f "$dir/ready"
+          python3 "$backend/worker.py" prepare --output "$dir/worker.qcow2"
+          digest=$(sha256sum "$dir/worker.qcow2" | cut -d' ' -f1)
+          CI_DEPENDENCY_PROXY_SOCKET="$dir/cache.sock" python3 "$backend/worker.py" run --image "$dir/worker.qcow2" --sha256 "$digest" --source . -- @smoke
+          kill "$broker_pid"; wait "$broker_pid"; broker_pid=''
+          cat "$dir/metrics.json" >> "$GITHUB_STEP_SUMMARY"

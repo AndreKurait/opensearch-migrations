@@ -138,6 +138,9 @@
       "docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443",
       "ghcr.io:443",
       "pkg-containers.githubusercontent.com:443"
+    ],
+    "ubuntu-image": [
+      "cloud-images.ubuntu.com:443"
     ]
   },
   "jobs": {
@@ -153,7 +156,12 @@
     },
     "CI.yml/gradle-build-macos": {
       "platform": "macos",
-      "candidate": "seatbelt-only"
+      "candidate": "seatbelt",
+      "purposes": [
+        "github",
+        "bootstrap",
+        "package"
+      ]
     },
     "CI.yml/python-lint": {
       "purposes": [
@@ -495,6 +503,15 @@
         "github"
       ],
       "nativePrivileges": false
+    },
+    "container-worker-check.yml/kvm": {
+      "purposes": [
+        "github",
+        "ubuntu",
+        "ubuntu-image",
+        "openartifact"
+      ],
+      "nativePrivileges": true
     }
   },
   "version": "v2.21.1"
