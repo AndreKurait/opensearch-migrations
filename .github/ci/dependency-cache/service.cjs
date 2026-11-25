@@ -6,7 +6,7 @@ const { openLocalRecorder, readReceipt } = require('./receipts.cjs');
 const { openReader } = require('./github-store.cjs');
 const { serve } = require('./cli.cjs');
 const { openPackageTransport } = require('./openartifact/transport.cjs');
-const { openColdStore } = require('./openartifact/cold.cjs');
+const { openColdStore, openReadStore } = require('./openartifact/cold.cjs');
 
 async function service(mode, dir) {
   let stop;
@@ -17,10 +17,6 @@ async function service(mode, dir) {
   process.once('SIGINT', stop);
   const receiptFile = path.join(dir, 'receipt.json');
   let seed;
-  const store =
-    mode === 'record'
-      ? await openLocalRecorder({ receiptFile, lookup: (key) => seed?.resolve(key) })
-      : await openReader();
   const misses = new Set();
   const reportMiss = (key) => {
     if (misses.size < 256) misses.add(key);
@@ -28,20 +24,11 @@ async function service(mode, dir) {
   const hosted = process.env.GITHUB_ACTIONS === 'true' && process.env.RUNNER_ENVIRONMENT === 'github-hosted';
   const coldAllowed = mode === 'read' && hosted && process.env.CI_DEPENDENCY_STRICT_READ !== '1';
   const cold = coldAllowed ? await openColdStore(dir) : null;
-  const resolve = store.resolve.bind(store);
-  store.resolve = async (key) => {
-    try {
-      return await resolve(key);
-    } catch (error) {
-      if (error.code === 'CACHE_MISS') {
-        reportMiss(key);
-        if (cold) return cold.resolve(key);
-      }
-      throw error;
-    }
-  };
-  let packages;
+  let packages, store;
   try {
+    store = mode === 'record'
+      ? await openLocalRecorder({receiptFile, lookup: (key) => seed?.resolve(key)})
+      : await openReadStore({openReader, cold, reportMiss});
     if (hosted && mode === 'record') {
       try {
         seed = await openReader();
@@ -105,6 +92,11 @@ async function service(mode, dir) {
     }
     if (packages?.metrics)
       await fs.writeFile(path.join(dir, 'openartifact-metrics.json'), JSON.stringify(packages.metrics));
+    if (mode === 'read')
+      await fs.writeFile(path.join(dir, 'transfer-metrics.json'), JSON.stringify({
+        ...(store.metrics || { archiveTransfers: 0, archivePayloadBytes: 0 }),
+        ...(cold?.metrics || { originLookups: 0, originPayloadBytes: 0 }),
+      }));
   } finally {
     try {
       await packages?.close();
@@ -113,7 +105,7 @@ async function service(mode, dir) {
         await seed?.close();
       } finally {
         await cold?.close();
-        await store.close();
+        await store?.close();
       }
     }
   }

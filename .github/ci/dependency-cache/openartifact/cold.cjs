@@ -5,6 +5,39 @@ const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { fetchPublic, validateKey } = require('../proxy.cjs');
 
+async function openReadStore({ openReader, cold, reportMiss }) {
+  let reader;
+  try {
+    reader = await openReader();
+  } catch (error) {
+    if (!cold || error.code !== 'CACHE_MISS') throw error;
+    // An absent snapshot has no trusted rows. The ordinary PR broker can start with empty repositories.
+  }
+  const entries = reader?.entries || [];
+  const known = new Map(entries.map((entry) => [entry.key, entry]));
+  return {
+    entries,
+    metrics: reader?.metrics,
+    async resolve(key) {
+      if (reader) {
+        try {
+          return await reader.resolve(key);
+        } catch (error) {
+          if (error.code !== 'CACHE_MISS') throw error;
+          reportMiss(key);
+          if (!cold) throw error;
+        }
+      } else reportMiss(key);
+      const item = await cold.resolve(key);
+      const expected = known.get(key);
+      if (expected && (item?.digest !== expected.digest || item?.size !== expected.size))
+        throw new Error('Public origin no longer matches the published dependency');
+      return item;
+    },
+    close: () => reader?.close(),
+  };
+}
+
 // Ordinary PRs may need a newly introduced public dependency before main warms it.
 // All data is ephemeral and each network download must share these job limits.
 async function openColdStore(
@@ -16,7 +49,9 @@ async function openColdStore(
   let unreserved = maxBytes,
     closed = false;
   const inflight = new Set();
+  const metrics = { originLookups: 0, originPayloadBytes: 0 };
   return {
+    metrics,
     async resolve(key) {
       validateKey(key);
       if (closed) throw new Error('Cold dependency store closed');
@@ -35,7 +70,9 @@ async function openColdStore(
         });
         inflight.add(lease);
         try {
+          metrics.originLookups++;
           const entry = await fetchArtifact(key, dest, { maxBytes: allowance });
+          metrics.originPayloadBytes += entry?.size || 0;
           unreserved += allowance - (entry?.size || 0);
           return entry ? { ...entry, path: dest } : null;
         } catch (error) {
@@ -58,4 +95,4 @@ async function openColdStore(
   };
 }
 
-module.exports = { openColdStore };
+module.exports = { openColdStore, openReadStore };

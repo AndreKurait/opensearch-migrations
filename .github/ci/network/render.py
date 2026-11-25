@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Render or verify the first steps of every local job without reformatting its workflow."""
+
 import argparse
 from hashlib import sha256
 import json
@@ -18,17 +19,30 @@ BASE = '${{ github.event.pull_request.base.sha || github.event.merge_group.base_
 
 def bootstrap(file, native, platform):
     digest = sha256((HERE / file).read_bytes()).hexdigest()
-    lines = [f'- name: Enforce {platform} network policy before candidate checkout', '  shell: bash',
-             '  working-directory: ${{ runner.temp }}', '  env:', f'    POLICY_SHA: {BASE}', '  run: |',
-             '    set -euo pipefail', f'    guard="$RUNNER_TEMP/{file}"',
-             f'    curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/{file}" -o "$guard"',
-             f'    expected={digest}', '    test "$(shasum -a 256 "$guard" | cut -d\' \' -f1)" = "$expected"']
+    lines = [
+        f'- name: Enforce {platform} network policy before candidate checkout',
+        '  shell: bash',
+        '  working-directory: ${{ runner.temp }}',
+        '  env:',
+        f'    POLICY_SHA: {BASE}',
+        '  run: |',
+        '    set -euo pipefail',
+        f'    guard="$RUNNER_TEMP/{file}"',
+        '    curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/'
+        f'$POLICY_SHA/.github/ci/network/{file}" -o "$guard"',
+        f'    expected={digest}',
+        '    test "$(shasum -a 256 "$guard" | cut -d\' \' -f1)" = "$expected"',
+    ]
     if platform == 'Linux':
-        lines += ['    sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install',
-                  '    /usr/bin/python3 "$guard" probe']
+        lines += [
+            '    sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install',
+            '    /usr/bin/python3 "$guard" probe',
+        ]
         if not native:
-            lines += ['    sudo /usr/bin/python3 "$guard" lock-down',
-                      '    if sudo -n true >/dev/null 2>&1 || docker info >/dev/null 2>&1; then exit 1; fi']
+            lines += [
+                '    sudo /usr/bin/python3 "$guard" lock-down',
+                '    if sudo -n true >/dev/null 2>&1 || docker info >/dev/null 2>&1; then exit 1; fi',
+            ]
     else:
         lines += ['    /usr/bin/python3 "$guard" install']
     return '\n'.join(lines)
@@ -37,7 +51,9 @@ def bootstrap(file, native, platform):
 def guard(job, definitions):
     if job.get('platform') == 'macos':
         guard_step = bootstrap('darwin_guard.py', False, 'macOS')
-        endpoints = ' '.join(dict.fromkeys(host for name in job['purposes'] for host in POLICY['purposes'][name]))
+        endpoints = ' '.join(
+            dict.fromkeys(host for name in job['purposes'] for host in POLICY['purposes'][name])
+        )
         return guard_step.replace('  run: |', '    PUBLIC_ENDPOINTS: ' + endpoints + '\n  run: |')
     purposes = job['purposes']
     hosts = set()
@@ -51,15 +67,23 @@ def guard(job, definitions):
         if group:
             groups.append(' '.join(group))
     key = tuple(groups)
-    prefix = f'network_{len(definitions[0])+1}'
+    prefix = f'network_{len(definitions[0]) + 1}'
     if key in definitions[0]:
         first = '- *' + definitions[0][key]
     else:
         definitions[0][key] = prefix
-        first = '\n'.join([f'- &{prefix}', '  name: Restrict runner and container egress',
-            f"  uses: step-security/harden-runner@{POLICY['action']} # {POLICY['version']}", '  with:',
-            '    egress-policy: block', '    disable-telemetry: true', '    allowed-endpoints: >-',
-            *['      ' + group for group in groups]])
+        first = '\n'.join(
+            [
+                f'- &{prefix}',
+                '  name: Restrict runner and container egress',
+                f"  uses: step-security/harden-runner@{POLICY['action']} # {POLICY['version']}",
+                '  with:',
+                '    egress-policy: block',
+                '    disable-telemetry: true',
+                '    allowed-endpoints: >-',
+                *['      ' + group for group in groups],
+            ]
+        )
     native = job['nativePrivileges']
     kind = 'native' if native else 'unprivileged'
     if kind in definitions[1]:
@@ -71,10 +95,17 @@ def guard(job, definitions):
     parts = [first, second]
     if 'unreviewedForkSandbox' in job:
         works = job['unreviewedForkSandbox']
-        parts += ['- name: Require isolated execution for external fork code',
-                  f"  if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && !({works})",
-                  '  shell: bash', '  working-directory: ${{ runner.temp }}', '  run: |',
-                  '    echo "::error::This external fork test requires an isolated worker. A maintainer can review the exact commit and run it from a trusted repository ref."', '    exit 1']
+        parts += [
+            '- name: Require isolated execution for external fork code',
+            "  if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name "
+            f"!= github.repository && !({works})",
+            '  shell: bash',
+            '  working-directory: ${{ runner.temp }}',
+            '  run: |',
+            '    echo "::error::This external fork test requires an isolated worker. A maintainer can review '
+            'the exact commit and run it from a trusted repository ref."',
+            '    exit 1',
+        ]
     return '\n'.join(parts)
 
 
@@ -84,22 +115,27 @@ def render(file, inventory):
     if not separator:
         raise ValueError(f'{file.name}: expected a jobs mapping')
     headers = list(JOB.finditer(body))
-    pieces = [pre, separator, body[:headers[0].start()]]
+    pieces = [pre, separator, body[: headers[0].start()]]
     definitions = ({}, set())
     for i, hdr in enumerate(headers):
         key = file.name + '/' + hdr[1]
         job = POLICY['jobs'][key]
         inventory.add(key)
-        chunk = body[hdr.start():headers[i+1].start() if i+1 < len(headers) else len(body)]
+        end = headers[i + 1].start() if i + 1 < len(headers) else len(body)
+        chunk = body[hdr.start():end]
         if 'delegates' in job:
             if not re.search(r'^    uses: ' + re.escape(job['delegates']) + r'\s*$', chunk, re.M):
                 raise ValueError(f'{key}: delegated workflow reference changed')
             pieces.append(chunk)
             continue
         runner = re.search(r'^    runs-on: (.+)$', chunk, re.M)
-        labels = re.findall(r'ubuntu-(?:latest|[0-9.]+)|macos-(?:latest|[0-9.]+)', runner[1]) if runner else []
+        labels = (
+            re.findall(r'ubuntu-(?:latest|[0-9.]+)|macos-(?:latest|[0-9.]+)', runner[1]) if runner else []
+        )
         platform = job.get('platform', 'linux')
-        if not labels or any(('macos' if label.startswith('macos-') else 'linux') != platform for label in labels):
+        if not labels or any(
+            ('macos' if label.startswith('macos-') else 'linux') != platform for label in labels
+        ):
             raise ValueError(f'{key}: unsupported hosted runner platform')
         if re.search(r'^    (?:container|services):', chunk, re.M):
             raise ValueError(f'{key}: job containers start before runner policy')
@@ -116,7 +152,11 @@ def render(file, inventory):
             rest = rest[pos.end():]
         # Migrate the initial fully expanded policy on branches that first installed the guard.
         elif rest.startswith(space + '- name: Restrict runner and container egress'):
-            pos = re.search('^' + re.escape(space) + r'- name: Verify outbound blocking before checkout\n[\s\S]+?^\s+PY\n', rest, re.M)
+            pos = re.search(
+                '^' + re.escape(space) + r'- name: Verify outbound blocking before checkout\n[\s\S]+?^\s+PY\n',
+                rest,
+                re.M,
+            )
             if not pos:
                 raise ValueError(f'{key}: unsupported legacy guard')
             rest = rest[pos.end():]
@@ -145,7 +185,9 @@ def main():
             else:
                 drift.append(file.name)
     if not args.only and set(POLICY['jobs']) != inventory:
-        raise ValueError('Inventory contains obsolete workflow jobs: ' + ', '.join(set(POLICY['jobs']) - inventory))
+        raise ValueError(
+            'Inventory contains obsolete workflow jobs: ' + ', '.join(set(POLICY['jobs']) - inventory)
+        )
     if drift:
         raise SystemExit('Workflow policy drift: ' + ', '.join(drift) + '. Run render.py --write')
     print(f'{len(inventory)} jobs match the network policy')

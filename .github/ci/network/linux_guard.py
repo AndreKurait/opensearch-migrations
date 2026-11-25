@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Bind the Community agent's permitted IP/port pairs to every hosted network interface."""
+
 import argparse
 import ipaddress
 import os
@@ -43,7 +44,10 @@ def reconcile(pairs, ipv6=False):
     if subprocess.run(cmd + ['-S', CHAIN], capture_output=True).returncode:
         run(cmd + ['-N', CHAIN])
     records = ['*filter', f'-F {CHAIN}']
-    allow = lambda body: records.append(f'-A {CHAIN} {body} -j ACCEPT')
+
+    def allow(body):
+        records.append(f'-A {CHAIN} {body} -j ACCEPT')
+
     # Only in-VM networks are reachable unrestricted. Private addresses on the cloud NIC stay blocked.
     for interface in ('lo', 'docker0', 'br+', 'cni+', 'veth+'):
         allow(f'-o {interface}')
@@ -61,7 +65,20 @@ def reconcile(pairs, ipv6=False):
             run(cmd + ['-I', hook, '1', *jump])
     if not ipv6:
         for address in DNS:
-            rule = ['-m', 'owner', '--uid-owner', '0', '-d', address, '-p', 'tcp', '--dport', '443', '-j', 'ACCEPT']
+            rule = [
+                '-m',
+                'owner',
+                '--uid-owner',
+                '0',
+                '-d',
+                address,
+                '-p',
+                'tcp',
+                '--dport',
+                '443',
+                '-j',
+                'ACCEPT',
+            ]
             if subprocess.run(cmd + ['-C', 'OUTPUT', *rule], capture_output=True).returncode:
                 run(cmd + ['-I', 'OUTPUT', '1', *rule])
 
@@ -93,15 +110,26 @@ def install():
     os.chmod(script, 0o555)
     reconcile(vendor_pairs())
     reconcile([], ipv6=True)
-    run(['systemd-run', '--unit=migrations-egress-sync', '--property=Restart=on-failure',
-         '/usr/bin/python3', str(script), 'sync'])
+    run(
+        [
+            'systemd-run',
+            '--unit=migrations-egress-sync',
+            '--property=Restart=on-failure',
+            '/usr/bin/python3',
+            str(script),
+            'sync',
+        ]
+    )
     run(['systemctl', 'is-active', '--quiet', 'migrations-egress-sync.service'])
 
 
 def probe():
     if os.geteuid() == 0:
         raise RuntimeError('Network probe must run as the worker user')
-    for family, target in [(socket.AF_INET, ('1.1.1.1', 443)), (socket.AF_INET6, ('2606:4700:4700::1111', 443, 0, 0))]:
+    for family, target in [
+        (socket.AF_INET, ('1.1.1.1', 443)),
+        (socket.AF_INET6, ('2606:4700:4700::1111', 443, 0, 0)),
+    ]:
         try:
             with socket.socket(family) as sock:
                 sock.settimeout(2)
@@ -117,6 +145,7 @@ def probe():
 
 def lock_down():
     import pwd
+
     name = os.environ['SUDO_USER']
     if name != 'runner' or pwd.getpwnam(name).pw_uid == 0:
         raise RuntimeError('Unexpected GitHub-hosted runner account')
@@ -127,7 +156,9 @@ def lock_down():
     fragment = Path('/etc/sudoers.d/zz-migrations-job')
     fragment.write_text('runner ALL=(ALL:ALL) !ALL\n')
     os.chmod(fragment, 0o440)
-    run(['visudo', '-c'], stdout=subprocess.DEVNULL)
+    # Hosted images may ship unrelated fragments with permissive file modes. Validate our fragment,
+    # then the caller checks the effective privileges as the runner account.
+    run(['visudo', '-c', '-f', str(fragment)], stdout=subprocess.DEVNULL)
 
 
 if __name__ == '__main__':

@@ -40,6 +40,7 @@
       "cdn03.quay.io:443",
       "cdn04.quay.io:443",
       "public.ecr.aws:443",
+      "d2glxqk2uabbnd.cloudfront.net:443",
       "registry.k8s.io:443",
       "us-west1-docker.pkg.dev:443",
       "us-central1-docker.pkg.dev:443",

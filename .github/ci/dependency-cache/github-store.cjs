@@ -268,6 +268,7 @@ function createStore(toolkit, options = {}) {
     const entries = new Map(index.entries.map(e => [e.key, e]));
     const { blobs, locations } = layout(index.entries);
     const blobMap = new Map(blobs.map(blob => [blob.id, blob]));
+    const metrics = { archiveTransfers: 0, archivePayloadBytes: 0 };
     const pending = new Map();
     const limit = limiter(4);
     let closed = false;
@@ -280,6 +281,8 @@ function createStore(toolkit, options = {}) {
         if (await store.restore(member, key, [], false, {destination:file, maxBytes:blob.size}) !== key) throw missingCache(`Dependency cache entry ${blob.id} was evicted or inaccessible; re-run the trusted cache publisher`);
         const stat = await fs.lstat(file);
         if (!stat.isFile() || stat.size !== blob.size) throw new Error(`Invalid dependency cache blob length for ${blob.id}`);
+        metrics.archiveTransfers++;
+        metrics.archivePayloadBytes += stat.size;
         for (const entry of blob.members) {
           const out = path.join(temp, entry.digest);
           if (blob.members.length === 1) {
@@ -303,6 +306,7 @@ function createStore(toolkit, options = {}) {
     }
     return {
       generation: index.generation,
+      metrics,
       entries: [...entries.values()].map(entry => ({...entry})),
       async resolve(key) {
         if (closed) throw new Error('Dependency cache reader is closed');

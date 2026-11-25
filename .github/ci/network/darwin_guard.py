@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Install the hosted macOS PF policy and run a Gradle candidate with a separate Seatbelt profile."""
+
 import ipaddress
 import json
 import http.server
+from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
 import re
@@ -18,8 +20,20 @@ import urllib.request
 
 PF = '/sbin/pfctl'
 ANCHOR = 'com.apple/migrations-egress'
-OS_READ = ['/bin', '/usr/bin', '/usr/lib', '/usr/share', '/usr/libexec', '/sbin', '/System',
-           '/Library/Apple', '/Library/Developer', '/private/etc', '/dev', '/opt/homebrew']
+OS_READ = [
+    '/bin',
+    '/usr/bin',
+    '/usr/lib',
+    '/usr/share',
+    '/usr/libexec',
+    '/sbin',
+    '/System',
+    '/Library/Apple',
+    '/Library/Developer',
+    '/private/etc',
+    '/dev',
+    '/opt/homebrew',
+]
 
 
 def command(args, **kwargs):
@@ -28,8 +42,11 @@ def command(args, **kwargs):
 
 def addresses(host):
     try:
-        return {str(ipaddress.ip_address(row[4][0])) for row in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
-                if ipaddress.ip_address(row[4][0]).is_global}
+        return {
+            str(ipaddress.ip_address(row[4][0]))
+            for row in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+            if ipaddress.ip_address(row[4][0]).is_global
+        }
     except socket.gaierror:
         return set()
 
@@ -40,18 +57,29 @@ def configured_hosts():
         if not re.fullmatch(r'(?:[a-z0-9-]+\.)+[a-z0-9-]+:(?:80|443)', endpoint):
             raise ValueError(f'Unexpected endpoint {endpoint}')
     # Concrete cache/storage hosts in GitHub's platform inventory and job environment.
-    with urllib.request.urlopen('https://api.github.com/meta', context=ssl.create_default_context(), timeout=10) as result:
+    with urllib.request.urlopen(
+        'https://api.github.com/meta', context=ssl.create_default_context(), timeout=10
+    ) as result:
         platform = json.load(result)['domains']['actions']
     for host in platform:
         if re.fullmatch(r'[a-z0-9.-]+', host):
             hosts.add(host + ':443')
-    for name in ['ACTIONS_CACHE_URL', 'ACTIONS_RESULTS_URL', 'ACTIONS_RUNTIME_URL', 'ACTIONS_ID_TOKEN_REQUEST_URL']:
+    for name in [
+        'ACTIONS_CACHE_URL',
+        'ACTIONS_RESULTS_URL',
+        'ACTIONS_RUNTIME_URL',
+        'ACTIONS_ID_TOKEN_REQUEST_URL',
+    ]:
         url = urllib.parse.urlsplit(os.environ.get(name, ''))
         host = url.hostname or ''
         if url.scheme == 'https' and host.endswith(('.actions.githubusercontent.com', '.githubapp.com')):
             hosts.add(host + ':443')
-    for host in ['codeload.github.com', 'results-receiver.actions.githubusercontent.com', 'actions-results-receiver-production.githubapp.com',
-                 'pipelines.actions.githubusercontent.com']:
+    for host in [
+        'codeload.github.com',
+        'results-receiver.actions.githubusercontent.com',
+        'actions-results-receiver-production.githubapp.com',
+        'pipelines.actions.githubusercontent.com',
+    ]:
         hosts.add(host + ':443')
     return hosts
 
@@ -77,14 +105,20 @@ def install():
         raise RuntimeError('The system PF configuration does not invoke com.apple child anchors')
     endpoints = configured_hosts()
     tables = {80: set(), 443: set()}
-    for endpoint in sorted(endpoints):
-        host, port = endpoint.rsplit(':', 1)
-        tables[int(port)].update(addresses(host))
+    targets = [endpoint.rsplit(':', 1) for endpoint in sorted(endpoints)]
+    with ThreadPoolExecutor(max_workers=8) as lookups:
+        for (_, port), resolved in zip(targets, lookups.map(addresses, (host for host, _ in targets))):
+            tables[int(port)].update(resolved)
     dns = command(['/usr/sbin/scutil', '--dns'], capture_output=True).stdout
-    resolvers = {str(ipaddress.ip_address(value.split('%')[0])) for value in re.findall(r'nameserver\[\d+\]\s*:\s*(\S+)', dns)}
-    policy = ['pass out quick on lo0 all']
+    resolvers = {
+        str(ipaddress.ip_address(value.split('%')[0]))
+        for value in re.findall(r'nameserver\[\d+\]\s*:\s*(\S+)', dns)
+    }
+    policy = ['pass quick on lo0 all']
     if resolvers:
-        policy.append('pass out quick proto { udp tcp } to { ' + ', '.join(sorted(resolvers)) + ' } port 53 keep state')
+        policy.append(
+            'pass out quick proto { udp tcp } to { ' + ', '.join(sorted(resolvers)) + ' } port 53 keep state'
+        )
     for port, allowed in tables.items():
         if not allowed:
             continue
@@ -100,61 +134,96 @@ def install():
 
 
 def seatbelt(temp, java, port):
-    quote = lambda p: json.dumps(str(p))
+    def quote(value):
+        return json.dumps(str(value))
+
     read = [f'(subpath {quote(path)})' for path in OS_READ + [str(java), str(temp)]]
-    # No write access to the trusted checkout, runner directories, credential files, Docker socket or sudo configuration.
-    return '\n'.join(['(version 1)', '(deny default)', '(allow process-fork process-exec sysctl-read mach-lookup)',
-                       '(allow file-read* ' + ' '.join(read) + ')', '(allow file-read-metadata)',
-                       f'(allow file-write* (subpath {quote(temp)}) (literal "/dev/null") (literal "/dev/tty"))',
-                       '(deny network*)', f'(allow network-outbound (remote ip "localhost:{port}"))',
-                       '(allow signal (target self))', '(deny process-exec (literal "/usr/bin/sudo") (literal "/usr/bin/su"))'])
+    # Only the fresh working directory and two device files are writable.
+    return '\n'.join(
+        [
+            '(version 1)',
+            '(deny default)',
+            '(allow process-fork process-exec sysctl-read mach-lookup)',
+            '(allow file-read* ' + ' '.join(read) + ')',
+            '(allow file-read-metadata)',
+            f'(allow file-write* (subpath {quote(temp)}) (literal "/dev/null") (literal "/dev/tty"))',
+            '(deny network*)',
+            f'(allow network-outbound (remote ip "localhost:{port}"))',
+            '(allow signal (target self))',
+            '(deny process-exec (literal "/usr/bin/sudo") (literal "/usr/bin/su"))',
+        ]
+    )
 
 
 def build():
     if sys.platform != 'darwin' or not shutil.which('sandbox-exec'):
         raise RuntimeError('Hosted macOS Seatbelt is required')
     proxy = urllib.parse.urlsplit(os.environ['CI_DEPENDENCY_PROXY_URL'])
-    if proxy.scheme != 'http' or proxy.hostname != '127.0.0.1' or not proxy.port or proxy.path not in ('','/'):
+    if not (proxy.scheme == 'http' and proxy.hostname == '127.0.0.1' and proxy.port and proxy.path in ('', '/')):
         raise RuntimeError('Expected one loopback dependency broker')
     source = Path(os.environ['CI_DEPENDENCY_TEST_SOURCE']).resolve(strict=True)
     java = Path(os.environ['JAVA_HOME']).resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix='migrations-seatbelt-', dir='/private/tmp') as directory:
         temp = Path(directory).resolve()
-        work = temp / 'candidate'; work.mkdir()
+        work = temp / 'candidate'
+        work.mkdir()
         archive = temp / 'source.tar'
         command(['/usr/bin/git', '-C', str(source), 'archive', '-o', str(archive), 'HEAD'])
         command(['/usr/bin/tar', '-xf', str(archive), '-C', str(work)])
         archive.unlink()
-        home = temp / 'home'; home.mkdir(); tmp = temp / 'tmp'; tmp.mkdir()
-        wrapper = temp / 'wrapper'; wrapper.mkdir()
-        for suffix in ['.jar','.properties']:
+        home = temp / 'home'
+        home.mkdir()
+        tmp = temp / 'tmp'
+        tmp.mkdir()
+        wrapper = temp / 'wrapper'
+        wrapper.mkdir()
+        for suffix in ['.jar', '.properties']:
             file = Path(os.environ['CI_DEPENDENCY_GRADLE_WRAPPER_JAR']).with_suffix(suffix)
             shutil.copy(file, wrapper / file.name)
-        profile = temp / 'candidate.sb'; profile.write_text(seatbelt(temp, java, proxy.port))
+        profile = temp / 'candidate.sb'
+        profile.write_text(seatbelt(temp, java, proxy.port))
         prefix = ['/usr/bin/sandbox-exec', '-f', str(profile)]
-        env = {'PATH': f'{java}/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': str(home), 'TMPDIR': str(tmp),
-               'JAVA_HOME': str(java), 'CI': 'true', 'GRADLE_USER_HOME': str(home / 'gradle'),
-               'MAVEN_REPOSITORY_URL': f'{proxy.geturl().rstrip("/")}/maven/', 'CI_DEPENDENCY_PROXY_URL': proxy.geturl(),
-               'CI_DEPENDENCY_GRADLE_WRAPPER_JAR': str(wrapper / 'gradle-wrapper.jar'),
-               'OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED': ''}
+        env = {
+            'PATH': f'{java}/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+            'HOME': str(home),
+            'TMPDIR': str(tmp),
+            'JAVA_HOME': str(java),
+            'CI': 'true',
+            'GRADLE_USER_HOME': str(home / 'gradle'),
+            'MAVEN_REPOSITORY_URL': f'{proxy.geturl().rstrip("/")}/maven/',
+            'CI_DEPENDENCY_PROXY_URL': proxy.geturl(),
+            'CI_DEPENDENCY_GRADLE_WRAPPER_JAR': str(wrapper / 'gradle-wrapper.jar'),
+            'OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED': '',
+        }
         if 'CI_GRADLE_BUILD_CACHE_URL' in os.environ:
             env['CI_GRADLE_BUILD_CACHE_URL'] = f'{proxy.geturl().rstrip("/")}/gradle-build-cache/'
             env['CI_GRADLE_BUILD_CACHE_PUSH'] = 'false'
         command(prefix + ['/usr/bin/nc', '-z', '-w', '3', '127.0.0.1', str(proxy.port)], env=env, cwd=work)
         for target in ('1.1.1.1', '2606:4700:4700::1111'):
-            if subprocess.run(prefix + ['/usr/bin/nc', '-z', '-w', '2', target,'443'], env=env, cwd=work).returncode == 0:
+            result = subprocess.run(prefix + ['/usr/bin/nc', '-z', '-w', '2', target, '443'], env=env, cwd=work)
+            if result.returncode == 0:
                 raise RuntimeError('Seatbelt allowed direct external traffic')
         # Match Gradle's client/daemon JVM arguments so --no-daemon can execute entirely inside one JVM.
-        command(prefix + [str(work / 'gradlew'), '--no-daemon', '-Dorg.gradle.jvmargs=', 'build'], env=env, cwd=work)
+        command(
+            prefix + [str(work / 'gradlew'), '--no-daemon', '-Dorg.gradle.jvmargs=', 'build'],
+            env=env,
+            cwd=work,
+        )
 
 
 def fixture():
     if sys.platform != 'darwin':
         raise RuntimeError('Run this proof on macOS')
+
     class Marker(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
-            self.send_response(200); self.end_headers(); self.wfile.write(b'local broker')
-    with http.server.HTTPServer(('127.0.0.1', 0), Marker) as server, tempfile.TemporaryDirectory(dir='/private/tmp') as staged, tempfile.NamedTemporaryFile(dir='/private/tmp') as private:
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'local broker')
+
+    with http.server.HTTPServer(('127.0.0.1', 0), Marker) as server, tempfile.TemporaryDirectory(
+        dir='/private/tmp'
+    ) as staged, tempfile.NamedTemporaryFile(dir='/private/tmp') as private:
         port = server.server_address[1]
         threading.Thread(target=server.serve_forever, daemon=True).start()
         temporary = Path(staged).resolve()
@@ -162,18 +231,29 @@ def fixture():
         profile.write_text(seatbelt(temporary, Path('/Library/Java'), port))
         prefix = ['/usr/bin/sandbox-exec', '-f', str(profile)]
         env = {'HOME': str(temporary), 'PATH': '/usr/bin:/bin', 'TMPDIR': str(temporary)}
+
         def execute(argv):
-            return subprocess.run(prefix + argv, env=env, cwd=temporary, capture_output=True, text=True, timeout=15)
-        response = execute(['/usr/bin/curl', '-fsS', '--max-time','5', f'http://127.0.0.1:{port}/fixture'])
+            return subprocess.run(
+                prefix + argv, env=env, cwd=temporary, capture_output=True, text=True, timeout=15
+            )
+
+        response = execute(['/usr/bin/curl', '-fsS', '--max-time', '5', f'http://127.0.0.1:{port}/fixture'])
         if response.returncode or response.stdout != 'local broker':
             raise RuntimeError('Candidate cannot reach its assigned broker')
         github = next(iter(addresses('api.github.com')))
-        for argv in [['/usr/bin/nc','-z','-w','2',github,'443'], ['/bin/cat',private.name], ['/usr/bin/sudo','-n','true']]:
+        for argv in [
+            ['/usr/bin/nc', '-z', '-w', '2', github, '443'],
+            ['/bin/cat', private.name],
+            ['/usr/bin/sudo', '-n', 'true'],
+        ]:
             if execute(argv).returncode == 0:
                 raise RuntimeError(f'Candidate isolation did not deny {argv[0]}')
-        if execute(['/usr/bin/touch',str(temporary / 'built')]).returncode:
+        if execute(['/usr/bin/touch', str(temporary / 'built')]).returncode:
             raise RuntimeError('Candidate cannot write a build output')
-        print('Hosted PF and Seatbelt passed. Worker can use its broker, create build output, and cannot reach allowed host egress, read host files, or use sudo.')
+        print(
+            'Hosted PF and Seatbelt passed. The worker reached its broker and created output. '
+            'Seatbelt denied the host control plane, private files, and sudo.'
+        )
 
 
 if __name__ == '__main__':

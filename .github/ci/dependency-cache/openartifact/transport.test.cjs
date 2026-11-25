@@ -7,7 +7,25 @@ const os = require('node:os');
 const path = require('node:path');
 const { readModel, nativePath } = require('./transport.cjs');
 const { validateRows } = require('./stack.cjs');
-const { openColdStore } = require('./cold.cjs');
+const { openColdStore, openReadStore } = require('./cold.cjs');
+
+test('empty or evicted caches use bounded public fallback only for genuine misses', async () => {
+  const miss = async () => { throw Object.assign(new Error('evicted'), {code: 'CACHE_MISS'}); };
+  const key = '/maven/release.jar';
+  const artifact = {digest: 'a'.repeat(64), size: 15};
+  const cold = {resolve: async () => artifact};
+  const options = {cold, reportMiss() {}, openReader: miss};
+  const empty = await openReadStore(options);
+  assert.deepEqual(empty.entries, []);
+  assert.deepEqual(await empty.resolve(key), artifact);
+  await assert.rejects(openReadStore({...options, cold: null}), {code: 'CACHE_MISS'});
+  await assert.rejects(openReadStore({...options, openReader: async () => { throw new Error('bad index'); }}), /bad index/);
+  const prior = {entries: [{key, ...artifact}], resolve: miss};
+  const evicted = await openReadStore({...options, openReader: async () => prior});
+  assert.deepEqual(await evicted.resolve(key), artifact);
+  cold.resolve = async () => ({...artifact, digest: 'b'.repeat(64)});
+  await assert.rejects(evicted.resolve(key), /no longer matches/);
+});
 
 test('derive OpenArtifact cache metadata directly from published main paths, including Gradle fallback misses', () => {
   const sample = {
