@@ -141,7 +141,7 @@ Resources:
                 Resource: [!GetAtt Project.Arn, !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:build/migrations-github-eks:*']
               - {Effect: Allow, Action: ['codebuild:ListBuildsForProject', 'codebuild:BatchGetProjects'], Resource: !GetAtt Project.Arn}
               - Effect: Allow
-                Action: ['servicequotas:GetServiceQuota', 'ec2:DescribeVpcs', 'ec2:DescribeNetworkInterfaces', 'ec2:DescribeAddresses', 'ec2:DescribeInternetGateways', 'ec2:DescribeEgressOnlyInternetGateways', 'ec2:DescribeNatGateways', 'ec2:DescribeSubnets', 'ec2:DescribeInstances', 'ec2:DescribeInstanceTypes']
+                Action: ['servicequotas:GetServiceQuota', 'ec2:DescribeVpcs', 'ec2:DescribeNetworkInterfaces', 'ec2:DescribeAddresses', 'ec2:DescribeInternetGateways', 'ec2:DescribeEgressOnlyInternetGateways', 'ec2:DescribeNatGateways', 'ec2:DescribeSubnets', 'ec2:DescribeInstances', 'ec2:DescribeInstanceTypes', 'ec2:DescribeCapacityReservations']
                 Resource: '*'
                 Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
               - {Effect: Allow, Action: 'logs:GetLogEvents', Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/migrations-github-eks:log-stream:*'}

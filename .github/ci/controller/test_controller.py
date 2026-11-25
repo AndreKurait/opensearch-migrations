@@ -210,15 +210,10 @@ class CapacityTests(unittest.TestCase):
         for key in ('vpcs', 'eips', 'builds', 'enis', 'vcpus'):
             self.assertEqual({}, capacity.lanes(dict(room, **{key: 0})))
 
-    def test_compute_in_a_stopped_build_vpc_is_still_counted_until_it_terminates(self):
-        stage = 'ci-' + 'a' * 12
-        vpc = {'VpcId': 'vpc-1', 'Tags': [
-            {'Key': 'MigrationCI', 'Value': 'github'}, {'Key': 'MATestStage', 'Value': stage},
-        ]}
-        items = [{'VpcId': 'vpc-1', 'InstanceType': 'm6g.2xlarge', 'State': {'Name': state}}
-                 for state in ('pending', 'running', 'terminated')]
-        rows = {
-            'describe-vpcs': {'Vpcs': [vpc]}, 'describe-instances': {'Reservations': [{'Instances': items}]},
+    def usage_rows(self):
+        return {
+            'describe-vpcs': {'Vpcs': []}, 'describe-instances': {'Reservations': []},
+            'describe-capacity-reservations': {'CapacityReservations': []},
             'describe-instance-types': {'InstanceTypes': [{'InstanceType': 'm6g.2xlarge',
                                                            'VCpuInfo': {'DefaultVCpus': 8}}]},
             'describe-internet-gateways': {'InternetGateways': []},
@@ -226,9 +221,61 @@ class CapacityTests(unittest.TestCase):
             'describe-addresses': {'Addresses': []}, 'describe-network-interfaces': {'NetworkInterfaces': []},
             'describe-nat-gateways': {'NatGateways': []}, 'describe-subnets': {'Subnets': []},
         }
+
+    def test_compute_in_a_stopped_build_vpc_is_still_counted_until_it_terminates(self):
+        stage = 'ci-' + 'a' * 12
+        rows = self.usage_rows()
+        rows['describe-vpcs']['Vpcs'].append({'VpcId': 'vpc-1', 'Tags': [
+            {'Key': 'MigrationCI', 'Value': 'github'}, {'Key': 'MATestStage', 'Value': stage}]})
+        items = [{'VpcId': 'vpc-1', 'InstanceType': 'm6g.2xlarge', 'State': {'Name': state}}
+                 for state in ('pending', 'running', 'terminated')]
+        rows['describe-instances']['Reservations'] = [{'Instances': items}]
         with patch.object(capacity, 'active_builds', return_value=[]):
-            used = capacity.usage(lambda service, operation, *args: rows[operation])
+            used = capacity.usage(lambda service, operation, *args: rows[operation], '1' * 12)
         self.assertEqual(16, used['vcpus'])
+
+    def test_owned_reserved_capacity_includes_shared_unused_and_future_slots(self):
+        rows = self.usage_rows()
+        account = '1' * 12
+        reservation = dict(InstanceType='m6g.2xlarge', OwnerId=account, AvailableInstanceCount=0)
+        states = ['assessing', 'scheduled', 'pending', 'active', 'delayed', 'expired', 'cancelled', 'failed']
+        reservations = [dict(reservation, State=state, CapacityReservationId=state, TotalInstanceCount=2)
+                        for state in states]
+        reservations.append(dict(reservation, State='active', OwnerId='2' * 12,
+                                 CapacityReservationId='shared-in', TotalInstanceCount=5))
+        rows['describe-capacity-reservations']['CapacityReservations'] = reservations
+        instance = dict(InstanceType='m6g.2xlarge', State={'Name': 'running'})
+        rows['describe-instances']['Reservations'] = [{'Instances': [
+            dict(instance, CapacityReservationId='active'), dict(instance, CapacityReservationId='shared-in'),
+            dict(instance, CapacityReservationId='absent'), dict(instance, InstanceLifecycle='spot')]}]
+
+        def call(service, operation, *args):
+            return rows[operation]
+
+        with patch.object(capacity, 'active_builds', return_value=[]):
+            self.assertEqual(88, capacity.usage(call, account)['vcpus'])
+            active = next(r for r in reservations if r['State'] == 'active')
+            active['AvailableInstanceCount'] = 2  # A concurrent termination made the instance scan stale.
+            self.assertEqual(96, capacity.usage(call, account)['vcpus'])
+            rows['describe-instance-types']['InstanceTypes'] = []
+            with self.assertRaisesRegex(ValueError, 'incomplete vCPU'):
+                capacity.usage(call, account)
+
+    def test_separate_quota_families_and_nat_deletion_during_discovery(self):
+        for name in ('m8g.2xlarge', 'c7gn.xlarge', 'im4gn.large', 'h1.2xlarge', 'i7ie.large', 'd3en.xlarge'):
+            self.assertTrue(capacity.standard_type(name), name)
+        for name in ('inf2.xlarge', 'trn2.3xlarge', 'dl1.24xlarge', 'mac2.metal', 'hpc7g.4xlarge',
+                     'g6.xlarge', 'p6e-gb200.36xlarge', 'x2iezn.2xlarge', 'u-6tb1.56xlarge'):
+            self.assertFalse(capacity.standard_type(name), name)
+        rows = self.usage_rows()
+        rows['describe-instance-types']['InstanceTypes'] = []
+        rows['describe-subnets']['Subnets'] = [{'SubnetId': 'present', 'AvailabilityZone': 'us-west-2a'}]
+        rows['describe-nat-gateways']['NatGateways'] = [
+            {'SubnetId': subnet, 'VpcId': 'vpc-1', 'State': state}
+            for subnet, state in [('present', 'available'), ('gone', 'deleting'), ('another', 'deleted')]]
+        with patch.object(capacity, 'active_builds', return_value=[]):
+            used = capacity.usage(lambda service, operation, *args: rows[operation], '1' * 12)
+        self.assertEqual(2, used['nat_per_az'])
 
     def test_occupied_capacity_prevents_launch(self):
         room = dict.fromkeys(capacity.QUOTAS, 100)
@@ -237,4 +284,4 @@ class CapacityTests(unittest.TestCase):
         with patch.object(capacity, 'quotas', return_value=room.copy()), \
                 patch.object(capacity, 'usage', return_value=occupied), \
                 self.assertRaisesRegex(RuntimeError, 'occupied'):
-            capacity.admit('cfn-import', None, dict(room=room), wait_seconds=0)
+            capacity.admit('cfn-import', None, dict(account='1' * 12, room=room), wait_seconds=0)

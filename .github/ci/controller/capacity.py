@@ -83,13 +83,20 @@ def time_from_build(build):
     return datetime.fromisoformat(build['startTime']).timestamp()
 
 
-def usage(call, ignore_active=False):
+def standard_type(instance_type):
+    family = instance_type.split('.')[0]
+    return (family.startswith(('a', 'c', 'd', 'h', 'i', 'm', 'r', 't', 'z')) and
+            not family.startswith(('dl', 'hpc', 'inf', 'mac', 'trn')))
+
+
+def usage(call, account, ignore_active=False):
     queries = {'vpcs': ('describe-vpcs', 'Vpcs'), 'igws': ('describe-internet-gateways', 'InternetGateways'),
                'egws': ('describe-egress-only-internet-gateways', 'EgressOnlyInternetGateways'),
                'eips': ('describe-addresses', 'Addresses'),
                'enis': ('describe-network-interfaces', 'NetworkInterfaces'),
                'nats': ('describe-nat-gateways', 'NatGateways'), 'subnets': ('describe-subnets', 'Subnets'),
-               'instances': ('describe-instances', 'Reservations')}
+               'instances': ('describe-instances', 'Reservations'),
+               'reservations': ('describe-capacity-reservations', 'CapacityReservations')}
     tasks = {key: (lambda op=op, prop=prop: call('ec2', op)[prop]) for key, (op, prop) in queries.items()}
     rows = parallel(dict(tasks, builds=lambda: active_builds(call)))
     # Resources owned by running stages are covered by their full reservation until teardown finishes.
@@ -134,25 +141,48 @@ def usage(call, ignore_active=False):
     nat_eips = {}
     for nat in rows['nats']:
         if nat['State'] in ('pending', 'available', 'deleting'):
-            charge(nat, 'nat:' + zones[nat['SubnetId']])
-            nat_eips.update({a.get('AllocationId'): vpcs.get(nat['VpcId']) for a in nat['NatGatewayAddresses']})
+            # Subnet and NAT inventories can straddle a deletion. Count an unknown zone against the busiest one.
+            zone = zones.get(nat.get('SubnetId'))
+            charge(nat, 'nat:' + zone if zone else 'nat_unknown_zone')
+            nat_eips.update({a['AllocationId']: vpcs.get(nat['VpcId']) for a in nat.get('NatGatewayAddresses', [])
+                             if a.get('AllocationId')})
     for row in rows['eips']:
         charge(row, 'eips', parent=nat_eips.get(row.get('AllocationId')))
+    reservations = {r['CapacityReservationId']: r for r in rows['reservations']
+                    if r['State'] in ('assessing', 'scheduled', 'pending', 'active', 'delayed') and
+                    r.get('ReservationType') != 'capacity-block' and standard_type(r['InstanceType'])}
+    local_occupants = Counter()
     for res in rows['instances']:
         for i in res['Instances']:
-            family = i['InstanceType'].split('.')[0]
-            standard = family.startswith(('a', 'c', 'd', 'h', 'i', 'm', 'r', 't', 'z'))
-            if standard and i['State']['Name'] in ('running', 'pending') and i.get('InstanceLifecycle') != 'spot':
-                # Standard On-Demand quota uses default instance vCPUs, including when CPU options reduce visible cores.
-                charge(i, 'type:' + i['InstanceType'])
+            if (not standard_type(i['InstanceType']) or i['State']['Name'] not in ('running', 'pending') or
+                    i.get('InstanceLifecycle') in ('spot', 'capacity-block', 'scheduled') or
+                    i.get('Placement', {}).get('Tenancy') == 'host'):
+                continue
+            reservation = reservations.get(i.get('CapacityReservationId'))
+            if reservation and reservation['InstanceType'] == i['InstanceType']:
+                if reservation['OwnerId'] != account:
+                    continue  # The shared reservation's owner carries this quota usage.
+                if not ignore_active or not (direct(i) or vpcs.get(i.get('VpcId'))):
+                    local_occupants[i['CapacityReservationId']] += 1
+            # Count pending launches too so the next admission cannot spend the same vCPUs.
+            charge(i, 'type:' + i['InstanceType'])
+    for reservation_id, reservation in reservations.items():
+        if reservation['OwnerId'] == account:
+            # Includes unused slots and other accounts' instances, which DescribeInstances cannot see.
+            count = max(reservation.get('AvailableInstanceCount', 0), reservation['TotalInstanceCount'] -
+                        local_occupants[reservation_id])
+            other['type:' + reservation['InstanceType']] += count
     instance_types = sorted({k[5:] for c in [other, *by_stage.values()] for k in c if k.startswith('type:')})
     sizes = {}
     for start in range(0, len(instance_types), 100):
         page = call('ec2', 'describe-instance-types', '--instance-types', *instance_types[start:start + 100])
         sizes.update({i['InstanceType']: i['VCpuInfo']['DefaultVCpus'] for i in page['InstanceTypes']})
+    if sizes.keys() != set(instance_types):
+        raise ValueError('EC2 returned incomplete vCPU counts for the Oregon capacity inventory')
     for counter in [other, *by_stage.values()]:
         counter['vcpus'] = sum(counter['type:' + name] * size for name, size in sizes.items())
-        counter['nat_per_az'] = max((n for k, n in counter.items() if k.startswith('nat:')), default=0)
+        nat_peak = max((n for k, n in counter.items() if k.startswith('nat:')), default=0)
+        counter['nat_per_az'] = nat_peak + counter['nat_unknown_zone']
         counter['enis'] = max((n for k, n in counter.items() if k.startswith('eni:')), default=0)
     other['builds'] = 0 if ignore_active else len(rows['builds'])
     if not ignore_active:
@@ -202,7 +232,7 @@ def admit(suite, call, cfg, wait_seconds=4 * 3600):
     deadline = time.monotonic() + wait_seconds
     limits = quotas(call)
     while True:
-        used = usage(call)
+        used = usage(call, cfg['account'])
         short = [k for k, n in RESERVATIONS[suite].items() if n + used[k] > limits[k] or n > cfg['room'][k]]
         if not short:
             return
@@ -241,9 +271,9 @@ if __name__ == '__main__':
     parser.add_argument('--publish', action='store_true', help='Set AWS_CI_CONFIG on the main-only environment')
     opts = parser.parse_args()
     aws = client(opts.profile)
-    measured = parallel({'limits': lambda: quotas(aws), 'used': lambda: usage(aws, ignore_active=True)})
-    room = {k: max(0, measured['limits'][k] - measured['used'][k]) for k in QUOTAS}
     account = aws('sts', 'get-caller-identity')['Account']
+    measured = parallel({'limits': lambda: quotas(aws), 'used': lambda: usage(aws, account, ignore_active=True)})
+    room = {k: max(0, measured['limits'][k] - measured['used'][k]) for k in QUOTAS}
     cfg = dict(account=account, region=REGION, room=room)
     print('Oregon capacity after background usage:', json.dumps(room, sort_keys=True))
     print('Shared GitHub queues:', json.dumps(lanes(room), sort_keys=True))
