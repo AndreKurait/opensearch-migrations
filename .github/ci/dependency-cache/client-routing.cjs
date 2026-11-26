@@ -169,7 +169,12 @@ async function engineAdapter(socket, listener, endpoint, k3sRegistryFile, strict
         const headers = { ...req.headers };
         if (body) { delete headers['transfer-encoding']; headers['content-length'] = body.length; }
         const upstream = http.request({ socketPath: socket, method: req.method, path: targetPath, headers }, async response => {
-          try { res.writeHead(response.statusCode, response.headers); await pipeline(response, res); } catch { res.destroy(); }
+          try {
+            res.writeHead(response.statusCode, response.headers);
+            // Docker waits for the wait endpoint headers before it starts the container.
+            res.flushHeaders();
+            await pipeline(response, res);
+          } catch { res.destroy(); }
         });
         upstream.on('error', () => res.writeHead(502).end());
         if (body) upstream.end(body); else req.pipe(upstream);

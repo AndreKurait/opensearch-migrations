@@ -168,3 +168,30 @@ test('normal skopeo invocation uses its explicit registries.conf even when no en
     } finally { await c.close(); }
   } finally { process.env.PATH = orig; }
 });
+
+test('Docker wait returns headers before container startup produces its exit event', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'routing-engine-wait-'));
+  t.after(() => fs.rm(dir, {recursive:true,force:true}));
+  const socket = path.join(dir, 'engine.sock');
+  const listener = path.join(dir, 'routed.sock');
+  let release;
+  const daemon = http.createServer((req,res) => {
+    res.writeHead(200, {'content-type':'application/json'});
+    res.flushHeaders();
+    release = () => res.end('{"StatusCode":0}');
+  });
+  t.after(await serve(daemon, socket));
+  const adapter = await engineAdapter(socket, listener, '127.0.0.1:1');
+  t.after(adapter.close);
+  await new Promise((resolve,reject) => {
+    const req = http.request({socketPath:listener, method:'POST', path:'/v1.44/containers/example/wait'}, res => {
+      release();
+      let body = '';
+      res.on('data', chunk => {body += chunk;});
+      res.on('end', () => body === '{"StatusCode":0}' ? resolve() : reject(new Error('Missing exit status')));
+    });
+    req.setTimeout(2000, () => { release?.(); req.destroy(new Error('Docker wait headers were buffered')); });
+    req.on('error', reject);
+    req.end();
+  });
+});
