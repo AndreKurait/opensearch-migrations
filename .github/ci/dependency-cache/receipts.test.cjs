@@ -124,3 +124,28 @@ test('offline misses fail the request and leave a path-only receipt for protecte
   await recorder.close();
   assert.deepEqual(readReceipt(await readFile(receiptFile)), [{key, accessed}]);
 });
+
+test('a recorded OCI HEAD observes the digest without restoring the layer until its first GET', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'record-metadata-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const data = Buffer.from('layer');
+  const digest = createHash('sha256').update(data).digest('hex');
+  const key = `/v2/dockerhub/library/test/blobs/sha256:${digest}`;
+  const item = {digest, size: data.length, type: 'application/octet-stream'};
+  let restores = 0;
+  const recorder = await openLocalRecorder({receiptFile: path.join(dir, 'receipt'), lookup: async () => {
+    restores++;
+    const file = path.join(dir, 'layer');
+    await writeFile(file, data);
+    return {...item, path: file};
+  }});
+  const proxy = await startProxy({catalog: new Map([[key, item]]), observeMetadata: recorder.observeMetadata,
+    resolve: recorder.resolve});
+  t.after(proxy.close);
+  assert.equal((await fetch(proxy.url + key, {method: 'HEAD'})).status, 200);
+  assert.equal(restores, 0);
+  for (let i = 0; i < 2; i++) assert.deepEqual(Buffer.from(await (await fetch(proxy.url + key)).arrayBuffer()), data);
+  assert.equal(restores, 1);
+  const rows = await recorder.close();
+  assert.deepEqual(rows.map(({key, digest}) => ({key, digest})), [{key, digest}]);
+});
