@@ -56,6 +56,11 @@ def recovery_archive():
     paths.extend(repo / 'libraries/testAutomation' / name for name in ('Pipfile', 'Pipfile.lock'))
     paths.extend(sorted((repo / 'libraries/testAutomation/testAutomation').glob('*.py')))
     paths.append(repo / 'deployment/k8s/installK6Chart.sh')
+    paths.append(ROOT / 'native-oci.cjs')
+    cache = repo / '.github/ci/dependency-cache'
+    for directory in (cache, cache / 'openartifact'):
+        paths.extend(sorted(path for path in directory.glob('*.cjs') if not path.name.endswith('.test.cjs')))
+    paths.extend([cache / 'helm-charts.json', cache / 'openartifact/images.json'])
     output = io.BytesIO()
     with gzip.GzipFile(fileobj=output, mode='wb', mtime=0) as zipped, tarfile.open(fileobj=zipped, mode='w') as tar:
         for path in paths:

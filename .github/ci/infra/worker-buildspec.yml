@@ -18,12 +18,13 @@ phases:
         mkdir -p "$CODEBUILD_SRC_DIR/ci-results"
         [[ "$CI_STAGE" =~ ^ci-[a-z0-9]{1,12}$ ]]
         [[ "$CI_SUITE" =~ ^[a-z][a-z0-9-]{1,48}$ ]]
+        [[ "$CI_RECOVERY_SHA256" =~ ^[a-f0-9]{64}$ ]]
+        aws s3api get-object --bucket "$CI_RECOVERY_BUCKET" --key "recovery/$CI_RECOVERY_SHA256.tar.gz" /tmp/ci-control.tar.gz >/dev/null
+        echo "$CI_RECOVERY_SHA256  /tmp/ci-control.tar.gz" | sha256sum -c -
+        mkdir -p "$CODEBUILD_SRC_DIR/control"
+        tar -xzf /tmp/ci-control.tar.gz -C "$CODEBUILD_SRC_DIR/control"
         if [[ "${CI_MODE:-}" == cleanup ]]; then
-          [[ "$CI_RECOVERY_SHA256" =~ ^[a-f0-9]{64}$ ]]
-          aws s3api get-object --bucket "$CI_RECOVERY_BUCKET" --key "recovery/$CI_RECOVERY_SHA256.tar.gz" /tmp/ci-cleanup.tar.gz >/dev/null
-          echo "$CI_RECOVERY_SHA256  /tmp/ci-cleanup.tar.gz" | sha256sum -c -
-          mkdir -p "$CODEBUILD_SRC_DIR/harness"
-          tar -xzf /tmp/ci-cleanup.tar.gz -C "$CODEBUILD_SRC_DIR/harness"
+          ln -s "$CODEBUILD_SRC_DIR/control" "$CODEBUILD_SRC_DIR/harness"
         else
           [[ "$CI_GIT_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$CI_GIT_REF" =~ ^(refs/pull/[1-9][0-9]*/head|refs/heads/main)$ ]]
@@ -79,9 +80,9 @@ phases:
           2114c9dea2844dce6d0ee2d792a9aae846be8cf53d5b19dc2988b5a0e8fec26e "$tool_dir/helm.tgz"
         tar -xzf "$tool_dir/helm.tgz" -C "$tool_dir" linux-amd64/helm
         install -m 0755 "$tool_dir/linux-amd64/helm" /usr/local/bin/helm
-        if [[ -n "${CI_DEPENDENCY_PROXY_URL:-}" && -x "$harness/.github/ci/infra/native-oci.cjs" ]]; then
+        if [[ -n "${CI_DEPENDENCY_PROXY_URL:-}" && -x "$CODEBUILD_SRC_DIR/control/.github/ci/infra/native-oci.cjs" ]]; then
           mkdir "$tool_dir/record"
-          for tool in crane helm; do ln -s "$harness/.github/ci/infra/native-oci.cjs" "$tool_dir/record/$tool"; done
+          for tool in crane helm; do ln -s "$CODEBUILD_SRC_DIR/control/.github/ci/infra/native-oci.cjs" "$tool_dir/record/$tool"; done
           export PATH="$tool_dir/record:$PATH"
         fi
         command -v jq && docker buildx version && docker info >/dev/null
@@ -114,19 +115,13 @@ phases:
         set -euo pipefail
         cd "$CODEBUILD_SRC_DIR/harness"
         if [[ -n "${CI_RELEASE_VERSION:-}" ]]; then cd "$CODEBUILD_SRC_DIR/release"; fi
-        recorder="$CODEBUILD_SRC_DIR/harness/.github/ci/dependency-cache/cli.cjs"
-        if [[ "${CI_MODE:-}" != cleanup && -f "$recorder" ]]; then
+        recorder="$CODEBUILD_SRC_DIR/control/.github/ci/dependency-cache/cli.cjs"
+        if [[ "${CI_MODE:-}" != cleanup ]]; then
           export CI_DEPENDENCY_ORIGIN_REPORT="$CODEBUILD_SRC_DIR/ci-results/dependency-origin.jsonl"
           export CI_DEPENDENCY_CACHE_STATS="$CODEBUILD_SRC_DIR/ci-results/dependency-cache-stats.json"
           export CI_DEPENDENCY_RECEIPT="$CODEBUILD_SRC_DIR/ci-results/dependency-requests.json"
           export CI_CACHE_TRUSTED_DOCKER=1
-          if grep -q "args\[0\] === 'native-worker'" "$recorder"; then
-            node "$recorder" native-worker -- bash /tmp/migrations-native-suite.sh
-          elif [[ "$CI_GIT_REF" == refs/heads/main ]]; then
-            node "$recorder" record-worker -- bash /tmp/migrations-native-suite.sh
-          else
-            bash /tmp/migrations-native-suite.sh
-          fi
+          node "$recorder" native-worker -- bash /tmp/migrations-native-suite.sh
         else
           bash /tmp/migrations-native-suite.sh
         fi
