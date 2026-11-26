@@ -199,6 +199,11 @@ async function cloudWorker() {
             `docker://${proxy.host}/${image}`, `dir:${temp}`], {...process.env, ...env});
         } finally { await fs.rm(temp, {recursive: true, force: true}); }
       }
+      const npmCache = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestration-npm-cache-'));
+      try {
+        await run('npm', ['ci', '--prefix', path.resolve('orchestrationSpecs')],
+          {...process.env, ...env, npm_config_cache: npmCache});
+      } finally { await fs.rm(npmCache, {recursive: true, force: true}); }
       const pipenv = await fs.mkdtemp(path.join(os.tmpdir(), 'cluster-tools-pipenv-'));
       try {
         const bin = path.join(pipenv, 'bin');
