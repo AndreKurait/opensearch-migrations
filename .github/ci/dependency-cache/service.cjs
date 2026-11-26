@@ -10,6 +10,7 @@ const { openColdStore, openReadStore } = require('./openartifact/cold.cjs');
 
 async function service(mode, dir) {
   process.env.CI_DEPENDENCY_ORIGIN_REPORT = path.join(dir, 'origin-requests.jsonl');
+  await fs.writeFile(process.env.CI_DEPENDENCY_ORIGIN_REPORT, '', {flag: 'wx', mode: 0o600});
   let stop;
   const finished = new Promise((resolve) => {
     stop = resolve;
