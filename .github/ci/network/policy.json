@@ -232,6 +232,7 @@
         "kubernetes",
         "coverage",
         "ubuntu",
+        "es-build-packages",
         "dependency-services"
       ],
       "nativePrivileges": true,

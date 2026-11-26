@@ -34,6 +34,11 @@ const registries = {
   gcr: {host: 'mirror.gcr.io', cdn: ['storage.googleapis.com']},
   distroless: {host: 'gcr.io', realm: 'https://gcr.io/v2/token', service: 'gcr.io', repo: 'distroless/static', cdn: []},
 };
+const elasticReleases = {
+  '/raw/elastic/downloads/elasticsearch/elasticsearch-5.6.16.tar.gz': '6b035a59337d571ab70cea72cc55225c027ad142fbb07fd8984e54261657c77f',
+  '/raw/elastic/downloads/elasticsearch/elasticsearch-6.8.23.tar.gz': '424af91f838f9e5f13e0292f97cbd6333535450291a621d761bd479dfc2dff78',
+  '/raw/elastic/downloads/elasticsearch/elasticsearch-7.10.2-linux-x86_64.tar.gz': '3b7ae3b6f5f2248fa4441aa2cf653638c9022108f813e0081da13c378a35e11e',
+};
 const rawOrigins = {
   al2023: ['https://cdn.amazonlinux.com/al2023/', []],
   alpine: ['https://dl-cdn.alpinelinux.org/alpine/', []],
@@ -110,7 +115,7 @@ function parseKey(key) {
   }
   if (kind === 'raw' && Object.hasOwn(rawOrigins, originId) && parts.length >= 3) {
     const [origin, cdn] = rawOrigins[originId];
-    return {urls: [new URL('./' + parts.slice(2).join('/'), origin)], cdn};
+    return {urls: [new URL('./' + parts.slice(2).join('/'), origin)], cdn, digest: elasticReleases[key]};
   }
   if (kind !== 'v2' || !Object.hasOwn(registries, originId) || parts.length < 5) throw new Error('Unsupported artifact route');
   const operation = parts.at(-2);
@@ -430,4 +435,4 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, packa
   })};
 }
 
-module.exports = {startProxy, fetchPublic, validateKey};
+module.exports = {startProxy, fetchPublic, validateKey, pinnedElasticDigest: key => elasticReleases[key]};
