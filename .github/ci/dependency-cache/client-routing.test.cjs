@@ -91,11 +91,17 @@ test('a real Docker CLI talks solely to an isolated Unix-socket fixture and pres
   });
   t.after(await serve(fixture,daemon));
   const k3sFile = path.join(dir, 'k3s-registries.yaml');
-  const adapter = await engineAdapter(daemon, listener, '127.0.0.1:9876', k3sFile); t.after(adapter.close);
+  const adapter = await engineAdapter(daemon, listener, '127.0.0.1:9876', k3sFile, true); t.after(adapter.close);
   const env = {...process.env,DOCKER_HOST:`unix://${listener}`,DOCKER_API_VERSION:'1.44',DOCKER_CONFIG:dir};
   for (const img of ['ghcr.io/repo/image:test','public.ecr.aws/team/repo:cached']) {
     const p = await exec('docker',['pull',img],{env}); assert.match(p.stdout,/pulled/);
   }
+  const before = seen.length;
+  for (const query of ['fromImage=unconfigured.example/repo', 'fromSrc=https://unconfigured.example/image.tar']) {
+    const [status] = await get({socketPath:listener, method:'POST', path:`/v1.44/images/create?${query}`});
+    assert.equal(status, 403);
+  }
+  assert.equal(seen.length, before);
   const creates=seen.filter(([,u])=>u.pathname.endsWith('/images/create'));
   assert.deepEqual(creates.map(([,u])=>u.searchParams.get('fromImage')),['127.0.0.1:9876/ghcr/repo/image','127.0.0.1:9876/ecrpublic/team/repo']);
   const tags=seen.filter(([,u])=>u.pathname.endsWith('/tag'));

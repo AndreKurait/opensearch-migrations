@@ -117,12 +117,23 @@ function daemonCall(socket, method, requestPath, headers = {}) {
 // Many clients use the daemon's image-create endpoint (Docker CLI, Compose, Testcontainers).
 // This socket is for disposable native Docker jobs which already control their own daemon. Other
 // Engine APIs remain native, including streams upgraded for exec/buildx. It is not a sandbox.
-async function engineAdapter(socket, listener, endpoint, k3sRegistryFile) {
+async function engineAdapter(socket, listener, endpoint, k3sRegistryFile, strict = false) {
   const server = http.createServer(async (req, res) => {
     const requestURL = new URL(req.url, 'http://localhost');
     const create = /^((?:\/v[\d.]+)?)\/images\/create$/.exec(requestURL.pathname);
     try {
-      const ref = req.method === 'POST' && create && imageReference(requestURL.searchParams.get('fromImage'), requestURL.searchParams.get('tag'));
+      const image = requestURL.searchParams.get('fromImage');
+      const pulling = req.method === 'POST' && create;
+      const ref = pulling && imageReference(image, requestURL.searchParams.get('tag'));
+      if (strict && pulling && !ref) {
+        const source = requestURL.searchParams.get('fromSrc');
+        const localImage = image && /^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]+)?\//.test(image);
+        if ((image && !localImage) || (source && source !== '-')) {
+          res.writeHead(403, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({message: 'External image source has no dependency cache route'}));
+          return;
+        }
+      }
       if (!ref) {
         let targetPath = req.url;
         let body;
@@ -295,7 +306,7 @@ async function setupClients({ url, mode, repository = process.cwd() }) {
       const listener = path.join(temp, 'docker.sock');
       const k3s = path.join(temp, 'k3s-registries.yaml');
       await fs.writeFile(k3s, k3sConfig(bridge, relay.port), {mode:0o644});
-      const adapter = await engineAdapter(original.slice('unix://'.length), listener, upstream.host, k3s);
+      const adapter = await engineAdapter(original.slice('unix://'.length), listener, upstream.host, k3s, process.env.CI_DEPENDENCY_STRICT_READ === '1' || process.env.CI_DEPENDENCY_MODE === 'replay');
       cleanup.push(adapter.close);
       env.DOCKER_HOST = `unix://${listener}`;
     }
