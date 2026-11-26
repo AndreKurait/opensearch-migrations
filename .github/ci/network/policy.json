@@ -418,7 +418,7 @@
     "aws-suite.yml/watch-4": {
       "delegates": "./.github/workflows/aws-watch.yml"
     },
-    "aws-suite.yml/outcome": {
+    "aws-suite-publication.yml/outcome": {
       "purposes": [
         "github"
       ],

@@ -43,7 +43,8 @@ jobs:
           allowed-endpoints: >-
             api.github.com:443 github.com:443 raw.githubusercontent.com:443
             sts.us-west-2.amazonaws.com:443 sts.amazonaws.com:443 codebuild.us-west-2.amazonaws.com:443 ssm.us-west-2.amazonaws.com:443
-      - name: Enforce Linux network policy before candidate checkout
+      - &enforce_unprivileged
+        name: Enforce Linux network policy before candidate checkout
         shell: bash
         working-directory: ${{ runner.temp }}
         env:
@@ -63,3 +64,53 @@ jobs:
       - name: Dispatch the protected publisher for this main worker
         env: {GH_TOKEN: '${{ github.token }}', BUILD_ID: '${{ needs.worker.outputs.build-id }}', WORKER_SHA: '${{ inputs.sha }}'}
         run: gh workflow run dependency-cache-sync.yml --ref main --repo "$GITHUB_REPOSITORY" -f "build=$BUILD_ID" -f "sha=$WORKER_SHA"
+  outcome:
+    concurrency:
+      group: ${{ inputs.pr != '' && format('aws-pr-{0}-status', inputs.pr) || format('aws-outcome-{0}-{1}', github.run_id, inputs.suite) }}
+      queue: max
+    needs: worker
+    if: >-
+      always() &&
+      github.workflow_ref == 'AndreKurait/opensearch-migrations/.github/workflows/aws-integration.yml@refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_target' ||
+      github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      # BEGIN generated network guard
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+      - *enforce_unprivileged
+      # END generated network guard
+
+      - if: inputs.pr != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Record the final suite result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+          SUITE: ${{ inputs.suite }}
+          PR: ${{ inputs.pr }}
+          WORKER_RESULT: ${{ needs.worker.result }}
+          WORKER_STATE: ${{ needs.worker.outputs.state }}
+        run: |
+          state=failure
+          if [[ "$WORKER_RESULT" == success && "$WORKER_STATE" == SUCCEEDED ]]; then
+            state=success
+          fi
+          if [[ -n "$PR" ]]; then
+            python3 .github/ci/controller/status.py "$state"
+          fi
+          echo "**$SUITE** · \`$SHA\` · **$state**" >> "$GITHUB_STEP_SUMMARY"
+          test "$state" = success
