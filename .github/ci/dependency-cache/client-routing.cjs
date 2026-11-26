@@ -193,18 +193,26 @@ async function engineAdapter(socket, listener, endpoint, k3sRegistryFile, strict
       const pull = await daemonCall(socket, 'POST', `${requestURL.pathname}?${query}`);
       res.writeHead(pull.statusCode, { 'content-type': 'application/json' });
       if (pull.statusCode !== 200) { await pipeline(pull, res); return; }
-      let buffered = '';
       let failed = false;
-      for await (const part of pull) {
-        buffered += part.toString();
-        let end;
-        while ((end = buffered.indexOf('\n')) !== -1) {
-          const line = buffered.slice(0, end + 1); buffered = buffered.slice(end + 1);
-          if (line.trim()) failed ||= Boolean(JSON.parse(line).error);
-          res.write(line);
+      async function* progressLines() {
+        let buffered = '';
+        for await (const part of pull) {
+          buffered += part.toString();
+          let end;
+          while ((end = buffered.indexOf('\n')) !== -1) {
+            const line = buffered.slice(0, end + 1);
+            buffered = buffered.slice(end + 1);
+            if (line.trim()) failed ||= Boolean(JSON.parse(line).error);
+            yield line;
+          }
+        }
+        if (buffered.trim()) {
+          failed ||= Boolean(JSON.parse(buffered).error);
+          yield buffered + '\n';
         }
       }
-      if (buffered.trim()) { failed ||= Boolean(JSON.parse(buffered).error); res.write(buffered + '\n'); }
+      // A slow Docker client must also slow the daemon's pull progress stream.
+      await pipeline(progressLines(), res, {end: false});
       if (!failed && !ref.tag.startsWith('sha256:')) {
         const alias = new URLSearchParams({ repo: ref.repository, tag: ref.tag });
         const tagged = await daemonCall(socket, 'POST', `${create[1]}/images/${encodeURIComponent(local + ':' + ref.tag)}/tag?${alias}`);
