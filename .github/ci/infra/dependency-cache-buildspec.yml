@@ -45,5 +45,5 @@ phases:
         cd "$CODEBUILD_SRC_DIR/harness"
         # This new worker must observe the actual wrapper distribution, including when its base image cached Gradle.
         export GRADLE_USER_HOME="$CODEBUILD_SRC_DIR/gradle-home"
-        # Actions debug frames can contain signed cache URLs. CodeBuild persists raw stdout.
-        node .github/ci/dependency-cache/cli.cjs cloud-worker 2>&1 | sed -u '/^::debug::/d'
+        # CodeBuild persists stdout verbatim, including values the Actions toolkit asks its runner to mask.
+        node .github/ci/dependency-cache/cli.cjs cloud-worker 2>&1 | sed -u -e '/^::debug::/d' -e '/^::add-mask::/d'
