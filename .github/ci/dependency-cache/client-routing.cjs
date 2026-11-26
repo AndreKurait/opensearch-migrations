@@ -6,7 +6,7 @@ const net = require('node:net');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { pipeline } = require('node:stream/promises');
+const { finished, pipeline } = require('node:stream/promises');
 const { promisify } = require('node:util');
 const { buildkitRoute } = require('./buildkit-cache.cjs');
 const { validateKey, canonicalKey } = require('./proxy.cjs');
@@ -225,7 +225,9 @@ async function engineAdapter(socket, listener, endpoint, k3sRegistryFile, strict
       if (!failed && !ref.tag.startsWith('sha256:')) {
         const alias = new URLSearchParams({ repo: ref.repository, tag: ref.tag });
         const tagged = await daemonCall(socket, 'POST', `${create[1]}/images/${encodeURIComponent(local + ':' + ref.tag)}/tag?${alias}`);
+        const tagComplete = finished(tagged, {cleanup: true});
         tagged.resume();
+        await tagComplete;
         if (tagged.statusCode !== 201) throw new Error(`Docker could not tag the mirrored image (${tagged.statusCode})`);
       } else if (!failed) {
         // Docker cannot tag a RepoDigest alias. Reconcile original digest references in subsequent requests (below).
