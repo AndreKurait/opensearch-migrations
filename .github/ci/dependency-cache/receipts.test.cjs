@@ -87,3 +87,16 @@ test('rejects extra fields, unsafe origins, duplicates, stale time, false digest
   assert.throws(() => readReceipt(Buffer.alloc(MAX_RECEIPT_BYTES + 1), now), /size/);
   assert.throws(() => readReceipt('{"exports":["/raw/test/x"]}', now), /count/);
 });
+
+test('normal hosted recording uses published package metadata and known 404s without origin traffic', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'cache-first-metadata-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const metadata = {digest: 'a'.repeat(64), path: '/published/file', size: 1};
+  const recorder = await openLocalRecorder({receiptFile: path.join(dir, 'receipt'),
+    lookup: async key => key === '/npm/test' ? metadata : null,
+    fetchArtifact: () => assert.fail('unexpected public origin download')});
+  assert.deepEqual(await recorder.resolve('/npm/test'), metadata);
+  assert.equal(await recorder.resolve('/pypi/simple/no-package'), null);
+  const observations = await recorder.close();
+  assert.equal(observations.length, 2);
+});

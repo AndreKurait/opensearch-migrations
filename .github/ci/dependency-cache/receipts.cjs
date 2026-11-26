@@ -55,9 +55,10 @@ async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now 
   async function record(entry) {
     const {key} = entry;
     const file = path.join(dir, randomUUID());
-    if (lookup && immutablePublicKey(key)) {
+    if (lookup) {
       try {
         const published = await lookup(key);
+        if (published === null) { entry.missing = true; return null; }
         if (published) { entry.digest = published.digest; return published; }
       } catch (error) {
         if (error.code !== 'CACHE_MISS') throw error;
