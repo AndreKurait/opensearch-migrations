@@ -80,5 +80,9 @@ jobs:
           parts[0]=${BASH_REMATCH[2]}
           for id in "${parts[@]}"; do
             [[ "$id" =~ ^[0-9a-f-]{36}$ ]]
-            gh cache delete "$prefix$id" --ref refs/heads/main --repo "$GITHUB_REPOSITORY"
+            key="$prefix$id"
+            if ! gh cache delete "$key" --ref refs/heads/main --repo "$GITHUB_REPOSITORY"; then
+              remaining=$(gh api "repos/$GITHUB_REPOSITORY/actions/caches?ref=refs%2Fheads%2Fmain&key=$key" --jq '.total_count')
+              [[ "$remaining" == 0 ]] || exit 1
+            fi
           done
