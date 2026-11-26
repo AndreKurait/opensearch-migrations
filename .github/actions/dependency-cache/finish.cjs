@@ -50,7 +50,18 @@ async function finish() {
     if (gradle) console.log(`Gradle remote cache ${gradle[1]}`);
     const misses = await fs.readFile(path.join(dir, 'misses.json'), 'utf8').catch(() => null);
     if (misses) console.error(`Missing published dependencies: ${JSON.parse(misses).join(', ')}`);
-    if (process.env.INPUT_MODE !== 'record') return;
+    if (process.env.INPUT_MODE !== 'record') {
+      if (process.env.GITHUB_EVENT_NAME === 'pull_request' && process.env.CI_DEPENDENCY_STRICT_READ !== '1') {
+        const file = path.join(dir, 'receipt.json');
+        const text = await fs.readFile(file).catch(error => { if (error.code !== 'ENOENT') throw error; });
+        if (text && readReceipt(text).length) {
+          const {default: artifacts} = await import('../../ci/dependency-cache/node_modules/@actions/artifact/lib/artifact.js');
+          await artifacts.uploadArtifact(`public-dependency-misses-${process.env.GITHUB_RUN_ATTEMPT}-${randomUUID()}`,
+            [file], dir, {retentionDays: 3});
+        }
+      }
+      return;
+    }
     const text = await fs.readFile(path.join(dir, 'receipt.json'));
     const observations = readReceipt(text);
     if (!observations.length) return;

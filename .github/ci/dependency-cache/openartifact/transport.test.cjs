@@ -82,6 +82,9 @@ test('unpublished public dependencies coalesce, are bounded and disappear with t
   const items = await Promise.all([cold.resolve(key), cold.resolve(key)]);
   assert.deepEqual(items[0], items[1]);
   assert.equal(calls, 1);
+  assert.equal(cold.observations.length, 1);
+  assert.equal(cold.observations[0].key, key);
+  assert.equal(cold.observations[0].digest, items[0].digest);
   await assert.rejects(cold.resolve('/maven/too-big'), /oversize/);
   await cold.resolve('/maven/example/b.jar');
   await assert.rejects(cold.resolve('/maven/example/c.jar'), /budget/);

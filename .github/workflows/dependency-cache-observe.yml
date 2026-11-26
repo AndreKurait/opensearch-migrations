@@ -2,7 +2,6 @@ name: Observe main dependency workers
 on:
   workflow_run:
     workflows: [CI, Local Integ Tests, Dependency cache protocol check]
-    branches: [main]
     types: [in_progress, completed]
 permissions: {}
 concurrency:
@@ -12,10 +11,12 @@ jobs:
   observe:
     if: >-
       github.repository == 'AndreKurait/opensearch-migrations' && vars.DEPENDENCY_PROXY_ENABLED == 'true' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event.workflow_run.event) &&
+      ((github.event.workflow_run.event == 'pull_request' && github.event.action == 'completed' && github.event.workflow_run.name == 'CI') ||
+       (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository &&
+        contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event.workflow_run.event))) &&
       (vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event.workflow_run.event == 'workflow_dispatch') &&
       github.event.workflow_run.conclusion != 'skipped'
+    cache-mode: write
     runs-on: ubuntu-24.04
     timeout-minutes: 355
     permissions: {actions: write, contents: read}
@@ -28,6 +29,7 @@ jobs:
           disable-telemetry: true
           allowed-endpoints: >-
             api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
       - name: Enforce Linux network policy before candidate checkout
         shell: bash
         working-directory: ${{ runner.temp }}
@@ -47,7 +49,17 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {ref: '${{ github.workflow_sha }}', persist-credentials: false}
+      - name: Collect public dependency requests from completed PR checks
+        if: github.event.workflow_run.event == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund
+          node .github/ci/dependency-cache/pr-receipts.cjs
       - name: Publish newly completed main workers
+        if: github.event.workflow_run.event != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_ID: ${{ github.event.workflow_run.id }}

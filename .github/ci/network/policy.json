@@ -451,7 +451,8 @@
     },
     "dependency-cache-observe.yml/observe": {
       "purposes": [
-        "github"
+        "github",
+        "bootstrap"
       ],
       "nativePrivileges": false
     },

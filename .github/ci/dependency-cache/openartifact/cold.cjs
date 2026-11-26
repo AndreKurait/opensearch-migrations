@@ -48,10 +48,12 @@ async function openColdStore(
   const pending = new Map();
   let unreserved = maxBytes,
     closed = false;
+  const observations = [];
   const inflight = new Set();
   const metrics = { originLookups: 0, originPayloadBytes: 0 };
   return {
     metrics,
+    observations,
     async resolve(key) {
       validateKey(key);
       if (closed) throw new Error('Cold dependency store closed');
@@ -72,6 +74,7 @@ async function openColdStore(
         try {
           metrics.originLookups++;
           const entry = await fetchArtifact(key, dest, { maxBytes: allowance });
+          observations.push({key, accessed: Date.now(), ...(entry ? {digest: entry.digest} : {missing: true})});
           metrics.originPayloadBytes += entry?.size || 0;
           unreserved += allowance - (entry?.size || 0);
           return entry ? { ...entry, path: dest } : null;

@@ -81,6 +81,7 @@ async function service(mode, dir) {
       },
       packages?.handle,
     );
+    if (cold?.observations.length) await fs.writeFile(receiptFile, JSON.stringify(cold.observations), {mode: 0o600});
     if (packages?.metrics)
       await fs.writeFile(path.join(dir, 'openartifact-metrics.json'), JSON.stringify(packages.metrics));
     if (mode === 'read')

@@ -11,7 +11,7 @@ on:
       cache-only:
         description: Require dependency proxy hits for the normal test jobs
         type: boolean
-        default: true
+        default: false
 
 permissions: {contents: read, actions: read}
 
