@@ -239,3 +239,29 @@ test('abandoning a Docker build upload closes the daemon request and leaves the 
     await fs.rm(dir, {recursive: true, force: true});
   }
 });
+
+test('a truncated Docker tag response fails the pull and leaves the adapter usable', {timeout: 5000}, async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'truncated-docker-tag-'));
+  const backend = path.join(dir, 'backend.sock');
+  const broker = path.join(dir, 'broker.sock');
+  const daemon = http.createServer((req, res) => {
+    if (req.url === '/_ping') return res.end('OK');
+    if (req.url.includes('/images/create?')) return res.end('{"status":"pulled"}\n');
+    assert.match(req.url, /\/tag\?/);
+    res.writeHead(201, {'content-length': '128'});
+    res.write('partial', () => res.destroy());
+  });
+  const stop = await serve(daemon, backend);
+  const adapter = await engineAdapter(backend, broker, 'localhost:1234');
+  try {
+    const [, body] = await get({socketPath: broker, method: 'POST', path: '/v1.44/images/create?fromImage=busybox&tag=latest'});
+    const events = body.trim().split('\n').map(line => JSON.parse(line));
+    assert.equal(events[0].status, 'pulled');
+    assert.ok(events[1].error);
+    assert.deepEqual(await get({socketPath: broker, path: '/_ping'}), [200, 'OK']);
+  } finally {
+    await adapter.close();
+    await stop();
+    await fs.rm(dir, {recursive: true, force: true});
+  }
+});
