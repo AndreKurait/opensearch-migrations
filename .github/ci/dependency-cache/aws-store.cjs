@@ -6,6 +6,7 @@ const fs = require('node:fs/promises');
 const {createRequire} = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
+const {isFreshEntry} = require('./receipts.cjs');
 const {pipeline} = require('node:stream/promises');
 
 const prefix = 'dependency-cache/v1';
@@ -67,19 +68,20 @@ async function checkFile(filename, {digest, size}) {
 }
 
 function checkEntry(entry, validateKey) {
+  const verifiedAt = entry?.verifiedAt ?? entry?.accessed;
   if (!entry || typeof entry.key !== 'string' || validateKey(entry.key) !== entry.key ||
-      !Number.isSafeInteger(entry.accessed) || entry.accessed < 0) {
+      !Number.isSafeInteger(entry.accessed) || entry.accessed < 0 || !Number.isSafeInteger(verifiedAt) || verifiedAt < 0) {
     throw new Error('Invalid trusted dependency receipt');
   }
   if (entry.missing === true) {
     if (entry.digest !== null || entry.size !== 0 || entry.type !== '') throw new Error('Invalid missing receipt');
-    return {key: entry.key, missing: true, digest: null, size: 0, type: '', accessed: entry.accessed};
+    return {key: entry.key, missing: true, digest: null, size: 0, type: '', accessed: entry.accessed, verifiedAt};
   }
   if (!isDigest(entry.digest) || !Number.isSafeInteger(entry.size) || entry.size < 0 ||
       typeof entry.type !== 'string' || !entry.type || entry.type.length > 256 || /[\r\n]/.test(entry.type)) {
     throw new Error('Invalid dependency representation');
   }
-  return {key: entry.key, digest: entry.digest, size: entry.size, type: entry.type, accessed: entry.accessed};
+  return {key: entry.key, digest: entry.digest, size: entry.size, type: entry.type, accessed: entry.accessed, verifiedAt};
 }
 
 async function loadShard(storage, key, temp, validateKey) {
@@ -102,7 +104,9 @@ async function loadShard(storage, key, temp, validateKey) {
 
 function newer(a, b) {
   // A deterministic tie order ensures identical results regardless of which writer wins the S3 update.
-  return !b || a.accessed > b.accessed || (a.accessed === b.accessed && (a.digest || '') > (b.digest || ''));
+  if (!b) return true;
+  if (a.verifiedAt !== b.verifiedAt) return a.verifiedAt > b.verifiedAt;
+  return a.accessed > b.accessed || (a.accessed === b.accessed && (a.digest || '') > (b.digest || ''));
 }
 
 function observedTime(value, now) {
@@ -162,7 +166,7 @@ async function openRecorder(options = {}) {
     let state;
     const pinned = key.startsWith('/v2/') ? /\/(?:blobs|manifests)\/sha256:([a-f0-9]{64})$/.exec(key)?.[1] : undefined;
     const expected = observation ? observation.digest : pinned;
-    if (known && isDigest(expected) && known.digest === expected) {
+    if (known && isDigest(expected) && known.digest === expected && isFreshEntry(known, current)) {
       // Trusted key/digest observations and digest-addressed OCI URLs can use the same verified mapping.
       state = {entry: known};
     } else {
@@ -174,8 +178,8 @@ async function openRecorder(options = {}) {
           if ((observation?.digest && data?.digest !== observation.digest) || (observation?.missing && data !== null)) {
             throw new Error('Public origin no longer matches the main-worker dependency observation');
           }
-          const entry = checkEntry(data === null ? {key, missing: true, digest: null, size: 0, type: '', accessed: observedAt} :
-            {key, digest: data.digest, size: data.size, type: data.type, accessed: observedAt}, proxy.validateKey);
+          const entry = checkEntry(data === null ? {key, missing: true, digest: null, size: 0, type: '', accessed: observedAt, verifiedAt: current} :
+            {key, digest: data.digest, size: data.size, type: data.type, accessed: observedAt, verifiedAt: current}, proxy.validateKey);
           if (data !== null) {
             // fetchPublic hashes while streaming; S3 validates the same checksum before accepting the file.
             await storage.put(blobKey(entry.digest), filename, entry.digest);

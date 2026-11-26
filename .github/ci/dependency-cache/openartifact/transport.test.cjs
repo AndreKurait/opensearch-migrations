@@ -102,3 +102,19 @@ test('non-native requests and unpublished strict misses never start Docker servi
     await transport.close();
   }
 });
+
+test('expired metadata and negative results refresh independently of recent reads while strict replay remains offline', async () => {
+  const now = Date.now();
+  for (const [missing, age] of [[true, 61_000], [false, 301_000]]) {
+    const key = '/npm/example';
+    const old = {key, missing, accessed: now, verifiedAt: now - age};
+    const fresh = {digest: 'b'.repeat(64), size: 12};
+    const reader = {entries: [old], resolve: async () => old};
+    const options = {openReader: async () => reader, reportMiss() {}};
+    const normal = await openReadStore({...options, cold: {resolve: async () => fresh}});
+    assert.deepEqual(normal.entries, []);
+    assert.deepEqual(await normal.resolve(key), fresh);
+    const strict = await openReadStore({...options, cold: null});
+    assert.deepEqual(await strict.resolve(key), old);
+  }
+});

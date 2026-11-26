@@ -32,7 +32,11 @@ async function service(mode, dir) {
       : await openReadStore({openReader, cold, reportMiss});
     if (hosted && mode === 'record') {
       try {
-        seed = await openReader();
+        const snapshot = await openReader();
+        const {isFreshEntry} = require('./receipts.cjs');
+        const entries = snapshot.entries.filter(entry => isFreshEntry(entry));
+        const byKey = new Map(entries.map(entry => [entry.key, entry]));
+        seed = {...snapshot, entries, resolve: key => isFreshEntry(byKey.get(key)) ? snapshot.resolve(key) : undefined};
       } catch (error) {
         console.warn(
           `Main is recording without a previous published dependency index (${error.code || 'index unavailable'}).`,

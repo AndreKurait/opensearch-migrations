@@ -5,6 +5,8 @@ const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { fetchPublic, validateKey } = require('../proxy.cjs');
 
+const {isFreshEntry} = require('../receipts.cjs');
+
 async function openReadStore({ openReader, cold, reportMiss }) {
   let reader;
   try {
@@ -16,9 +18,11 @@ async function openReadStore({ openReader, cold, reportMiss }) {
   const entries = reader?.entries || [];
   const known = new Map(entries.map((entry) => [entry.key, entry]));
   return {
-    entries,
+    entries: cold ? entries.filter(entry => isFreshEntry(entry)) : entries,
     metrics: reader?.metrics,
     async resolve(key) {
+      const expected = known.get(key);
+      if (cold && expected && !isFreshEntry(expected)) return cold.resolve(key);
       if (reader) {
         try {
           return await reader.resolve(key);
@@ -29,7 +33,6 @@ async function openReadStore({ openReader, cold, reportMiss }) {
         }
       } else reportMiss(key);
       const item = await cold.resolve(key);
-      const expected = known.get(key);
       if (expected && (item?.digest !== expected.digest || item?.size !== expected.size))
         throw new Error('Public origin no longer matches the published dependency');
       return item;

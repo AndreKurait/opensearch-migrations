@@ -29,16 +29,16 @@ const blobKey = id => `${PREFIX}blob-${id}`;
 const missingCache = message => Object.assign(new Error(message), { code: 'CACHE_MISS' });
 
 function prepareEntry(entry) {
-  const { key, size, accessed, type } = entry;
+  const { key, size, accessed, type, verifiedAt = accessed } = entry;
   if (typeof key !== 'string' || !key || typeof type !== 'string' || !Number.isSafeInteger(size) || size < 0 ||
-      !Number.isSafeInteger(accessed) || accessed < 0) throw new Error('Invalid dependency catalog entry');
+      !Number.isSafeInteger(accessed) || accessed < 0 || !Number.isSafeInteger(verifiedAt) || verifiedAt < 0) throw new Error('Invalid dependency catalog entry');
   if (entry.missing === true) {
     if (entry.digest !== null || size !== 0 || type !== '') throw new Error(`Invalid missing dependency ${key}`);
-    return { key, size, accessed, type, digest: null, missing: true };
+    return { key, size, accessed, verifiedAt, type, digest: null, missing: true };
   }
   const digest = typeof entry.digest === 'string' && entry.digest.replace(/^sha256:/, '');
   if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error(`Invalid SHA-256 for ${key}`);
-  return { key, digest, size, type, accessed };
+  return { key, digest, size, type, accessed, verifiedAt };
 }
 
 function selectRecent(entries, maxBytes = DEFAULT_BYTES) {

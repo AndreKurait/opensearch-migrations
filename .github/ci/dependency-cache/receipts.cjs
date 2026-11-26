@@ -45,6 +45,14 @@ function immutablePublicKey(key) {
   return /^\/raw\/(?:gradle\/gradle-[\d.]+-(?:bin|all)\.zip|corretto\/resources\/[\d.]+\/|(?:k3s|kind|argo|crane)\/v[\d.]+|kubectl\/release\/v[\d.]+\/|helm\/helm-v[\d.]+-)/.test(key);
 }
 
+// Retention uses accessed. Freshness uses the last authoritative origin check.
+function isFreshEntry(entry, now = Date.now()) {
+  if (!entry) return false;
+  if (!entry.missing && immutablePublicKey(entry.key)) return true;
+  const ttl = entry.missing ? 60_000 : 300_000;
+  return now - (entry.verifiedAt ?? entry.accessed) < ttl;
+}
+
 async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now = Date.now, lookup}) {
   if (typeof receiptFile !== 'string' || !receiptFile) throw new Error('A dependency receipt file is required');
   const dir = await mkdtemp(path.join(tmpdir(), 'dependency-recorder-'));
@@ -112,4 +120,4 @@ async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now 
   };
 }
 
-module.exports = {openLocalRecorder, readReceipt, immutablePublicKey, MAX_RECEIPT_BYTES, MAX_RECEIPT_ENTRIES};
+module.exports = {openLocalRecorder, readReceipt, immutablePublicKey, isFreshEntry, MAX_RECEIPT_BYTES, MAX_RECEIPT_ENTRIES};

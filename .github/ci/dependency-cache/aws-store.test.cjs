@@ -62,7 +62,7 @@ test('concurrent workers retain independent observed keys, coalesce GETs and cho
   const pub = await openPublisher({storage, proxy: olderOrigin});
   const byKey = new Map(pub.entries.map(e => [e.key, e]));
   assert.equal(byKey.get('maven/tag').accessed, 20);
-  assert.deepEqual(byKey.get('maven/b'), {key: 'maven/b', missing: true, digest: null, size: 0, type: '', accessed: 30});
+  assert.deepEqual(byKey.get('maven/b'), {key: 'maven/b', missing: true, digest: null, size: 0, type: '', accessed: 30, verifiedAt: 30});
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'test-dependency-read-'));
   t.after(() => fs.rm(dir, {recursive: true, force: true}));
   const dest = path.join(dir, 'blob');

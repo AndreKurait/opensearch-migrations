@@ -55,7 +55,7 @@ test('rolling LRU counts shared bytes once and retains known public negatives', 
   const negative = missing('/maven/unknown', 4);
   const list = selectRecent([newA, alias, newerB, oldC, negative, make('/maven/a', 'previous', 0)], 6);
   assert.deepEqual(list.map(e => e.key), [newA.key, negative.key, alias.key, oldC.key]);
-  assert.deepEqual(selectRecent([newA, missing(newA.key, 8)], 0), [missing(newA.key, 8)]);
+  assert.deepEqual(selectRecent([newA, missing(newA.key, 8)], 0), [{...missing(newA.key, 8), verifiedAt: 8}]);
   assert.throws(() => selectRecent([newA, { ...alias, size: 1 }]), /Conflicting sizes/);
 });
 

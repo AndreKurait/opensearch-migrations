@@ -72,7 +72,7 @@ async function openPackageTransport({ mode, reader, imageMode = mode, coldAllowe
       const target = nativePath(key);
       if (!target) return false;
       const lookup = published.get(key);
-      if (mode === 'read' && !lookup) {
+      if (mode === 'read' && (!lookup || (coldAllowed && !require('../receipts.cjs').isFreshEntry(lookup)))) {
         reportMiss(key);
         if (coldAllowed) return false; // The fixed-origin job-local resolver may fetch this one dependency.
         throw Object.assign(new Error('Missing published dependency'), { code: 'CACHE_MISS' });
