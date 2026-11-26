@@ -188,6 +188,14 @@ async function cloudWorker() {
     const recorder = await require('./aws-store.cjs').openRecorder();
     await serve(recorder, 'record', async env => {
       const proxy = new URL(env.CI_DEPENDENCY_PROXY_URL);
+      const versions = await fs.readFile('gradle/libs.versions.toml', 'utf8');
+      const lucene = /^lucene10 = "([0-9]+\.[0-9]+\.[0-9]+)"$/m.exec(versions)?.[1];
+      if (!lucene) throw new Error('Missing repository Lucene 10 version');
+      for (const extension of ['pom', 'jar', 'module']) {
+        const coordinate = `/maven/org/apache/lucene/lucene-core/${lucene}/lucene-core-${lucene}.${extension}`;
+        const result = await recorder.resolve(coordinate);
+        if (!result && extension !== 'module') throw new Error(`Missing required Maven artifact ${coordinate}`);
+      }
       const images = [
         'dockerhub/kindest/node@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5',
         'dockerhub/library/sonarqube@sha256:ef0290a2deabad86a2623552712033a7107a9f5b310af00519b4ddd5b348ef4e',
