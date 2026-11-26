@@ -37,6 +37,15 @@ async function finish() {
       }
     }
     const serviceLog = await fs.readFile(path.join(dir, 'service.log'), 'utf8').catch(() => '');
+    // Retain digest-level evidence in the job log after the temporary service directory is removed.
+    for (const line of serviceLog.split('\n')) {
+      if (!line.startsWith('Dependency cache transfer ')) continue;
+      const record = JSON.parse(line.slice('Dependency cache transfer '.length));
+      if (/^(object|pack)-[a-f0-9]{64}$/.test(record.archive) && Number.isSafeInteger(record.bytes) &&
+          Array.isArray(record.digests) && record.digests.every(digest => /^[a-f0-9]{64}$/.test(digest))) {
+        console.log('Dependency cache transfer ' + JSON.stringify({archive:record.archive, bytes:record.bytes, digests:record.digests}));
+      }
+    }
     const gradle = serviceLog.match(/^Gradle remote cache (\{[^\n]+\})$/m);
     if (gradle) console.log(`Gradle remote cache ${gradle[1]}`);
     const misses = await fs.readFile(path.join(dir, 'misses.json'), 'utf8').catch(() => null);
