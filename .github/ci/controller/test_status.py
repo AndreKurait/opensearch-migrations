@@ -26,8 +26,10 @@ class StatusTests(unittest.TestCase):
             with patch('sys.argv', ['status.py', 'plan']):
                 status.main()
         self.assertEqual(json.loads((self.temp / status.PLAN_FILE).read_text()), self.plan)
-        with patch.object(status, 'api', side_effect=[b'[]'] + [b''] * len(self.plan['suites'])) as api, patch('sys.argv', ['status.py', 'pending']):
-            status.main()
+        responses = [b'[]'] + [b''] * len(self.plan['suites'])
+        with patch.object(status, 'api', side_effect=responses) as api:
+            with patch('sys.argv', ['status.py', 'pending']):
+                status.main()
         self.assertEqual(len(api.call_args_list), 1 + len(self.plan['suites']))
         for call in api.call_args_list[1:]:
             self.assertIn('state=pending', call.args)

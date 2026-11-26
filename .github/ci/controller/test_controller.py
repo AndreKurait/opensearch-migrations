@@ -151,7 +151,7 @@ class ObservationTests(unittest.TestCase):
     def test_lease_waits_for_successful_recovery_after_a_failed_attempt(self):
         earlier, retry = 'older-cleanup', 'newer-cleanup'
         env = {'environmentVariables': [{'name': 'CI_MODE', 'value': 'cleanup'},
-                                       {'name': 'CI_RECOVER_BUILD', 'value': BUILD}]}
+                                        {'name': 'CI_RECOVER_BUILD', 'value': BUILD}]}
         rows = [dict(id=retry, buildStatus='SUCCEEDED', environment=env),
                 dict(id=earlier, buildStatus='TIMED_OUT', environment=env)]
         with patch.object(build, 'aws', side_effect=[{'ids': [retry, earlier, BUILD]}, {'builds': rows}]), \
@@ -194,13 +194,15 @@ class ObservationTests(unittest.TestCase):
             base = Path(tmp)
             with ZipFile(base / 'result.zip', 'w') as archive:
                 archive.writestr('junit.xml', '<testsuite name="ci"><testcase name="test"/></testsuite>')
-                archive.writestr('dependency-cache-stats.json', json.dumps(dict(restored=2, bytes=4, originRequests=1, misses=1)))
-                rows = [{'key':'/raw/helm/package.tgz','host':'get.helm.sh','status':302},
-                        {'key':'/raw/helm/package.tgz','host':'get.helm.sh','status':200}]
+                stats = dict(restored=2, bytes=4, originRequests=1, misses=1)
+                archive.writestr('dependency-cache-stats.json', json.dumps(stats))
+                rows = [{'key': '/raw/helm/package.tgz', 'host': 'get.helm.sh', 'status': 302},
+                        {'key': '/raw/helm/package.tgz', 'host': 'get.helm.sh', 'status': 200}]
                 archive.writestr('dependency-origin.jsonl', '\n'.join(json.dumps(row) for row in rows))
             text, _ = build.render(base / 'result.zip', base / 'output')
             self.assertIn('2 public HTTP request attempts', text)
-            self.assertEqual(rows, [json.loads(row) for row in (base / 'output/dependency-origin.jsonl').read_text().splitlines()])
+            origin_log = base / 'output/dependency-origin.jsonl'
+            self.assertEqual(rows, [json.loads(row) for row in origin_log.read_text().splitlines()])
 
     def test_bounded_report_and_safe_summary(self):
         with tempfile.TemporaryDirectory() as tmp:

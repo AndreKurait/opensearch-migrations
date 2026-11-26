@@ -57,6 +57,8 @@ SUITES = {
     'cfn-create': Suite(),
     'cfn-import': Suite(reservation=Reservation(eips=1, egws=0)),
 }
+
+
 def cleanup_minutes(suite):
     return 60 if suite in ('cfn-create', 'cfn-import', 'aoss') else 75
 

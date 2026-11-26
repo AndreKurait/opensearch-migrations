@@ -72,7 +72,8 @@ def publish(plan, state):
         context = f'aws-integration/{suite}'
         row = latest.get(context, {})
         if state == 'pending':
-            previous = re.fullmatch(re.escape(f'https://github.com/{REPO}/actions/runs/') + r'(\d+)/attempts/(\d+)', row.get('target_url') or '')
+            run_pattern = re.escape(f'https://github.com/{REPO}/actions/runs/') + r'(\d+)/attempts/(\d+)'
+            previous = re.fullmatch(run_pattern, row.get('target_url') or '')
             if previous and tuple(map(int, previous.groups())) >= (run, attempt):
                 continue
         else:

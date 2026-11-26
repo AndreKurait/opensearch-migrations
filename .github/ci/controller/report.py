@@ -76,7 +76,8 @@ def render(path, output_dir=None):
         stats, rows = dependencies
         counts += (f"\n\nDependency cache restored {stats['restored']} objects ({stats['bytes']} bytes). "
                    f"The proxy recorded {len(rows)} public HTTP request attempts across "
-                   f"{stats['originRequests']} upstream artifact resolutions; {stats['misses']} cache keys were missing.")
+                   f"{stats['originRequests']} upstream artifact resolutions; "
+                   f"{stats['misses']} cache keys were missing.")
         if output_dir:
             (output_dir / 'dependency-origin.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
             (output_dir / 'dependency-cache-stats.json').write_text(json.dumps(stats) + '\n')

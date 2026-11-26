@@ -212,7 +212,8 @@ def watch(build_id, cursor, minutes):
                 phases = [{key: phase.get(key) for key in ('phaseType', 'phaseStatus', 'durationInSeconds')}
                           for phase in build.get('phases', [])]
                 evidence = dict(buildId=build_id, buildStatus=state, phases=phases, workerReportAvailable=False)
-                (directory / 'codebuild-status.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+                status_file = directory / 'codebuild-status.json'
+                status_file.write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
                 artifact = True
             output(state=state, cursor=cursor, artifact=str(artifact).lower())
             if state != 'SUCCEEDED':

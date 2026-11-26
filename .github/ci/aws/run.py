@@ -20,7 +20,8 @@ import time
 import traceback
 import urllib.request
 
-from suites import cleanup_minutes, ALIASES, AOSS_SNAPSHOT_PREFIX, DISABLED_SUITES, SUITES, byos_snapshot, fixture_uri, nodepool
+from suites import (ALIASES, AOSS_SNAPSHOT_PREFIX, DISABLED_SUITES, SUITES, byos_snapshot, cleanup_minutes,
+                    fixture_uri, nodepool)
 from verification import dashboards, junit, nodepools
 
 HERE = Path(__file__).resolve().parent
