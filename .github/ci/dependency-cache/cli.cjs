@@ -9,7 +9,7 @@ const {promisify} = require('node:util');
 const {setTimeout: delay} = require('node:timers/promises');
 const {startProxy} = require('./proxy.cjs');
 const {setupClients} = require('./client-routing.cjs');
-const {openLocalRecorder, readReceipt, MAX_RECEIPT_BYTES} = require('./receipts.cjs');
+const {openLocalRecorder, isFreshEntry, readReceipt, MAX_RECEIPT_BYTES} = require('./receipts.cjs');
 
 const project = 'migrations-main-dependency-cache';
 const sourceBuild = /^migrations-github-eks:([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/;
@@ -95,14 +95,14 @@ async function nativeWorker(command, args) {
     receiptFile: process.env.CI_DEPENDENCY_RECEIPT,
     async fetchArtifact(key, file) {
       const entry = entries.get(key);
-      if (entry) {
+      if (entry && (strict || isFreshEntry(entry))) {
         if (entry.missing) return null;
         await snapshot.materialize(entry, file);
         stats.restored++;
         stats.bytes += entry.size;
         return entry;
       }
-      stats.misses++;
+      if (!entry) stats.misses++;
       if (strict) throw new Error(`Native dependency cache miss: ${key}`);
       stats.originRequests++;
       return require('./proxy.cjs').fetchPublic(key, file);
