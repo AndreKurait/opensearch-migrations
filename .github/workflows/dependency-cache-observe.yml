@@ -11,7 +11,8 @@ jobs:
   observe:
     if: >-
       github.repository == 'AndreKurait/opensearch-migrations' && vars.DEPENDENCY_PROXY_ENABLED == 'true' &&
-      ((github.event.workflow_run.event == 'pull_request' && github.event.action == 'completed' && github.event.workflow_run.name == 'CI') ||
+      ((github.event.workflow_run.event == 'pull_request' && github.event.action == 'completed' &&
+         contains(fromJSON('["CI","Local Integ Tests"]'), github.event.workflow_run.name)) ||
        (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository &&
         contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event.workflow_run.event))) &&
       (vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event.workflow_run.event == 'workflow_dispatch') &&
