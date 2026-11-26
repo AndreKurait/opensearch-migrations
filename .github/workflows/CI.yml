@@ -15,9 +15,9 @@ on:
 
 permissions: {contents: read, actions: read}
 
-# Prevent multiple simultaneous runs except on main repo
+# Keep manual cache-only verification independent of normal pull-through runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}${{ github.event_name == 'workflow_dispatch' && (inputs.cache-only && '-replay' || '-normal') || '' }}
   cancel-in-progress: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
 
 # The caller grants cache writes only to a main job on a recording trigger.
