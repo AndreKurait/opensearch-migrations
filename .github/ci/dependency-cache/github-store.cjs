@@ -273,7 +273,7 @@ function createStore(toolkit, options = {}) {
     const entries = new Map(index.entries.map(e => [e.key, e]));
     const { blobs, locations } = layout(index.entries, index.version === 2);
     const blobMap = new Map(blobs.map(blob => [blob.id, blob]));
-    const metrics = { archiveTransfers: 0, archivePayloadBytes: 0 };
+    const metrics = { archiveTransfers: 0, archivePayloadBytes: 0, catalogObjects: locations.size, restoredObjects: 0 };
     const pending = new Map();
     const limit = limiter(4);
     let closed = false;
@@ -288,6 +288,8 @@ function createStore(toolkit, options = {}) {
         if (!stat.isFile() || stat.size !== blob.size) throw new Error(`Invalid dependency cache blob length for ${blob.id}`);
         metrics.archiveTransfers++;
         metrics.archivePayloadBytes += stat.size;
+        metrics.restoredObjects += blob.members.length;
+        if (process.env.GITHUB_ACTIONS === 'true') console.log(`Dependency cache transfer ${JSON.stringify({archive: blob.id, bytes: stat.size, digests: blob.members.map(entry => entry.digest)})}`);
         for (const entry of blob.members) {
           const out = path.join(temp, entry.digest);
           if (blob.members.length === 1) {

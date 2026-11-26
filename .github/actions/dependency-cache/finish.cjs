@@ -26,12 +26,13 @@ async function finish() {
     if (transfer) {
       console.log(`Dependency archive and cold-origin transfers ${transfer}`);
       if (process.env.GITHUB_STEP_SUMMARY) {
-        const { archiveTransfers, archivePayloadBytes, originLookups, originPayloadBytes } = JSON.parse(transfer);
+        const { archiveTransfers, archivePayloadBytes, originLookups, originPayloadBytes, catalogObjects, restoredObjects } = JSON.parse(transfer);
         await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, [
           '### Dependency proxy reads', '',
           '| Source | Transfers | Payload bytes |', '| --- | ---: | ---: |',
           `| GitHub cache archives | ${archiveTransfers} | ${archivePayloadBytes} |`,
           `| Public dependency origins | ${originLookups} | ${originPayloadBytes} |`, '',
+          ...(catalogObjects === undefined ? [] : [`${restoredObjects} of ${catalogObjects} distinct catalog objects transferred to this job.`, '']),
         ].join('\n'));
       }
     }
