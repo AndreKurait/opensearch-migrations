@@ -180,3 +180,17 @@ test('npm and Python metadata route package bytes locally and reject off-origin 
     assert.equal(JSON.parse(response.body).versions['1.0.0'].dist.tarball, expected + '/npm/@org/item/-/item-1.0.0.tgz');
   }
 });
+
+test('a Gradle metadata probe reads only the published catalog', async t => {
+  const key = '/maven/example/example.jar';
+  const digest = hash('jar');
+  const catalog = new Map([[key, {digest, type: 'application/java-archive', size: 3}]]);
+  const proxy = await startProxy({catalog, resolve: () => assert.fail('restored payload'),
+    packageTransport: () => assert.fail('started package service')});
+  t.after(proxy.close);
+  const head = await get(proxy.url, key, 'HEAD');
+  assert.equal(head.status, 200);
+  assert.equal(head.headers['content-length'], '3');
+  assert.equal(head.headers.etag, `"${digest}"`);
+  assert.equal((await get(proxy.url, key, 'GET', {'if-none-match': head.headers.etag})).status, 304);
+});

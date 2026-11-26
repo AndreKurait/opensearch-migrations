@@ -272,7 +272,7 @@ function errorResponse(res, status, code, message) {
   res.end(body);
 }
 
-async function startProxy({host = '127.0.0.1', port = 0, resolve, packageTransport, buildCache, buildkitCache}) {
+async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, packageTransport, buildCache, buildkitCache}) {
   if (typeof resolve !== 'function') throw new Error('An artifact resolver is required');
   // A resolver may return a restored file. Check digest-addressed OCI content before serving even a range.
   const verified = new Map();
@@ -293,6 +293,21 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, packageTranspo
       }
       let route;
       try { route = parseKey(key); } catch { return errorResponse(res, 400, 'NAME_INVALID', 'Invalid artifact path'); }
+      // npm package indexes are rewritten for the client. Their wire length and ETag depend on its authority.
+      const metadata = catalog?.get(key);
+      if (metadata && !metadata.missing && !route.npmMetadata && !route.oci && !req.headers.range) {
+        const etag = `"${metadata.digest}"`;
+        const unchanged = req.headers['if-none-match']?.split(',').some(value => ['*', etag, 'W/' + etag].includes(value.trim()));
+        if (req.method === 'HEAD' || unchanged) {
+          res.setHeader('etag', etag);
+          res.setHeader('content-type', metadata.type);
+          res.setHeader('content-length', metadata.size);
+          res.setHeader('accept-ranges', 'bytes');
+          res.writeHead(unchanged ? 304 : 200);
+          res.end();
+          return;
+        }
+      }
       if (packageTransport && await packageTransport(req, res, key)) return;
       const item = await resolve(key);
       if (!item) return errorResponse(res, 404, route.manifest ? 'MANIFEST_UNKNOWN' : 'BLOB_UNKNOWN', 'Artifact not found');

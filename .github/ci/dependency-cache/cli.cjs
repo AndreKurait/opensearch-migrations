@@ -55,7 +55,8 @@ async function serve(store, mode, body, packageTransport) {
       buildkitDir = await fs.mkdtemp(path.join(os.tmpdir(), 'buildkit-cache-'));
       buildkitCache = require('./buildkit-cache.cjs').reader({directory:buildkitDir, toolkit:await require('./github-store.cjs').loadToolkit()});
     }
-    proxy = await startProxy({resolve: key => store.resolve(key), packageTransport, buildCache, buildkitCache});
+    const catalog = mode === 'read' && store.entries ? new Map(store.entries.map(entry => [entry.key, entry])) : undefined;
+    proxy = await startProxy({resolve: key => store.resolve(key), catalog, packageTransport, buildCache, buildkitCache});
     clients = await setupClients({url: proxy.url, mode});
     if (buildCache) {
       clients.env.CI_GRADLE_BUILD_CACHE_URL = `${proxy.url}/gradle-build-cache/`;
