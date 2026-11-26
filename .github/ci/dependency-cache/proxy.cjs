@@ -212,7 +212,9 @@ async function request(key, url, cdn, headers = {}, knownMissingUrl) {
       const report = process.env.CI_DEPENDENCY_ORIGIN_REPORT;
       if (report) {
         const event = {key, host: current.hostname, status: response?.status ?? 'error'};
-        await appendFile(report, JSON.stringify(event) + '\n', {mode: 0o600});
+        const line = JSON.stringify(event);
+        if (process.env.CODEBUILD_BUILD_ID) console.log(`Dependency origin request ${line}`);
+        await appendFile(report, line + '\n', {mode: 0o600});
       }
     }
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
