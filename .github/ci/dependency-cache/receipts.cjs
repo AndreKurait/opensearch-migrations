@@ -62,7 +62,10 @@ function isFreshEntry(entry, now = Date.now()) {
 function reusableRecordingEntry(entry, now = Date.now()) {
   if (isFreshEntry(entry, now)) return true;
   if (!entry || now - (entry.verifiedAt ?? entry.accessed) >= 24 * 60 * 60 * 1000) return false;
-  if (!entry.missing) return isPackageIndex(entry.key);
+  if (!entry.missing) {
+    // The publisher refreshes version tags, which registries can repoint to another digest.
+    return isPackageIndex(entry.key) || /^\/v2\/.+\/manifests\/v?\d+\.\d+\.\d+$/.test(entry.key);
+  }
   // Gradle probes for a JAR even when a released plugin marker contains only a POM.
   return immutablePublicKey(entry.key) && /^\/maven\/.+\.gradle\.plugin\/[^/]+\/[^/]+\.jar$/.test(entry.key);
 }

@@ -168,3 +168,13 @@ test('recorders reuse a published negative release plugin marker while the publi
   assert.equal(reusableRecordingEntry(entry, 86_400_000), false);
   assert.equal(reusableRecordingEntry({...entry, key: key.replace('/1.0/', '/1.0-SNAPSHOT/')}, 600_000), false);
 });
+
+test('workers reuse release image tags for at most a day while the publisher refreshes them', () => {
+  const prefix = '/v2/dockerhub/testcontainers/ryuk/manifests/';
+  const entry = {key: prefix + '0.8.1', verifiedAt: 0};
+  assert.equal(isFreshEntry(entry, 600_000), false);
+  assert.equal(reusableRecordingEntry(entry, 600_000), true);
+  assert.equal(reusableRecordingEntry(entry, 86_400_000), false);
+  assert.equal(reusableRecordingEntry({...entry, key: prefix + 'latest'}, 600_000), false);
+  assert.equal(reusableRecordingEntry({...entry, missing: true}, 600_000), false);
+});
