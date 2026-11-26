@@ -51,6 +51,8 @@ const pinnedRawArtifacts = {
   '/raw/elastic/downloads/elasticsearch-plugins/repository-azure/repository-azure-7.17.29.zip': '3a50c815590a4a3913a3a54f8b1dd67ff4b91be1e954726328b0a10129da90fd',
   '/raw/elastic/downloads/elasticsearch-plugins/repository-gcs/repository-gcs-7.17.29.zip': '4760c0e99c0073a73f7574169bccc9f870bea5990ff5fba6e1b5cd2930f13281',
   '/raw/elastic/downloads/elasticsearch/elasticsearch-7.17.29-linux-x86_64.tar.gz': 'f7175de3ac8ca16326b9dbdff4ef70bc3da6405efe624655444ba2464073ea8e',
+  '/raw/elastic/downloads/elasticsearch/elasticsearch-8.17.10-linux-x86_64.tar.gz': '7f6317bc656c3d801e4e8cf478b924f219e523b40a2204859f378a6e76b340d0',
+  '/raw/elastic/downloads/elasticsearch/elasticsearch-8.19.11-linux-x86_64.tar.gz': '9f78e28a97fdb163f0afde08681c21adf2fb252415d3024b7d42a943c5606ae4',
 };
 const rawOrigins = {
   'msk-iam': ['https://github.com/aws/aws-msk-iam-auth/releases/download/', githubAssets],
