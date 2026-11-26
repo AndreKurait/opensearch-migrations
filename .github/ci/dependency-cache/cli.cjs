@@ -103,7 +103,10 @@ async function nativeWorker(command, args) {
         return entry;
       }
       if (!entry) stats.misses++;
-      if (strict) throw new Error(`Native dependency cache miss: ${key}`);
+      if (strict) {
+        // The protected publisher can resolve this path after replay without opening worker egress.
+        throw Object.assign(new Error(`Native dependency cache miss: ${key}`), {code: 'UNPUBLISHED_DEPENDENCY'});
+      }
       stats.originRequests++;
       return require('./proxy.cjs').fetchPublic(key, file);
     },

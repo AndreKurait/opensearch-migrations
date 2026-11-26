@@ -109,3 +109,18 @@ test('AL2023 snapshot reads stay warm while mirror lists and negative results ex
   assert.equal(isFreshEntry({key: mirror, verifiedAt}, 600_000), false);
   assert.equal(isFreshEntry({key: snapshot, verifiedAt, missing: true}, 600_000), false);
 });
+
+test('offline misses fail the request and leave a path-only receipt for protected publication', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'offline-receipt-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const receiptFile = path.join(dir, 'requests.json');
+  const key = '/maven/org/example/example.jar';
+  const accessed = Date.now();
+  const recorder = await openLocalRecorder({receiptFile, now: () => accessed, fetchArtifact: async () => {
+    throw Object.assign(new Error('offline miss'), {code: 'UNPUBLISHED_DEPENDENCY'});
+  }});
+  await assert.rejects(recorder.resolve(key), {code: 'UNPUBLISHED_DEPENDENCY'});
+  await assert.rejects(recorder.resolve(key), {code: 'UNPUBLISHED_DEPENDENCY'});
+  await recorder.close();
+  assert.deepEqual(readReceipt(await readFile(receiptFile)), [{key, accessed}]);
+});

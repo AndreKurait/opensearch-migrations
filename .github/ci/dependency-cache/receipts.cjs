@@ -90,12 +90,12 @@ async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now 
         entry.accessed = Math.max(entry.accessed, accessed);
         return pending.get(key);
       }
-      if (pending.size >= MAX_RECEIPT_ENTRIES) throw new Error('Too many distinct dependency requests');
+      if (!observed.has(key) && observed.size >= MAX_RECEIPT_ENTRIES) throw new Error('Too many distinct dependency requests');
       const entry = {key, accessed};
       observed.set(key, entry);
       pending.set(key, record(entry).catch(error => {
         pending.delete(key);
-        observed.delete(key);
+        if (error.code !== 'UNPUBLISHED_DEPENDENCY') observed.delete(key);
         throw error;
       }));
       return pending.get(key);
