@@ -177,11 +177,13 @@ function allowed(url, hosts) {
     hosts.some(host => typeof host === 'string' ? host === url.hostname : host.test(url.hostname));
 }
 
-async function request(key, url, cdn, headers = {}) {
+async function request(key, url, cdn, headers = {}, knownMissingUrl) {
   const hosts = [url.hostname, ...cdn];
   let current = url;
   for (let count = 0; count <= 5; count++) {
     if (!allowed(current, hosts)) throw new Error('Unapproved upstream redirect');
+    // The Plugin Portal redirects optional metadata back to the same Central URL.
+    if (current.href === knownMissingUrl) return new Response(null, {status: 404});
     const outgoing = {...headers, 'accept-encoding': 'identity'};
     if (current.origin !== url.origin) delete outgoing.authorization;
     let response;
@@ -266,8 +268,9 @@ async function fetchPublic(key, destination, {maxBytes = Infinity} = {}) {
   if (route.manifest) headers.accept = manifestTypes.join(', ');
   if (route.npmMetadata) headers.accept = 'application/vnd.npm.install-v1+json';
   if (route.pypiMetadata) headers.accept = 'application/vnd.pypi.simple.v1+json';
+  let knownMissingUrl;
   for (const url of route.urls) {
-    let response = await request(key, url, route.cdn, headers);
+    let response = await request(key, url, route.cdn, headers, knownMissingUrl);
     // Query the independently hosted Central mirror when Central throttles this shared runner IP.
     // A mirror miss still falls through to the Gradle Plugin Portal for plugin-only artifacts.
     if (url.hostname === 'repo.maven.apache.org' && [429, 502, 503, 504].includes(response.status)) {
@@ -282,6 +285,7 @@ async function fetchPublic(key, destination, {maxBytes = Infinity} = {}) {
       response = await request(key, url, route.cdn, {...headers, authorization: `Bearer ${token}`});
     }
     if (response.status === 404) {
+      if (url.hostname === 'repo.maven.apache.org') knownMissingUrl = url.href;
       await response.body?.cancel();
       continue;
     }

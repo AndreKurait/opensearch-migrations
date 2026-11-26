@@ -104,6 +104,14 @@ test('Maven falls back on a true Central 404 and caches exact uncompressed bytes
     ['repo.maven.apache.org', 'maven-central.storage-download.googleapis.com', 'plugins.gradle.org']);
 });
 
+test('a Plugin Portal redirect to the same throttled Central metadata uses the confirmed mirror miss', async t => {
+  const dir = await scratch(t);
+  const calls = mockFetch(t, [new Response(null, {status: 429}), new Response(null, {status: 404}),
+    new Response(null, {status: 303, headers: {location: 'https://repo.maven.apache.org/maven2/org/example/jib.module'}})]);
+  assert.equal(await fetchPublic('/maven/org/example/jib.module', path.join(dir, 'missing')), null);
+  assert.equal(calls.length, 3);
+});
+
 test('OCI authenticates anonymously only to registry realm and drops the token on CDN redirects', async t => {
   const dir = await scratch(t);
   const payload = 'blob';
