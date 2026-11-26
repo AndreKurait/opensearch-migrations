@@ -187,7 +187,16 @@ async function cloudWorker() {
     digest: '2461f1beee9cb04c8942739fe1a2b37e7b7c2a3d518f0779dc75f9245baa3094', accessed: Date.now()}]);
   if (mode !== 'publish') {
     const recorder = await require('./aws-store.cjs').openRecorder();
-    await serve(recorder, 'record', env => run(process.execPath, [path.join(__dirname, 'smoke.cjs')], {...process.env, ...env}));
+    await serve(recorder, 'record', async env => {
+      const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'kind-node-seed-'));
+      try {
+        const proxy = new URL(env.CI_DEPENDENCY_PROXY_URL);
+        const kindNode = 'dockerhub/kindest/node@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5';
+        await run('skopeo', ['--override-os', 'linux', '--override-arch', 'amd64', 'copy', '--src-tls-verify=false',
+          `docker://${proxy.host}/${kindNode}`, `dir:${temp}`], {...process.env, ...env});
+      } finally { await fs.rm(temp, {recursive: true, force: true}); }
+      await run(process.execPath, [path.join(__dirname, 'smoke.cjs')], {...process.env, ...env});
+    });
   }
   if (mode === 'record') return;
   const parameter = process.env.CI_CACHE_GRANT_PARAMETER;
