@@ -11,7 +11,10 @@ Resources:
       BucketEncryption: &encryption {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]}
       OwnershipControls: &ownership {Rules: [{ObjectOwnership: BucketOwnerEnforced}]}
       PublicAccessBlockConfiguration: &private {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
-      LifecycleConfiguration: {Rules: [{Id: ExpireBuilds, Prefix: builds/, Status: Enabled, ExpirationInDays: 14, AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}}]}
+      LifecycleConfiguration:
+        Rules:
+          - {Id: ExpireBuilds, Prefix: builds/, Status: Enabled, ExpirationInDays: 14, AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}}
+          - {Id: ExpireGradleOutputs, Prefix: gradle-outputs/v1/, Status: Enabled, ExpirationInDays: 90}
   Fixtures:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -186,6 +189,9 @@ Resources:
               - Effect: Allow
                 Action: ['ecr:InitiateLayerUpload', 'ecr:UploadLayerPart', 'ecr:CompleteLayerUpload', 'ecr:PutImage']
                 Resource: !GetAtt BuildKitCache.Arn
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub '${Artifacts.Arn}/gradle-outputs/v1/*'
   Project:
     Type: AWS::CodeBuild::Project
     Properties:

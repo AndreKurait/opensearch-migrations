@@ -51,6 +51,10 @@ async function serve(store, mode, body, packageTransport) {
         mode, toolkit: await require('./github-store.cjs').loadToolkit(),
       });
     }
+    if (process.env.CODEBUILD_BUILD_ID && process.env.CI_RECOVERY_BUCKET && process.env.CI_SUITE) {
+      buildCache = await require('./aws-gradle-cache.cjs').openAwsBuildCache({aws, bucket: process.env.CI_RECOVERY_BUCKET,
+        write: process.env.CI_AWS_BUILDKIT_WRITE === 'true' && process.env.CI_DEPENDENCY_MODE !== 'replay'});
+    }
     if (process.env.GITHUB_ACTIONS === 'true' && process.env.CI_CACHE_TRUSTED_DOCKER === '1') {
       buildkitDir = await fs.mkdtemp(path.join(os.tmpdir(), 'buildkit-cache-'));
       buildkitCache = require('./buildkit-cache.cjs').reader({directory:buildkitDir, toolkit:await require('./github-store.cjs').loadToolkit()});

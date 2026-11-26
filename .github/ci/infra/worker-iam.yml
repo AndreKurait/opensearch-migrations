@@ -116,11 +116,11 @@ Statement:
     Effect: Allow
     Action: s3:ListBucket
     Resource: !GetAtt Artifacts.Arn
-    Condition: {StringEquals: {'s3:prefix': dependency-cache/v1/catalog/}}
+    Condition: {StringEquals: {'s3:prefix': [dependency-cache/v1/catalog/, gradle-outputs/v1/]}}
   - Sid: ReadPublishedDependencies
     Effect: Allow
     Action: s3:GetObject
-    Resource: [!Sub '${Artifacts.Arn}/dependency-cache/v1/catalog/*', !Sub '${Artifacts.Arn}/dependency-cache/v1/blobs/*']
+    Resource: [!Sub '${Artifacts.Arn}/dependency-cache/v1/catalog/*', !Sub '${Artifacts.Arn}/dependency-cache/v1/blobs/*', !Sub '${Artifacts.Arn}/gradle-outputs/v1/*']
   - Sid: ReadOperatorRecovery
     Effect: Allow
     Action: s3:GetObject
