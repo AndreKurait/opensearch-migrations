@@ -185,7 +185,7 @@ RUN mkdir -p ${ES_HOME}/data ${ES_HOME}/logs
 # versions ignore the flag so it is safe to pass unconditionally for 5.x+).
 # Run before the final chown so all plugin files are owned by the elasticsearch user.
 RUN MAJOR=$(echo "${ES_VERSION}" | cut -d. -f1) && \
-    if [ "$MAJOR" -ge 5 ]; then \
+    if [ "$MAJOR" -ge 5 ] && [ ! -d "${ES_HOME}/modules/repository-gcs" ]; then \
       plugin=repository-gcs; \
       if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then plugin="http://$CI_PACKAGE_ENDPOINT/raw/elastic/downloads/elasticsearch-plugins/repository-gcs/repository-gcs-${ES_VERSION}.zip"; fi; \
       ${ES_HOME}/bin/elasticsearch-plugin install --batch "$plugin"; \
@@ -193,7 +193,7 @@ RUN MAJOR=$(echo "${ES_VERSION}" | cut -d. -f1) && \
 
 # Install repository-azure plugin (ES 7.0+)
 RUN MAJOR=$(echo "${ES_VERSION}" | cut -d. -f1) && \
-    if [ "$MAJOR" -ge 7 ]; then \
+    if [ "$MAJOR" -ge 7 ] && [ ! -d "${ES_HOME}/modules/repository-azure" ]; then \
       plugin=repository-azure; \
       if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then plugin="http://$CI_PACKAGE_ENDPOINT/raw/elastic/downloads/elasticsearch-plugins/repository-azure/repository-azure-${ES_VERSION}.zip"; fi; \
       ${ES_HOME}/bin/elasticsearch-plugin install --batch "$plugin"; \
