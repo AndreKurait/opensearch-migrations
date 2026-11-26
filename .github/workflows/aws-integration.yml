@@ -24,6 +24,10 @@ on:
       sha:
         type: string
         description: Full reviewed PR head SHA
+      cache-only:
+        type: boolean
+        default: false
+        description: Require cached dependencies on every selected AWS worker
       parameters:
         type: string
         description: Optional single-suite JSON parameters (see TESTING.md)

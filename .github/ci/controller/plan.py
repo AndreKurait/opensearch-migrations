@@ -113,8 +113,11 @@ def plan(event_name, event, repository, sha, ref, authenticate=api):
             suites = suites or (DEFAULT_PR_SUITE,)
     if not re.fullmatch(SHA, sha) or (release and not re.fullmatch(RELEASE, release)):
         raise ValueError('Invalid commit SHA or release version')
+    worker_options = parameters(suites, options)
+    if event_name == 'workflow_dispatch' and event['inputs'].get('cache-only') == 'true':
+        worker_options['CI_DEPENDENCY_MODE'] = 'replay'
     return {'sha': sha, 'ref': git_ref, 'matrix': json.dumps(list(suites), separators=(',', ':')),
-            'release': release, 'pr': str(pull or ''), 'parameters': json.dumps(parameters(suites, options))}
+            'release': release, 'pr': str(pull or ''), 'parameters': json.dumps(worker_options)}
 
 
 if __name__ == '__main__':

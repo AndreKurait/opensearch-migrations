@@ -110,7 +110,10 @@ class ApprovalTests(unittest.TestCase):
         self.event.update(sender={'login': 'reviewer'}, inputs={'pr': '12', 'sha': SHA})
         self.assertEqual(['cfn-create'], json.loads(self.select('workflow_dispatch')['matrix']))
         self.event['inputs'].update(suite='all')
-        self.assertEqual(set(plan.ALL), set(json.loads(self.select('workflow_dispatch')['matrix'])))
+        self.event['inputs']['cache-only'] = 'true'
+        result = self.select('workflow_dispatch')
+        self.assertEqual(set(plan.ALL), set(json.loads(result['matrix'])))
+        self.assertEqual({'CI_DEPENDENCY_MODE': 'replay'}, json.loads(result['parameters']))
 
     def test_only_supported_inputs_for_each_suite(self):
         self.assertEqual({'TEST_IDS': '0040,0042'}, parameters(['cdc'], '{"TEST_IDS":"0040,0042"}'))
