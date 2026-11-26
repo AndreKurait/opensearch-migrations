@@ -216,3 +216,24 @@ test('origin report records upstream fallback without headers or query strings',
     {key, host: 'plugins.gradle.org', status: 200},
   ]);
 });
+
+test('OCI manifest and blob probes use catalog metadata and defer byte verification until GET', async t => {
+  const digest = hash('oci');
+  const manifest = '/v2/dockerhub/library/test/manifests/v1';
+  const blob = `/v2/dockerhub/library/test/blobs/sha256:${digest}`;
+  const wrong = blob.replace(digest, 'a'.repeat(64));
+  const row = {digest, size: 3, type: manifestType};
+  const observed = [];
+  const proxy = await startProxy({catalog: new Map([[manifest, row], [blob, row], [wrong, row]]),
+    observeMetadata: key => observed.push(key), resolve: () => assert.fail('restored payload')});
+  t.after(proxy.close);
+  for (const key of [manifest, blob]) {
+    const head = await get(proxy.url, key, 'HEAD');
+    assert.equal(head.status, 200);
+    assert.equal(head.headers['docker-content-digest'], `sha256:${digest}`);
+    assert.equal(head.headers['content-length'], '3');
+    assert.equal((await get(proxy.url, key, 'GET', {'if-none-match': head.headers.etag})).status, 304);
+  }
+  assert.equal((await get(proxy.url, wrong, 'HEAD')).status, 502);
+  assert.deepEqual(observed, [manifest, manifest, blob, blob]);
+});

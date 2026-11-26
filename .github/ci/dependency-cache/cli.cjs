@@ -59,8 +59,9 @@ async function serve(store, mode, body, packageTransport) {
       buildkitDir = await fs.mkdtemp(path.join(os.tmpdir(), 'buildkit-cache-'));
       buildkitCache = require('./buildkit-cache.cjs').reader({directory:buildkitDir, toolkit:await require('./github-store.cjs').loadToolkit()});
     }
-    const catalog = mode === 'read' && store.entries ? new Map(store.entries.map(entry => [entry.key, entry])) : undefined;
-    proxy = await startProxy({resolve: key => store.resolve(key), catalog, packageTransport, buildCache, buildkitCache});
+    const catalog = store.metadataCatalog || (mode === 'read' && store.entries
+      ? require('./github-store.cjs').manifestLookup(store.entries) : undefined);
+    proxy = await startProxy({resolve: key => store.resolve(key), catalog, observeMetadata: store.observeMetadata, packageTransport, buildCache, buildkitCache});
     clients = await setupClients({url: proxy.url, mode});
     if (buildCache) {
       clients.env.CI_GRADLE_BUILD_CACHE_URL = `${proxy.url}/gradle-build-cache/`;
@@ -115,9 +116,16 @@ async function nativeWorker(command, args) {
       return require('./proxy.cjs').fetchPublic(key, file);
     },
   });
+  let metadataReads = 0;
+  const observeMetadata = store.observeMetadata;
+  store.observeMetadata = (key, digest) => { observeMetadata(key, digest); metadataReads++; };
+  store.metadataCatalog = {get(key) {
+    const entry = entries.get(key);
+    return strict || isFreshEntry(entry) ? entry : undefined;
+  }};
   try {
     await serve(store, 'record', env => run(command, args, {...process.env, ...env}));
-    if (strict && (!stats.restored || stats.misses)) throw new Error('Incomplete native dependency cache replay');
+    if (strict && ((!stats.restored && !metadataReads) || stats.misses)) throw new Error('Incomplete native dependency cache replay');
   } finally {
     await snapshot.close();
     if (process.env.CI_DEPENDENCY_CACHE_STATS) await fs.writeFile(process.env.CI_DEPENDENCY_CACHE_STATS, JSON.stringify(stats));

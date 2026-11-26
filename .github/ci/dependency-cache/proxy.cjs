@@ -340,7 +340,7 @@ function errorResponse(res, status, code, message) {
   res.end(body);
 }
 
-async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, packageTransport, buildCache, buildkitCache}) {
+async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, observeMetadata, packageTransport, buildCache, buildkitCache}) {
   if (typeof resolve !== 'function') throw new Error('An artifact resolver is required');
   // A resolver may return a restored file. Check digest-addressed OCI content before serving even a range.
   const verified = new Map();
@@ -363,10 +363,16 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, packa
       try { route = parseKey(key); } catch { return errorResponse(res, 400, 'NAME_INVALID', 'Invalid artifact path'); }
       // npm package indexes are rewritten for the client. Their wire length and ETag depend on its authority.
       const metadata = catalog?.get(key);
-      if (metadata && !metadata.missing && !route.npmMetadata && !route.oci && !req.headers.range) {
+      if (metadata && !metadata.missing && !route.npmMetadata && !req.headers.range) {
         const etag = `"${metadata.digest}"`;
         const unchanged = req.headers['if-none-match']?.split(',').some(value => ['*', etag, 'W/' + etag].includes(value.trim()));
         if (req.method === 'HEAD' || unchanged) {
+          if (!digestPattern.test(metadata.digest) || !Number.isSafeInteger(metadata.size) || metadata.size < 0 ||
+              (route.digest && route.digest !== metadata.digest) || (route.manifest && !manifestTypes.includes(metadata.type))) {
+            throw new Error('Invalid catalog metadata');
+          }
+          observeMetadata?.(key, metadata.digest);
+          if (route.oci) res.setHeader('docker-content-digest', `sha256:${metadata.digest}`);
           res.setHeader('etag', etag);
           res.setHeader('content-type', metadata.type);
           res.setHeader('content-length', metadata.size);

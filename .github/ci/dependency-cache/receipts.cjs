@@ -81,6 +81,14 @@ async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now 
     return item === null ? null : {...item, path: file};
   }
   return {
+    observeMetadata(key, digest) {
+      if (closed) throw new Error('Dependency recorder is closed');
+      const accessed = now();
+      const prior = observed.get(key);
+      if (prior) { prior.accessed = Math.max(prior.accessed, accessed); return; }
+      if (observed.size >= MAX_RECEIPT_ENTRIES) throw new Error('Too many distinct dependency requests');
+      observed.set(key, {key, accessed, digest});
+    },
     async resolve(key) {
       if (closed) throw new Error('Dependency recorder is closed');
       validateKey(key);
