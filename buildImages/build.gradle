@@ -197,7 +197,8 @@ def solr773Entry = [
     ]
 ]
 // Custom Elasticsearch images for k8s integration tests
-def ciPackageEndpoint = providers.environmentVariable('CI_DEPENDENCY_REGISTRY_ENDPOINT').getOrElse('')
+def ciPackageEndpoint = providers.environmentVariable('CI_BUILDKIT_PACKAGE_ENDPOINT')
+        .orElse(providers.environmentVariable('CI_DEPENDENCY_REGISTRY_ENDPOINT')).getOrElse('')
 def customESEntries = [
     [
                 serviceName: "customElasticsearch152",
