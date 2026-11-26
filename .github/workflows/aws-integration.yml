@@ -32,7 +32,7 @@ permissions: {}
 jobs:
   select:
     concurrency:
-      group: aws-integration-pr-status
+      group: ${{ (github.event_name == 'issue_comment' || inputs.pr != '') && 'aws-integration-pr-status' || format('aws-select-{0}', github.run_id) }}
       queue: max
     if: >-
       github.ref == 'refs/heads/main' &&
