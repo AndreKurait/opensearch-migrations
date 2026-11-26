@@ -252,6 +252,16 @@ class CapacityTests(unittest.TestCase):
         for key in ('vpcs', 'eips', 'builds', 'enis', 'vcpus'):
             self.assertEqual({}, capacity.lanes(dict(room, **{key: 0})))
 
+    def test_two_full_size_lanes_share_the_suites(self):
+        room = dict(builds=11, vpcs=4, igws=4, egws=5, eips=7, nat_per_az=5, vcpus=64, enis=5000)
+        lanes = capacity.lanes(room)
+        self.assertEqual(set(plan.ALL), set(lanes))
+        self.assertEqual([4, 5], sorted(list(lanes.values()).count(lane) for lane in set(lanes.values())))
+        for key, limit in room.items():
+            peaks = [max(capacity.RESERVATIONS[s][key] for s in lanes if lanes[s] == lane)
+                     for lane in set(lanes.values())]
+            self.assertLessEqual(sum(peaks), limit)
+
     def usage_rows(self):
         return {
             'describe-vpcs': {'Vpcs': []}, 'describe-instances': {'Reservations': []},

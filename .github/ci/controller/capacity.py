@@ -198,6 +198,7 @@ def lanes(room):
     # Sum of the per-resource maxima in every lane must fit for *any* selection, including overlapping runs.
     buckets = []
     assignment = {}
+    suite_counts = Counter()
     # Place overlapping VPCs first, then suites that can share the remaining EIPs.
     # The largest ENI and CPU reservations get first choice of available lanes.
     order = sorted(RESERVATIONS, key=lambda name: (RESERVATIONS[name]['vpcs'], -RESERVATIONS[name]['eips'],
@@ -206,7 +207,9 @@ def lanes(room):
         need = RESERVATIONS[suite]
         if any(need[k] > room[k] for k in QUOTAS):
             continue
-        for idx in [len(buckets), *range(len(buckets))]:
+        # Prefer another concurrent worker, then the least populated lane that can fit this suite.
+        existing = sorted(range(len(buckets)), key=suite_counts.__getitem__)
+        for idx in [len(buckets), *existing]:
             candidate = dict(buckets[idx]) if idx < len(buckets) else dict.fromkeys(QUOTAS, 0)
             peak = {k: max(candidate[k], need[k]) for k in QUOTAS}
             if all(peak[k] + sum(b[k] for j, b in enumerate(buckets) if j != idx) <= room[k] for k in QUOTAS):
@@ -214,6 +217,7 @@ def lanes(room):
                     buckets.append(peak)
                 else:
                     buckets[idx] = peak
+                suite_counts[idx] += 1
                 assignment[suite] = idx + 1
                 break
     return assignment
