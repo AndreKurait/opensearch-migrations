@@ -345,6 +345,7 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, obser
   // A resolver may return a restored file. Check digest-addressed OCI content before serving even a range.
   const verified = new Map();
   const server = http.createServer(async (req, res) => {
+    let resource, stage;
     try {
       if (buildkitCache && req.url.startsWith('/v2/buildkit-cache/') && await buildkitCache(req,res)) return;
       if (buildCache && req.url.startsWith('/gradle-build-cache/') && await buildCache.handle(req,res)) return;
@@ -361,6 +362,8 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, obser
       }
       let route;
       try { route = parseKey(key); } catch { return errorResponse(res, 400, 'NAME_INVALID', 'Invalid artifact path'); }
+      resource = key;
+      stage = 'catalog';
       // npm package indexes are rewritten for the client. Their wire length and ETag depend on its authority.
       const metadata = catalog?.get(key);
       if (metadata && !metadata.missing && !route.npmMetadata && !req.headers.range) {
@@ -382,8 +385,11 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, obser
           return;
         }
       }
+      stage = 'package-service';
       if (packageTransport && await packageTransport(req, res, key)) return;
+      stage = 'resolve';
       const item = await resolve(key);
+      stage = 'serve';
       if (!item) return errorResponse(res, 404, route.manifest ? 'MANIFEST_UNKNOWN' : 'BLOB_UNKNOWN', 'Artifact not found');
       if (!isAbsolute(item.path) || !digestPattern.test(item.digest) || !Number.isSafeInteger(item.size) || item.size < 0 ||
           (route.digest && item.digest !== route.digest) || (route.manifest && !manifestTypes.includes(item.type))) {
@@ -453,6 +459,10 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, obser
       }
     } catch (error) {
       const missing = error.code === 'CACHE_MISS';
+      if (resource && (process.env.GITHUB_ACTIONS === 'true' || process.env.CODEBUILD_BUILD_ID)) {
+        const code = /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code || '') ? error.code : 'UNKNOWN';
+        console.warn(`Dependency request failed ${JSON.stringify({key: resource, stage, code, status: missing ? 503 : 502})}`);
+      }
       errorResponse(res, missing ? 503 : 502, 'UNAVAILABLE', missing ? `Missing published dependency ${canonicalKey(req.url)}` : 'Artifact unavailable');
     }
   });
