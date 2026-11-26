@@ -218,9 +218,16 @@ jobs:
           if [[ -n "$TEST_IDS" && "$TEST_IDS" != "all" ]]; then
             test_ids_arg=(--test-ids="$TEST_IDS")
           fi
+          values_args=()
+          if [[ -n "${CI_DEPENDENCY_REGISTRY_ENDPOINT:-}" ]]; then
+            values="$RUNNER_TEMP/values-local-cache.yaml"
+            cp ../../deployment/k8s/charts/aggregates/migrationAssistantWithArgo/valuesForLocalK8s.yaml "$values"
+            echo "chartArchiveMirror: http://$CI_DEPENDENCY_REGISTRY_ENDPOINT" >> "$values"
+            values_args=(--values-file "$values")
+          fi
           read -ra sources <<< "${SOURCE_VERSION//,/ }"
           pipenv run app --source-version "${sources[@]}" --target-version="$TARGET_VERSION" \
-            "${test_ids_arg[@]}" \
+            "${test_ids_arg[@]}" "${values_args[@]}" \
             --test-reports-dir=./reports --copy-logs \
             --registry-prefix='docker-registry:5001/' \
             --kube-context="kind-${KIND_CLUSTER_NAME}" \

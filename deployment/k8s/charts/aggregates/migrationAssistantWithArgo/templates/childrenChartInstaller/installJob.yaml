@@ -114,13 +114,13 @@ spec:
 
       {{- range $name, $chart := .Values.charts }}
           {{- $repo := $chart.repository }}
-          {{- if and (index $.Values.conditionalPackageInstalls $name) (ne (substr 0 6 $repo) "oci://") }}
+          {{- if and (not $.Values.chartArchiveMirror) (index $.Values.conditionalPackageInstalls $name) (ne (substr 0 6 $repo) "oci://") }}
               echo "Adding chart repository..."
               retry 3 5 "helm repo add {{ $name }}" -- helm repo add chart-repo-{{ $name }} {{ $repo }}
           {{- end }}
       {{- end }}
 
-      {{- if .Values.charts }}
+      {{- if and .Values.charts (not .Values.chartArchiveMirror) }}
               retry 3 10 "helm repo update" -- helm repo update || \
                 echo "No traditional helm repos to update (OCI repos don't need it)"
       {{- end }}
@@ -270,7 +270,11 @@ spec:
                 do_install_{{ $name | replace "-" "_" }}() {
           {{- $repo := $chart.repository }}
           {{- $version := $chart.version }}
-          {{- if hasPrefix "oci://" $repo }}
+          {{- if $.Values.chartArchiveMirror }}
+                  helm upgrade --install \
+                    {{ $name }} \
+                    {{ printf "%s/helm/%s/%s-%s.tgz" ($.Values.chartArchiveMirror | trimSuffix "/") $name $name $version | quote }} \
+          {{- else if hasPrefix "oci://" $repo }}
                   echo "Installing OCI chart: {{ $name }}"
                   helm upgrade --install \
                     {{ $name }} \
