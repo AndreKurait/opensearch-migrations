@@ -185,7 +185,8 @@ async function openRecorder(options = {}) {
           }
           const entry = checkEntry(data === null ? {key, missing: true, digest: null, size: 0, type: '', accessed: observedAt, verifiedAt: current} :
             {key, digest: data.digest, size: data.size, type: data.type, accessed: observedAt, verifiedAt: current}, proxy.validateKey);
-          if (data !== null) {
+          if (data !== null && entry.digest !== known?.digest) {
+            // A catalog digest already references a verified, immutable S3 object.
             // fetchPublic hashes while streaming; S3 validates the same checksum before accepting the file.
             await storage.put(blobKey(entry.digest), filename, entry.digest);
           }

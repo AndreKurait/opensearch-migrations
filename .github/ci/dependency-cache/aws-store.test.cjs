@@ -167,3 +167,24 @@ test('receipt import independently refreshes a changed package index and still v
   assert.equal(entry.verifiedAt, 100);
   assert.equal(entry.accessed, 90);
 });
+
+
+test('revalidating unchanged registry metadata updates freshness without uploading the blob again', async () => {
+  const {storage} = fixture();
+  const proxy = origin('index');
+  const key = '/npm/typescript';
+  const initial = await openRecorder({storage, proxy, now: () => 100});
+  const {digest} = await initial.resolve(key);
+  await initial.close();
+  const writes = [];
+  const next = await openRecorder({storage: {...storage, async put(...args) {
+    writes.push(args[0]);
+    return storage.put(...args);
+  }}, proxy, now: () => 400000});
+  await next.importObservation({key, digest, accessed: 390000});
+  const [entry] = await next.close();
+  assert.equal(proxy.hits, 2);
+  assert.equal(entry.verifiedAt, 400000);
+  assert.equal(writes.length, 1);
+  assert.match(writes[0], /\/catalog\//);
+});
