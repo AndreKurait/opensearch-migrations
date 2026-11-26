@@ -268,12 +268,6 @@
       "nativePrivileges": true,
       "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true'"
     },
-    "ci-jobs.yml/generate-test-matrix": {
-      "purposes": [
-        "github"
-      ],
-      "nativePrivileges": false
-    },
     "ci-jobs.yml/seed-gradle-test-docker-cache": {
       "purposes": [
         "github",

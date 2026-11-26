@@ -17,7 +17,6 @@ env:
   java-version: '21'
   gradle-version: '8.12.1'
   node-version: '22.x'
-  gradle-test-parallelization: '30'
 
 jobs:
   gradle-extended-check:
@@ -401,26 +400,6 @@ jobs:
         if: ${{ !(vars.DEPENDENCY_PROXY_ENABLED == 'true') }}
         run: python3 -m unittest discover -s gradle/tests -v
 
-  generate-test-matrix:
-    if: *run_ci
-    runs-on: ubuntu-22.04
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      # BEGIN generated network guard
-      - *network_3
-      - *enforce_unprivileged
-      # END generated network guard
-
-      - id: set-matrix
-        run: |
-          # Generate a JSON array from 0 to gradle-test-parallelization-1
-          indices=()
-          for i in $(seq 0 $((${{ env.gradle-test-parallelization }}-1))); do
-            indices+=($i)
-          done
-          echo "matrix=$(IFS=,; echo "[${indices[*]}]")" >> $GITHUB_OUTPUT
-
   seed-gradle-test-docker-cache:
     if: >-
       vars.DEPENDENCY_PROXY_ENABLED != 'true' &&
@@ -471,9 +450,10 @@ jobs:
         run: .github/scripts/seed-gradle-test-docker-cache.sh "${{ matrix.image_list }}"
 
   gradle-tests:
-    needs: [generate-test-matrix, seed-gradle-test-docker-cache]
+    needs: seed-gradle-test-docker-cache
     if: >-
-      !cancelled() && needs.generate-test-matrix.result == 'success' &&
+      !cancelled() &&
+      (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch') &&
       (needs.seed-gradle-test-docker-cache.result == 'success' ||
       (vars.DEPENDENCY_PROXY_ENABLED == 'true' && needs.seed-gradle-test-docker-cache.result == 'skipped'))
     permissions: {contents: read, actions: read}
@@ -481,7 +461,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        index: ${{ fromJson(needs.generate-test-matrix.outputs.matrix) }}
+        index: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
     env:
       CI_GRADLE_STRIPE: ${{ matrix.index }}
       # The secrets context is unavailable in a step `if`, so gate on this instead.
@@ -542,7 +522,7 @@ jobs:
           MAX_WORKERS=$(( $(nproc) - 1 ))
           ./gradlew allTests mergeJacocoReports \
           --max-workers $MAX_WORKERS \
-          -Dtest.striping.total=${{ env.gradle-test-parallelization }} \
+          -Dtest.striping.total=${{ strategy.job-total }} \
           -Dtest.striping.index=${{ matrix.index }} \
           -x spotlessCheck --stacktrace --continue
         env:
