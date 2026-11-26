@@ -92,6 +92,19 @@ async function finish() {
       }
       await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
     }
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      const originFile = path.join(dir, 'origin-requests.jsonl');
+      await fs.writeFile(originFile, origins);
+      const files = [originFile];
+      for (const name of ['transfer-metrics.json', 'openartifact-metrics.json', 'misses.json']) {
+        const file = path.join(dir, name);
+        try { await fs.access(file); files.push(file); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
+      const {default: artifacts} = await import('../../ci/dependency-cache/node_modules/@actions/artifact/lib/artifact.js');
+      const name = `dependency-report-${process.env.GITHUB_JOB}-${process.env.GITHUB_RUN_ATTEMPT}-${randomUUID()}`;
+      await artifacts.uploadArtifact(name, files, dir, {retentionDays: 7});
+    }
     const log = await fs.readFile(path.join(dir, 'service.log'), 'utf8').catch(() => '');
     const failures = log.match(/^Cache (?:archive|metadata) at [a-z0-9.-]+ failed \([a-z0-9_, ]{1,120}\)\.$/gim) || [];
     for (const reason of new Set(failures.slice(-10))) console.warn(reason);
