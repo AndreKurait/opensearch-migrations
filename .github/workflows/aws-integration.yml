@@ -28,6 +28,11 @@ on:
         type: string
         description: Optional single-suite JSON parameters (see TESTING.md)
         default: '{}'
+# Admit one main-push matrix at a time so a burst of commits doesn't fill
+# every Oregon worker lane with nine waiting suites per push.
+concurrency:
+  group: ${{ github.event_name == 'push' && 'aws-main-push-matrix' || format('aws-integration-run-{0}', github.run_id) }}
+  queue: max
 permissions: {}
 jobs:
   select:
