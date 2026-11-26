@@ -43,6 +43,11 @@ def dependency_report(archive):
 def render(path, output_dir=None):
     with ZipFile(path) as archive:
         dependencies = dependency_report(archive)
+        if output_dir and dependencies is not None:
+            stats, rows = dependencies
+            output_dir.mkdir()
+            (output_dir / 'dependency-origin.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
+            (output_dir / 'dependency-cache-stats.json').write_text(json.dumps(stats) + '\n')
         entries = [entry for entry in archive.infolist() if entry.filename == 'junit.xml']
         if len(entries) != 1 or entries[0].file_size > 8 * 1024**2:
             raise ValueError('Expected one root junit.xml under 8 MiB')
@@ -69,7 +74,7 @@ def render(path, output_dir=None):
         # Publish only validated fields from the candidate archive.
         summary = dict(suite=public_text(root.get('name', '')), tests=len(cases), failures=outcomes['failed'],
                        errors=outcomes['error'], skipped=outcomes['skipped'])
-        output_dir.mkdir()
+        output_dir.mkdir(exist_ok=True)
         (output_dir / 'junit.xml').write_text(public_text(ET.tostring(root, encoding='unicode')), encoding='utf-8')
         (output_dir / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
     if dependencies is not None:
@@ -78,7 +83,4 @@ def render(path, output_dir=None):
                    f"The proxy recorded {len(rows)} public HTTP request attempts across "
                    f"{stats['originRequests']} upstream artifact resolutions; "
                    f"{stats['misses']} cache keys were missing.")
-        if output_dir:
-            (output_dir / 'dependency-origin.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
-            (output_dir / 'dependency-cache-stats.json').write_text(json.dumps(stats) + '\n')
     return '\n'.join([counts, '', '| Test case | Result |', '| --- | --- |', *lines]), outcomes

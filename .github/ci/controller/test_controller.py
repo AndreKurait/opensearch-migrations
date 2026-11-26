@@ -207,6 +207,19 @@ class ObservationTests(unittest.TestCase):
             origin_log = base / 'output/dependency-origin.jsonl'
             self.assertEqual(rows, [json.loads(row) for row in origin_log.read_text().splitlines()])
 
+    def test_dependency_report_survives_failure_before_junit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            stats = dict(restored=2, bytes=4, originRequests=0, misses=1)
+            with ZipFile(base / 'result.zip', 'w') as archive:
+                archive.writestr('dependency-cache-stats.json', json.dumps(stats))
+                archive.writestr('dependency-origin.jsonl', '')
+            with self.assertRaisesRegex(ValueError, 'junit.xml'):
+                render(base / 'result.zip', base / 'output')
+            self.assertEqual(stats, json.loads((base / 'output/dependency-cache-stats.json').read_text()))
+            self.assertEqual(b'', (base / 'output/dependency-origin.jsonl').read_bytes())
+            self.assertFalse((base / 'output/junit.xml').exists())
+
     def test_bounded_report_and_safe_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'report.zip'
