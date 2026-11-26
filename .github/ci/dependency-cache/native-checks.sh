@@ -23,6 +23,9 @@ if ! command -v bwrap >/dev/null || ! command -v skopeo >/dev/null; then
 fi
 suite=${1:?Missing repository check}
 case "$suite" in
+  protocol-smoke)
+    exec "$launcher" node .github/ci/dependency-cache/smoke.cjs
+    ;;
   gradle-extended)
     case "${2:-}" in spotlessCheck|publishToMavenLocal) ;; *) echo 'Unknown extended Gradle task' >&2; exit 2;; esac
     exec "$launcher" ./gradlew "$2"

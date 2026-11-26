@@ -32,30 +32,8 @@ runs:
       with:
         node-version: 22.x
 
-    - name: Restore npm archives for the dependency cache toolkit
+    - uses: ./.github/actions/install-dependency-toolkit
       if: inputs.dependency-proxy-enabled == 'true'
-      id: toolkit-cache
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
-      with:
-        path: ${{ runner.temp }}/dependency-toolkit-npm/_cacache
-        key: dependency-toolkit-npm-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/ci/dependency-cache/package-lock.json') }}
-        fail-on-cache-miss: ${{ env.CI_DEPENDENCY_STRICT_READ == '1' }}
-
-    - name: Install dependency cache toolkit
-      if: inputs.dependency-proxy-enabled == 'true'
-      shell: bash
-      working-directory: ${{ github.workspace }}
-      env:
-        npm_config_cache: ${{ runner.temp }}/dependency-toolkit-npm
-        npm_config_offline: ${{ steps.toolkit-cache.outputs.cache-hit == 'true' || env.CI_DEPENDENCY_STRICT_READ == '1' }}
-      run: npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund
-
-    - name: Save verified toolkit archives for cache-only runs
-      if: inputs.dependency-proxy-enabled == 'true' && steps.toolkit-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && env.CI_DEPENDENCY_STRICT_READ != '1'
-      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
-      with:
-        path: ${{ runner.temp }}/dependency-toolkit-npm/_cacache
-        key: ${{ steps.toolkit-cache.outputs.cache-primary-key }}
 
     - name: Start dependency cache
       if: inputs.dependency-proxy-enabled == 'true'
