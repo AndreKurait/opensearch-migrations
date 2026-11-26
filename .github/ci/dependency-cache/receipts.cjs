@@ -72,6 +72,13 @@ function reusableRecordingEntry(entry, now = Date.now(), catalog) {
   // Gradle probes for a JAR even when a released plugin marker contains only a POM.
   if (!entry.key.startsWith('/maven/') || !immutablePublicKey(entry.key)) return false;
   if (/\.gradle\.plugin\/[^/]+\/[^/]+\.jar$/.test(entry.key)) return true;
+  // The Gradle Node plugin probes Maven metadata before using the distribution archive.
+  const nodePom = /^\/maven\/org\/nodejs\/node\/(\d+\.\d+\.\d+)\/node-\1\.pom$/.exec(entry.key);
+  if (nodePom) {
+    const archive = `/raw/node/v${nodePom[1]}/node-v${nodePom[1]}-linux-x64.tar.gz`;
+    const digest = pinnedRawDigest(archive);
+    return Boolean(digest && catalog?.get(archive)?.digest === digest);
+  }
   if (!/\.(jar|module)$/.test(entry.key)) return false;
   const pom = catalog?.get(entry.key.replace(/\.(jar|module)$/, '.pom'));
   return Boolean(pom?.digest && !pom.missing);

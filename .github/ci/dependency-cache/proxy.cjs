@@ -39,6 +39,7 @@ const registries = {
   distroless: {host: 'gcr.io', realm: 'https://gcr.io/v2/token', service: 'gcr.io', repo: 'distroless/static', cdn: []},
 };
 const pinnedRawArtifacts = {
+  '/raw/node/v22.14.0/node-v22.14.0-linux-x64.tar.gz': '9d942932535988091034dc94cc5f42b6dc8784d6366df3a36c4c9ccb3996f0c2',
   '/raw/bubblewrap/bubblewrap_0.9.0-1ubuntu0.3_amd64.deb': '2461f1beee9cb04c8942739fe1a2b37e7b7c2a3d518f0779dc75f9245baa3094',
   '/raw/elastic/downloads/elasticsearch/elasticsearch-5.6.16.tar.gz': '6b035a59337d571ab70cea72cc55225c027ad142fbb07fd8984e54261657c77f',
   '/raw/elastic/downloads/elasticsearch/elasticsearch-6.8.23.tar.gz': '424af91f838f9e5f13e0292f97cbd6333535450291a621d761bd479dfc2dff78',
