@@ -163,14 +163,15 @@ def local_ipc():
     if existing.returncode != 1:
         raise RuntimeError('Expected an unused non-administrative UID for the worker')
     broker_port = urllib.parse.urlsplit(os.environ.get('CI_DEPENDENCY_PROXY_URL', '')).port or 30071
-    # Classify candidate connections on output, then check the receiving listener's UID on input.
-    # Runner and broker connections use the VM's ordinary allocator and never receive this tag.
+    # Keep candidate IPC stateless until PF has verified the inbound listener.
+    # Trusted local clients establish state on output so their reply traffic remains available.
     rules = (f'pass out quick on lo0 inet proto tcp to 127.0.0.1 port {broker_port} user {GUEST_UID} keep state\n'
              f'pass out quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{last} user {GUEST_UID} '
-             'no state tag MIGRATIONS_GUEST\n'
+             'no state\n'
              f'block return-rst out quick on lo0 proto tcp user {GUEST_UID}\n'
-             f'block return-rst in quick on lo0 inet proto tcp to 127.0.0.1 user != {GUEST_UID} '
-             'tagged MIGRATIONS_GUEST\n')
+             f'pass out quick on lo0 inet proto tcp to 127.0.0.1 user != {GUEST_UID} keep state\n'
+             f'pass in quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{last} user {GUEST_UID} keep state\n'
+             f'block return-rst in quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{last} flags S/SA\n')
     try:
         command(['/usr/bin/sudo', '-n', PF, '-a', anchor, '-f', '-'], input=rules)
         yield ports
