@@ -91,7 +91,7 @@ project(':deployment:k8s:migrationCompanion').projectDir = file('deployment/k8s/
 
 addSubProjects(':transformation', Paths.get(rootProject.projectDir.getPath(), 'transformation', 'transformationPlugins').toFile())
 
-if (System.getenv().containsKey("OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED")) {
+if (!System.getenv("CI_DEPENDENCY_PROXY_URL") && System.getenv().containsKey("OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED")) {
     develocity {
         buildScan {
             publishing.onlyIf { true }
