@@ -136,6 +136,9 @@ def buildKitProjects = [
         ]
 ]
 
+def ciPackageEndpoint = providers.environmentVariable('CI_BUILDKIT_PACKAGE_ENDPOINT')
+        .orElse(providers.environmentVariable('CI_DEPENDENCY_REGISTRY_ENDPOINT')).getOrElse('')
+
 def k6Entry = [
     // Load-test-only k6 runtime for the Kubernetes integration. It contains a pinned
     // k6 executable with the Valkey-compatible xk6-redis extension plus the scenarios,
@@ -162,6 +165,7 @@ def k6OperatorEntry = [
     // The image build downloads Go modules for its tests and the controller, so it honors the
     // builder's GOPROXY the same way as k6Runner above.
     buildArgs: [
+        CI_PACKAGE_ENDPOINT: ciPackageEndpoint,
         GOPROXY: System.getenv("GOPROXY") ?: "",
         BUILDER_IMAGE: ptc.rewrite(
             "docker.io/library/golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648"
@@ -199,8 +203,6 @@ def solr773Entry = [
     ]
 ]
 // Custom Elasticsearch images for k8s integration tests
-def ciPackageEndpoint = providers.environmentVariable('CI_BUILDKIT_PACKAGE_ENDPOINT')
-        .orElse(providers.environmentVariable('CI_DEPENDENCY_REGISTRY_ENDPOINT')).getOrElse('')
 def customESEntries = [
     [
                 serviceName: "customElasticsearch152",

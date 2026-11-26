@@ -15,11 +15,16 @@ ARG K6_OPERATOR_SOURCE_SHA256=87808985b4c5519b13673d1c1227250e6d215a710f04d5fe7c
 # mirror through, as for the k6 runner image (see ../Dockerfile).
 ARG GOPROXY
 
-RUN apk add --no-cache curl patch
+ARG CI_PACKAGE_ENDPOINT
+RUN if [ -n "$CI_PACKAGE_ENDPOINT" ]; then \
+      sed "s|https://dl-cdn.alpinelinux.org/alpine/|http://$CI_PACKAGE_ENDPOINT/raw/alpine/|g" /etc/apk/repositories > /tmp/ci-repositories; \
+      apk --repositories-file /tmp/ci-repositories add --no-cache curl patch; \
+    else apk add --no-cache curl patch; fi
 WORKDIR /workspace
 
-RUN curl -fsSL \
-      "https://codeload.github.com/grafana/k6-operator/tar.gz/${K6_OPERATOR_COMMIT}" \
+RUN source_url="https://codeload.github.com/grafana/k6-operator/tar.gz/${K6_OPERATOR_COMMIT}" \
+    && if [ -n "$CI_PACKAGE_ENDPOINT" ]; then source_url="http://$CI_PACKAGE_ENDPOINT/k6-operator/$K6_OPERATOR_COMMIT"; fi \
+    && curl -fsSL "$source_url" \
       -o /tmp/k6-operator.tar.gz \
     && echo "${K6_OPERATOR_SOURCE_SHA256}  /tmp/k6-operator.tar.gz" | sha256sum -c - \
     && tar -xzf /tmp/k6-operator.tar.gz --strip-components=1

@@ -86,6 +86,10 @@ function parseKey(key) {
     throw new Error('Invalid artifact path');
   }
   const [kind, originId] = parts;
+  if (key === '/k6-operator/3f43f7a5915587851f27063b8e28694a29a53f43') {
+    return {urls: [new URL(`https://codeload.github.com/grafana/k6-operator/tar.gz/${originId}`)], cdn: [],
+      digest: '87808985b4c5519b13673d1c1227250e6d215a710f04d5fe7c65c370105c7c0e'};
+  }
   if (kind === 'npm') {
     const scoped = /^@[a-z0-9._-]+$/.test(parts[1]);
     const packageLength = scoped ? 3 : 2;
