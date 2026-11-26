@@ -10,7 +10,7 @@ phases:
     commands:
       - |
         set -euo pipefail
-        [[ "${CI_CACHE_MODE:-}" =~ ^(record|publish|both)$ ]]
+        [[ "${CI_CACHE_MODE:-}" =~ ^(record|ingest|publish|both)$ ]]
         [[ "${CI_CACHE_MAIN_SHA:-}" =~ ^[a-f0-9]{40}$ ]]
         if [[ -n "${CI_CACHE_GRANT_PARAMETER:-}" ]]; then
           [[ "$CI_CACHE_GRANT_PARAMETER" =~ ^/migrations/cache-grants/[0-9]+-[0-9]+-[a-f0-9-]{36}$ ]]
@@ -20,7 +20,7 @@ phases:
         fi
         packages=()
         if ! command -v zstd >/dev/null; then packages+=(zstd); fi
-        if [[ "$CI_CACHE_MODE" != publish ]] && ! command -v skopeo >/dev/null; then packages+=(skopeo); fi
+        if [[ "$CI_CACHE_MODE" == record || "$CI_CACHE_MODE" == both ]] && ! command -v skopeo >/dev/null; then packages+=(skopeo); fi
         if (( ${#packages[@]} > 0 )); then
           apt-get update -qq
           apt-get install -y -qq "${packages[@]}"
@@ -33,7 +33,7 @@ phases:
         # Queued publishers can start after newer trusted recorders add routes to the shared S3 catalog.
         # Keep the original worker SHA for provenance, and publish with the current trusted catalog reader.
         revision="$CI_CACHE_MAIN_SHA"
-        if [[ "$CI_CACHE_MODE" == publish || "$CI_CACHE_MODE" == both ]]; then revision=FETCH_HEAD; fi
+        if [[ "$CI_CACHE_MODE" == publish || "$CI_CACHE_MODE" == ingest || "$CI_CACHE_MODE" == both ]]; then revision=FETCH_HEAD; fi
         git checkout --quiet --detach "$revision"
         node -e 'if (process.versions.node.split(".")[0] !== "22") throw Error("Node 22 is required")'
         npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund

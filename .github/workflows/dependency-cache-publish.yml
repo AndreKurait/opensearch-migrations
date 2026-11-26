@@ -2,6 +2,7 @@ name: Run protected dependency publisher
 on:
   workflow_call:
     inputs:
+      ingest: {type: boolean, default: false}
       receipt: {type: string, default: ''}
       build: {type: string, default: ''}
       sha: {type: string, required: true}
@@ -55,6 +56,7 @@ jobs:
         uses: ./.github/actions/dependency-cache
         with: {mode: launch}
         env:
+          CI_CACHE_INGEST: ${{ inputs.ingest }}
           CI_CACHE_INVENTORY_TOKEN: ${{ github.token }}
           CI_CACHE_MAIN_SHA: ${{ github.workflow_sha }}
           CI_CACHE_RECEIPT_SHA: ${{ inputs.sha }}

@@ -8,18 +8,28 @@ on:
       sha: {type: string, description: Commit of the original native worker}
       seed: {type: boolean, default: false, description: Exercise Gradle and OCI to bootstrap the cache}
 permissions: {}
-concurrency:
-  group: migrations-main-dependency-cache-publish
-  queue: max
 jobs:
-  sync:
+  ingest:
+    if: inputs.receipt != '' || inputs.build != ''
     uses: ./.github/workflows/dependency-cache-publish.yml
     permissions: {actions: read, contents: read, id-token: write}
     secrets: {AWS_CI_CONFIG: '${{ secrets.AWS_CI_CONFIG }}'}
     with:
+      ingest: true
       receipt: ${{ inputs.receipt }}
       build: ${{ inputs.build }}
       sha: ${{ inputs.sha || github.sha }}
+  sync:
+    needs: ingest
+    if: ${{ !cancelled() && (needs.ingest.result == 'success' || needs.ingest.result == 'skipped') }}
+    concurrency:
+      group: migrations-main-dependency-cache-publish
+      queue: max
+    uses: ./.github/workflows/dependency-cache-publish.yml
+    permissions: {actions: read, contents: read, id-token: write}
+    secrets: {AWS_CI_CONFIG: '${{ secrets.AWS_CI_CONFIG }}'}
+    with:
+      sha: ${{ github.sha }}
       seed: ${{ inputs.seed }}
   acknowledge:
     needs: sync

@@ -476,6 +476,9 @@
       ],
       "nativePrivileges": false
     },
+    "dependency-cache-sync.yml/ingest": {
+      "delegates": "./.github/workflows/dependency-cache-publish.yml"
+    },
     "dependency-cache-sync.yml/sync": {
       "delegates": "./.github/workflows/dependency-cache-publish.yml"
     },

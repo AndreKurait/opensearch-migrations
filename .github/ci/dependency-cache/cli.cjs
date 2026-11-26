@@ -180,7 +180,7 @@ async function importMain(observations) {
 
 async function cloudWorker() {
   const mode = process.env.CI_CACHE_MODE;
-  if (!['record', 'publish', 'both'].includes(mode)) throw new Error('Invalid worker mode');
+  if (!['record', 'ingest', 'publish', 'both'].includes(mode)) throw new Error('Invalid worker mode');
   if (mode === 'record' && process.env.CI_CACHE_BUILD_ID) {
     const observations = await nativeReceipt(process.env.CI_CACHE_BUILD_ID);
     await importMain(observations);
@@ -190,7 +190,7 @@ async function cloudWorker() {
   // Linux repository tests install this verified sandbox prerequisite before requesting test dependencies.
   await importMain([{key: '/raw/bubblewrap/bubblewrap_0.9.0-1ubuntu0.3_amd64.deb',
     digest: '2461f1beee9cb04c8942739fe1a2b37e7b7c2a3d518f0779dc75f9245baa3094', accessed: Date.now()}]);
-  if (mode !== 'publish') {
+  if (mode === 'both' || mode === 'record') {
     const recorder = await require('./aws-store.cjs').openRecorder();
     await serve(recorder, 'record', async env => {
       const proxy = new URL(env.CI_DEPENDENCY_PROXY_URL);
@@ -244,6 +244,11 @@ async function cloudWorker() {
     await importMain(receipts);
   }
   if (process.env.CI_CACHE_BUILD_ID) await importMain(await nativeReceipt(process.env.CI_CACHE_BUILD_ID));
+  if (mode === 'ingest') {
+    if (!process.env.CI_CACHE_RECEIPT_KEY && !process.env.CI_CACHE_BUILD_ID) throw new Error('Missing protected receipt');
+    console.log('Protected dependency receipts imported into S3.');
+    return;
+  }
   const catalog = await require('./aws-store.cjs').openPublisher();
   try {
     const github = require('./github-store.cjs');
@@ -290,7 +295,7 @@ async function launchPublisher() {
     await aws('ssm', 'put-parameter', '--name', parameter, '--type', 'SecureString', '--tier',
       Buffer.byteLength(payload) > 4096 ? 'Advanced' : 'Standard', '--value', `file://${file}`);
     await fs.rm(file);
-    const variables = {CI_CACHE_MAIN_SHA: env.CI_CACHE_MAIN_SHA, CI_CACHE_MODE: env.CI_CACHE_SEED === 'true' ? 'both' : 'publish', CI_CACHE_GRANT_PARAMETER: parameter};
+    const variables = {CI_CACHE_MAIN_SHA: env.CI_CACHE_MAIN_SHA, CI_CACHE_MODE: env.CI_CACHE_INGEST === 'true' ? 'ingest' : env.CI_CACHE_SEED === 'true' ? 'both' : 'publish', CI_CACHE_GRANT_PARAMETER: parameter};
     if (key) variables.CI_CACHE_RECEIPT_KEY = key;
     if (native) {
       variables.CI_CACHE_BUILD_ID = native;
