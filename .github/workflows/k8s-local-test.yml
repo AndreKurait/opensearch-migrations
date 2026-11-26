@@ -19,6 +19,10 @@ on:
         required: false
         type: string
         default: 'all'
+      test-image-task:
+        description: Standard source image task or aggregate fallback
+        type: string
+        default: all
       release-ref:
         description: Optional repository ref exercised by scheduled release canaries
         required: false
@@ -185,8 +189,15 @@ jobs:
           if [[ ",${TEST_IDS// /}," == *",008"* ]]; then
             load_test_target=":buildImages:buildKitLoadTestAll_amd64"
           fi
+          test_image_tasks=(:buildImages:buildKitTestAll_amd64)
+          if [[ -z "$RELEASE_REF" ]]; then
+            case "$TEST_IMAGE_TASK" in
+              none) test_image_tasks=() ;;
+              :buildKit_customElasticsearch*_amd64) test_image_tasks=("$TEST_IMAGE_TASK") ;;
+            esac
+          fi
           for attempt in 1 2 3; do
-            if ./gradlew :buildImages:buildImagesToRegistry_amd64 :buildImages:buildKitTestAll_amd64 ${load_test_target} \
+            if ./gradlew :buildImages:buildImagesToRegistry_amd64 "${test_image_tasks[@]}" ${load_test_target} \
                 -Pbuilder="builder-kind-${KIND_CLUSTER_NAME}" -PregistryEndpoint=localhost:5001 \
                 -x test --stacktrace; then
               exit 0
@@ -198,6 +209,8 @@ jobs:
           done
           exit 1
         env:
+          TEST_IMAGE_TASK: ${{ inputs.test-image-task }}
+          RELEASE_REF: ${{ inputs.release-ref }}
           OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
 
       - name: Publish BuildKit registry layers

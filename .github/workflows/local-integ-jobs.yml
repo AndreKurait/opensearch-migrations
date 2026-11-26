@@ -95,6 +95,7 @@ jobs:
       source-version: ${{ matrix.source }}
       target-version: ${{ matrix.target }}
       test-ids: ${{ matrix.ids }}
+      test-image-task: ${{ matrix.testImageTask || 'all' }}
       release-ref: ${{ needs.select-tests.outputs.release-ref }}
       release-repo: ${{ needs.select-tests.outputs.release-repo }}
       save-registry-cache: ${{ matrix.source == 'ES_7.10' && matrix.target == 'OS_3.1' }}

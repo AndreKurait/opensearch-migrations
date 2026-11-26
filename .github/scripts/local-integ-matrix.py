@@ -69,4 +69,17 @@ if __name__ == '__main__':
     jobs = select(args.mode, args.source, args.target, args.test_ids)
     if not jobs:
         parser.error('the selection contains no distinct source and target pair')
+    if args.mode == 'standard':
+        # clusterWorkflows.yaml uses one custom source image for each ES stripe.
+        # The OpenSearch and modern Solr templates pull published source images.
+        custom_images = {
+            'ES_1.5': 'customElasticsearch152', 'ES_2.4': 'customElasticsearch246',
+            'ES_5.6': 'customElasticsearch5616', 'ES_6.8': 'customElasticsearch6823',
+            'ES_7.10': 'customElasticsearch710', 'ES_8.19': 'customElasticsearch81914',
+            'OS_1.3': '', 'SOLR_8.11': '', 'SOLR_9.8': '',
+        }
+        for job in jobs:
+            if job['source'] in custom_images:
+                image = custom_images[job['source']]
+                job['testImageTask'] = f':buildKit_{image}_amd64' if image else 'none'
     print(json.dumps({'include': jobs}, separators=(',', ':')))
