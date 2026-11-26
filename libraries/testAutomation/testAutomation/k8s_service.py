@@ -459,12 +459,12 @@ class K8sService:
             logger.info(f"Namespace '{namespace}' already exists")
             return result
 
-    def delete_webhooks_referencing_namespace(self) -> None:
+    def delete_webhooks_referencing_namespace(self, namespace: Optional[str] = None) -> None:
         """Delete all webhooks that reference services in this namespace."""
-        logger.info(f"Deleting webhooks referencing namespace '{self.namespace}'")
+        ns = namespace or self.namespace
+        logger.info(f"Deleting webhooks referencing namespace '{ns}'")
         for webhook_type in ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]:
             try:
-                ns = self.namespace
                 jsonpath = (
                     f"jsonpath={{range .items[?(@.webhooks[*].clientConfig.service.namespace=="
                     f"\"{ns}\")]}}{{.metadata.name}}{{\"\\n\"}}{{end}}"
@@ -476,7 +476,7 @@ class K8sService:
                 if result and result.stdout.strip():
                     for name in result.stdout.strip().split("\n"):
                         if name:
-                            logger.info(f"Deleting {webhook_type} '{name}' (references namespace '{self.namespace}')")
+                            logger.info(f"Deleting {webhook_type} '{name}' (references namespace '{ns}')")
                             self.run_command(
                                 self._kubectl_base() + ["delete", webhook_type, name, "--ignore-not-found"],
                                 ignore_errors=True)
@@ -537,6 +537,7 @@ class K8sService:
         self.wait_for_pods_terminated()
         # Delete webhooks again in case they were recreated during pod termination
         self.delete_webhooks_referencing_namespace()
+        self.delete_webhooks_referencing_namespace("kyverno-ma")
 
     def delete_kyverno_webhooks(self) -> None:
         """Delete all kyverno-labeled webhook configurations."""
