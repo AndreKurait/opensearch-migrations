@@ -25,6 +25,12 @@ function get(opts, body) {
   });
 }
 
+test('Testcontainers Elastic OSS images are translated to the broker registry', () => {
+  const image = imageReference('docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2');
+  assert.equal(image.prefix, 'elastic-oci/elasticsearch/elasticsearch-oss');
+  assert.equal(image.tag, '7.10.2');
+});
+
 test('all native origin mapping formats agree and cleanup leaves read jobs without a Docker socket', async () => {
   const clients = await setupClients({ url: 'http://127.0.0.1:12345', mode: 'read' });
   try {

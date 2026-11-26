@@ -24,6 +24,8 @@ const registries = {
       'docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com',
       /^docker-images-prod\.s3\.(dualstack\.)?[a-z0-9-]+\.amazonaws\.com$/],
   },
+  'elastic-oci': {host: 'docker.elastic.co', realm: 'https://docker-auth.elastic.co/auth', service: 'token-service',
+    repo: 'elasticsearch/elasticsearch-oss', cdn: ['docker-registry-production.d24a988e385e0074d717b6bdaea58f0d.r2.cloudflarestorage.com']},
   ghcr: {host: 'ghcr.io', realm: 'https://ghcr.io/token', service: 'ghcr.io', cdn: ['pkg-containers.githubusercontent.com']},
   quay: {host: 'quay.io', realm: 'https://quay.io/v2/auth', service: 'quay.io', cdn: [/^cdn[0-9]+\.quay\.io$/]},
   ecrpublic: {host: 'public.ecr.aws', realm: 'https://public.ecr.aws/token/', service: 'public.ecr.aws',
