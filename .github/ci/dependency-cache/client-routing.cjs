@@ -89,12 +89,14 @@ async function bridgeRelay(upstream, address) {
   const server = http.createServer(async (request, response) => {
     let resource;
     try {
-      if (!['GET', 'HEAD'].includes(request.method) || !(request.url.startsWith('/v2/') || request.url.startsWith('/benchmark/') || request.url.startsWith('/helm/') || /^\/raw\/(?:al2023|alpine|elastic|elastic-legacy)\//.test(request.url))) throw new Error();
+      const permittedPath = /^(?:\/(?:v2|benchmark|helm|pypi|console-editor)\/|\/npm\/.+\/-\/.+\.tgz$|\/raw\/(?:al2023|alpine|elastic|elastic-legacy|msk-iam|kubectl|helm|stern|mount-s3|gcsfuse)\/)/;
+      if (!['GET', 'HEAD'].includes(request.method) || !permittedPath.test(request.url)) throw new Error();
       const target = new URL(request.url, 'http://localhost');
       if (target.origin !== 'http://localhost' || target.hash ||
           ([...target.searchParams.keys()].some(k => k !== 'ns') &&
             !(target.pathname.startsWith('/raw/al2023/') && target.search === '?instance_id=none'))) throw new Error();
       resource = target.pathname;
+      if (resource.startsWith('/pypi/simple/')) resource = resource.replace(/\/$/, '');
       if (resource !== '/v2/' && !buildkitRoute.test(resource)) validateKey(resource);
     } catch { response.writeHead(400).end(); return; }
     const headers = {};

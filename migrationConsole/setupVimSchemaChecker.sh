@@ -2,8 +2,12 @@
 set -e
 
 echo "=== Installing vim-plug ==="
-curl -fLo ~/.vim/autoload/plug.vim --create-dirs \
-    https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+plug_url=https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+if [[ -n "${CI_PACKAGE_ENDPOINT:-}" ]]; then
+    broker="http://${CI_PACKAGE_ENDPOINT}"
+    plug_url="$broker/console-editor/plug.vim"
+fi
+curl -fLo ~/.vim/autoload/plug.vim --create-dirs "$plug_url"
 
 echo "=== Configuring ~/.vimrc ==="
 cat > ~/.vimrc << 'EOF'
@@ -66,10 +70,24 @@ cat > ~/.vim/coc-settings.json << 'EOF'
 EOF
 
 echo "=== Installing vim plugins ==="
-vim +PlugInstall +qall
-
-echo "=== Installing coc-yaml extension ==="
-vim -c 'CocInstall -sync coc-yaml' +qall
+if [[ -n "${CI_PACKAGE_ENDPOINT:-}" ]]; then
+    set -o pipefail
+    for plugin in coc.nvim vim-commentary; do
+        mkdir -p "$HOME/.vim/plugged/$plugin"
+        curl -fsSL "$broker/console-editor/$plugin.tar.gz" | tar -xz --strip-components=1 -C "$HOME/.vim/plugged/$plugin"
+    done
+    extensions="$HOME/.config/coc/extensions"
+    mkdir -p "$extensions/node_modules"
+    for spec in coc-yaml@1.9.3 prettier@2.0.5; do
+        name=${spec%@*}
+        mkdir -p "$extensions/node_modules/$name"
+        curl -fsSL "$broker/npm/$name/-/$name-${spec#*@}.tgz" | tar -xz --strip-components=1 -C "$extensions/node_modules/$name"
+    done
+    echo '{"dependencies":{"coc-yaml":"1.9.3"}}' > "$extensions/package.json"
+else
+    vim +PlugInstall +qall
+    vim -c 'CocInstall -sync coc-yaml' +qall
+fi
 
 echo ""
 echo "=== Vim setup complete ==="

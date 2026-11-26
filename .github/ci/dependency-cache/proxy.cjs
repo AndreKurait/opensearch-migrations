@@ -40,6 +40,10 @@ const elasticReleases = {
   '/raw/elastic/downloads/elasticsearch/elasticsearch-7.10.2-linux-x86_64.tar.gz': '3b7ae3b6f5f2248fa4441aa2cf653638c9022108f813e0081da13c378a35e11e',
 };
 const rawOrigins = {
+  'msk-iam': ['https://github.com/aws/aws-msk-iam-auth/releases/download/', githubAssets],
+  stern: ['https://github.com/stern/stern/releases/download/', githubAssets],
+  'mount-s3': ['https://mountpoint-s3-release.s3.amazonaws.com/', []],
+  gcsfuse: ['https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/', githubAssets],
   al2023: ['https://cdn.amazonlinux.com/al2023/', []],
   alpine: ['https://dl-cdn.alpinelinux.org/alpine/', []],
   'elastic-legacy': ['https://download.elastic.co/', []],
@@ -106,6 +110,15 @@ function parseKey(key) {
   }
   if (/^\/benchmark\/corpora\/(geonames|http_logs|nested|nyc_taxis)\/[\w.-]+-1k(?:\.[\w.-]+)?$/.test(key)) {
     return {urls:[new URL(key.slice('/benchmark'.length), 'https://opensearch-benchmark-workloads.s3.amazonaws.com')], cdn:[]};
+  }
+  if (kind === 'console-editor') {
+    const sources = {
+      'plug.vim': 'https://raw.githubusercontent.com/junegunn/vim-plug/4c4e56b5f7384369927a075804b6a17de7644edd/plug.vim',
+      'coc.nvim.tar.gz': 'https://codeload.github.com/neoclide/coc.nvim/tar.gz/f3f05e1074c4dca8f3244684186bbf8687952ad0',
+      'vim-commentary.tar.gz': 'https://codeload.github.com/tpope/vim-commentary/tar.gz/64a654ef4a20db1727938338310209b6a63f60c9',
+    };
+    if (parts.length !== 2 || !Object.hasOwn(sources, originId)) throw new Error('Unknown migration console editor asset');
+    return {urls: [new URL(sources[originId])], cdn: []};
   }
   if (kind === 'raw' && originId === 'node') {
     const digests = {

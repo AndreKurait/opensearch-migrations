@@ -11,6 +11,7 @@ FROM ${KAFKA_IMAGE} AS kafka-dist
 
 # Stage 1: Download and install tools (kafka, kubectl, helm)
 FROM ${BASE_IMAGE} AS migration-console-tools
+ARG CI_PACKAGE_ENDPOINT
 
 RUN ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/') && \
     if [ "$ARCH" != "amd64" ] && [ "$ARCH" != "arm64" ]; then \
@@ -28,31 +29,40 @@ ARG STERN_VERSION="1.33.1"
 # auth jar (single fetch, no retries — a failure fails the build so it can be
 # re-run against the layer cache rather than silently varying).
 COPY --from=kafka-dist /opt/kafka /root/kafka-tools/kafka
-RUN mkdir -p /root/kafka-tools/aws && \
+RUN tool_base=https://github.com/aws/aws-msk-iam-auth/releases/download && \
+    if [ -n "$CI_PACKAGE_ENDPOINT" ]; then tool_base="http://$CI_PACKAGE_ENDPOINT/raw/msk-iam"; fi && \
+    mkdir -p /root/kafka-tools/aws && \
     curl -fSL \
-        https://github.com/aws/aws-msk-iam-auth/releases/download/v2.3.4/aws-msk-iam-auth-2.3.4-all.jar \
+        "${tool_base}/v2.3.4/aws-msk-iam-auth-2.3.4-all.jar" \
         -o /root/kafka-tools/kafka/libs/msk-iam-auth.jar
 
 # Get kubectl and Helm distributions
-RUN ARCH=$(cat /arch.env) && \
+RUN tool_base=https://dl.k8s.io && \
+    if [ -n "$CI_PACKAGE_ENDPOINT" ]; then tool_base="http://$CI_PACKAGE_ENDPOINT/raw/kubectl"; fi && \
+    ARCH=$(cat /arch.env) && \
     mkdir -p /k8s/bin && \
-    curl --retry 5 --retry-delay 5 --retry-connrefused -fSL "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" -o /k8s/bin/kubectl && \
+    curl --retry 5 --retry-delay 5 --retry-connrefused -fSL "${tool_base}/release/v${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" -o /k8s/bin/kubectl && \
     chmod +x /k8s/bin/kubectl
 
-RUN ARCH=$(cat /arch.env) && \
-    curl --retry 5 --retry-delay 5 --retry-connrefused -fSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${ARCH}.tar.gz" | tar -xz && \
+RUN tool_base=https://get.helm.sh && \
+    if [ -n "$CI_PACKAGE_ENDPOINT" ]; then tool_base="http://$CI_PACKAGE_ENDPOINT/raw/helm"; fi && \
+    ARCH=$(cat /arch.env) && \
+    curl --retry 5 --retry-delay 5 --retry-connrefused -fSL "${tool_base}/helm-v${HELM_VERSION}-linux-${ARCH}.tar.gz" | tar -xz && \
     mv linux-${ARCH}/helm /k8s/bin/
 
 # Install stern - used by 'workflow log -f' for multi-pod log tailing
-RUN ARCH=$(cat /arch.env) && \
+RUN tool_base=https://github.com/stern/stern/releases/download && \
+    if [ -n "$CI_PACKAGE_ENDPOINT" ]; then tool_base="http://$CI_PACKAGE_ENDPOINT/raw/stern"; fi && \
+    ARCH=$(cat /arch.env) && \
     curl --retry 5 --retry-delay 5 --retry-connrefused -fSL \
-        "https://github.com/stern/stern/releases/download/v${STERN_VERSION}/stern_${STERN_VERSION}_linux_${ARCH}.tar.gz" | tar -xz && \
+        "${tool_base}/v${STERN_VERSION}/stern_${STERN_VERSION}_linux_${ARCH}.tar.gz" | tar -xz && \
     mv stern /k8s/bin/ && \
     chmod +x /k8s/bin/stern
 
 
 # Stage 2: Main migration console base image with Python environment and scripts
 FROM ${BASE_IMAGE}
+ARG CI_PACKAGE_ENDPOINT
 
 # Define the virtual environment path
 ENV WORKON_HOME=/
@@ -86,24 +96,28 @@ RUN dnf install -y  \
         dnf clean all
 
 # Install mount-s3 for direct S3 bucket mounting (requires SYS_ADMIN capability at runtime)
-RUN MOUNT_S3_VERSION="1.22.2" && \
+RUN tool_base=https://mountpoint-s3-release.s3.amazonaws.com && \
+    if [ -n "$CI_PACKAGE_ENDPOINT" ]; then tool_base="http://$CI_PACKAGE_ENDPOINT/raw/mount-s3"; fi && \
+    MOUNT_S3_VERSION="1.22.2" && \
     ARCH=$(uname -m) && \
     if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi && \
     curl --retry 5 --retry-delay 5 --retry-connrefused -fSL \
-        "https://mountpoint-s3-release.s3.amazonaws.com/${MOUNT_S3_VERSION}/${ARCH}/mount-s3-${MOUNT_S3_VERSION}-${ARCH}.rpm" \
+        "${tool_base}/${MOUNT_S3_VERSION}/${ARCH}/mount-s3-${MOUNT_S3_VERSION}-${ARCH}.rpm" \
         -o /tmp/mount-s3.rpm && \
     dnf install -y /tmp/mount-s3.rpm && \
     rm -f /tmp/mount-s3.rpm
 
 # Install gcsfuse for direct GCS bucket mounting (requires SYS_ADMIN capability at runtime)
-RUN GCSFUSE_VERSION="3.9.2" && \
+RUN tool_base=https://github.com/GoogleCloudPlatform/gcsfuse/releases/download && \
+    if [ -n "$CI_PACKAGE_ENDPOINT" ]; then tool_base="http://$CI_PACKAGE_ENDPOINT/raw/gcsfuse"; fi && \
+    GCSFUSE_VERSION="3.9.2" && \
     ARCH=$(uname -m) && \
     dnf install -y \
         --setopt=install_weak_deps=False \
         --setopt=tsflags=nodocs \
         fuse && \
     curl --retry 5 --retry-delay 5 --retry-connrefused -fSL \
-        "https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/v${GCSFUSE_VERSION}/gcsfuse-${GCSFUSE_VERSION}-1.${ARCH}.rpm" \
+        "${tool_base}/v${GCSFUSE_VERSION}/gcsfuse-${GCSFUSE_VERSION}-1.${ARCH}.rpm" \
         -o /tmp/gcsfuse.rpm && \
     dnf install -y /tmp/gcsfuse.rpm && \
     rm -f /tmp/gcsfuse.rpm
