@@ -28,11 +28,13 @@ class PackageRequest(http.server.BaseHTTPRequestHandler):
         broker = urllib.parse.urlsplit('http://' + os.environ['CI_EKS_PACKAGE_BRIDGE'])
         upstream = http.client.HTTPConnection(broker.hostname, broker.port, timeout=180)
         try:
-            upstream.request(self.command, self.path, headers={k: self.headers[k] for k in ('Accept', 'Range', 'If-Range', 'If-None-Match') if k in self.headers})
+            keys = ('Accept', 'Range', 'If-Range', 'If-None-Match')
+            upstream.request(self.command, self.path, headers={k: self.headers[k] for k in keys if k in self.headers})
             response = upstream.getresponse()
             self.send_response(response.status)
             for key, value in response.getheaders():
-                if key.lower() in ('content-length', 'content-type', 'content-range', 'etag', 'last-modified', 'accept-ranges'):
+                if key.lower() in ('content-length', 'content-type', 'content-range', 'etag',
+                                   'last-modified', 'accept-ranges'):
                     self.send_header(key, value)
             self.end_headers()
             if self.command == 'GET':
@@ -61,6 +63,18 @@ class Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 
+def relay(client, worker):
+    while True:
+        ready, _, _ = select.select([client, worker], [], [], 180)
+        if not ready:
+            return
+        for source in ready:
+            data = source.recv(65536)
+            if not data:
+                return
+            (worker if source is client else client).sendall(data)
+
+
 def serve(public_port, control_port):
     lanes = queue.Queue(32)
 
@@ -82,15 +96,7 @@ def serve(public_port, control_port):
                     pass
                 done.set()
             try:
-                while True:
-                    ready, _, _ = select.select([self.request, worker], [], [], 180)
-                    if not ready:
-                        return
-                    for source in ready:
-                        data = source.recv(65536)
-                        if not data:
-                            return
-                        (worker if source is self.request else self.request).sendall(data)
+                relay(self.request, worker)
             finally:
                 done.set()
 

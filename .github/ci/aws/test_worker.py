@@ -51,7 +51,8 @@ class TestCloudWorker(unittest.TestCase):
         )
 
     def test_published_release_uses_configured_dependency_proxy(self):
-        with patch.dict(os.environ, CI_RELEASE_VERSION='3.4.2', CI_DEPENDENCY_PROXY_URL='http://localhost:1234/'), patch('run.command') as execute:
+        environment = dict(CI_RELEASE_VERSION='3.4.2', CI_DEPENDENCY_PROXY_URL='http://localhost:1234/')
+        with patch.dict(os.environ, environment), patch('run.command') as execute:
             Worker('eks', self.temp).build()
         self.assertEqual(execute.call_args.args[-1], 'http://localhost:1234/migration-release/3.4.2/aws-bootstrap.sh')
 

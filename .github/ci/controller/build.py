@@ -75,7 +75,8 @@ def start(suite, sha, ref, release, options):
     output(build_id=build['id'])
     effective_timeout = build.get('timeoutInMinutes')
     if isinstance(effective_timeout, int) and effective_timeout < requested_timeout:
-        warning = f'CodeBuild granted {effective_timeout} minutes for {suite}. The workflow requested {requested_timeout} minutes.'
+        warning = (f'CodeBuild granted {effective_timeout} minutes for {suite}. '
+                   f'The workflow requested {requested_timeout} minutes.')
         print(f'::warning::{warning}', flush=True)
         summary(warning)
 
