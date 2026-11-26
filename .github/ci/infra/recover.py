@@ -112,6 +112,8 @@ def handler(event, context):
         if len(attempts) >= 3 or any(b['buildStatus'] not in FAILED for b in attempts):
             continue
         overrides = {'CI_STAGE': stage, 'CI_SUITE': suite, 'CI_MODE': 'cleanup', 'CI_RECOVER_BUILD': build['id']}
+        if env.get('CI_DEPENDENCY_MODE') == 'replay':
+            overrides['CI_DEPENDENCY_MODE'] = 'replay'
         key = hashlib.sha256(f"{build['id']}/{len(attempts)}".encode()).hexdigest()
         variables_override = [{'name': k, 'value': v} for k, v in overrides.items()]
         role = {}

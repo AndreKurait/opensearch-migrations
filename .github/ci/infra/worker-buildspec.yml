@@ -117,20 +117,14 @@ phases:
         cd "$CODEBUILD_SRC_DIR/harness"
         if [[ -n "${CI_RELEASE_VERSION:-}" ]]; then cd "$CODEBUILD_SRC_DIR/release"; fi
         recorder="$CODEBUILD_SRC_DIR/control/.github/ci/dependency-cache/cli.cjs"
-        if [[ "${CI_MODE:-}" != cleanup ]]; then
-          export CI_DEPENDENCY_ORIGIN_REPORT="$CODEBUILD_SRC_DIR/ci-results/dependency-origin.jsonl"
-          export CI_DEPENDENCY_CACHE_STATS="$CODEBUILD_SRC_DIR/ci-results/dependency-cache-stats.json"
-          export CI_DEPENDENCY_RECEIPT="$CODEBUILD_SRC_DIR/ci-results/dependency-requests.json"
-          export CI_CACHE_TRUSTED_DOCKER=1
-          node "$recorder" native-worker -- bash /tmp/migrations-native-suite.sh
-          if [[ "${CI_DEPENDENCY_MODE:-}" == replay ]]; then
-            if [[ ! -f "$CI_DEPENDENCY_ORIGIN_REPORT" || -s "$CI_DEPENDENCY_ORIGIN_REPORT" ]]; then
-              echo 'Strict AWS replay requires an available upstream request log with zero requests.' >&2
-              exit 1
-            fi
-          fi
-        else
-          bash /tmp/migrations-native-suite.sh
+        export CI_DEPENDENCY_ORIGIN_REPORT="$CODEBUILD_SRC_DIR/ci-results/dependency-origin.jsonl"
+        export CI_DEPENDENCY_CACHE_STATS="$CODEBUILD_SRC_DIR/ci-results/dependency-cache-stats.json"
+        export CI_DEPENDENCY_RECEIPT="$CODEBUILD_SRC_DIR/ci-results/dependency-requests.json"
+        if [[ "${CI_MODE:-}" != cleanup ]]; then export CI_CACHE_TRUSTED_DOCKER=1; fi
+        node "$recorder" native-worker -- bash /tmp/migrations-native-suite.sh
+        if [[ "${CI_DEPENDENCY_MODE:-}" == replay && ( ! -f "$CI_DEPENDENCY_ORIGIN_REPORT" || -s "$CI_DEPENDENCY_ORIGIN_REPORT" ) ]]; then
+          echo 'Strict AWS replay requires an available upstream request log with zero requests.' >&2
+          exit 1
         fi
 artifacts:
   base-directory: ci-results
