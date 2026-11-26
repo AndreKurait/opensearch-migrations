@@ -53,6 +53,8 @@ function immutablePublicKey(key) {
 function isFreshEntry(entry, now = Date.now()) {
   if (!entry) return false;
   if (!entry.missing && immutablePublicKey(entry.key)) return true;
+  const rpm = /^\/raw\/al2023\/blobstore\/([a-f0-9]{64})\/[^/]+\.rpm$/.exec(entry.key);
+  if (!entry.missing && rpm && rpm[1] === entry.digest) return true;
   const ttl = entry.missing ? 60_000 : 300_000;
   return now - (entry.verifiedAt ?? entry.accessed) < ttl;
 }

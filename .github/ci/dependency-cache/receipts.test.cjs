@@ -189,3 +189,12 @@ test('cached Maven artifact absences require an existing release POM for extende
     assert.equal(reusableRecordingEntry(entry, 86_400_000, catalog), false);
   }
 });
+
+test('AL2023 RPMs remain fresh only when the content matches the blobstore digest', () => {
+  const digest = 'a'.repeat(64);
+  const key = `/raw/al2023/blobstore/${digest}/curl.x86_64.rpm`;
+  const entry = {key, digest, verifiedAt: 0};
+  assert.equal(isFreshEntry(entry, 86_400_000), true);
+  assert.equal(isFreshEntry({...entry, digest: 'b'.repeat(64)}, 86_400_000), false);
+  assert.equal(isFreshEntry({...entry, missing: true}, 86_400_000), false);
+});
