@@ -12,11 +12,13 @@ async function finish() {
   try {
     const pid = Number(process.env.STATE_service_pid);
     if (!Number.isSafeInteger(pid) || pid < 2) throw new Error('Invalid dependency proxy process');
-    try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    let alive = true;
+    try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; alive = false; }
     for (let i = 0; ; ++i) {
       const failed = await fs.readFile(path.join(dir, 'failed'), 'utf8').catch(() => null);
       if (failed) throw new Error(failed);
       if (await fs.access(path.join(dir, 'done')).then(() => true, () => false)) break;
+      if (!alive) throw new Error('Dependency broker exited before it finalized its observations');
       if (i > 300) throw new Error('Timed out while finalizing dependency observations');
       await delay(200);
     }
@@ -106,6 +108,9 @@ async function finish() {
       await artifacts.uploadArtifact(name, files, dir, {retentionDays: 7});
     }
     const log = await fs.readFile(path.join(dir, 'service.log'), 'utf8').catch(() => '');
+    // Report diagnostic classes only; an exception message or stack may contain signed cache URLs.
+    const fatal = log.match(/(?:^FATAL ERROR: [^\n]*heap out of memory|^Error \[ERR_[A-Z_]+\]|^node:events:\d+|^RangeError: Invalid string length)/gm) || [];
+    for (const reason of new Set(fatal)) console.warn(`Dependency broker process: ${reason}`);
     const failures = log.match(/^Cache (?:archive|metadata) at [a-z0-9.-]+ failed \([a-z0-9_, ]{1,120}\)\.$/gim) || [];
     for (const reason of new Set(failures.slice(-10))) console.warn(reason);
     await fs.rm(dir, {recursive: true, force: true});

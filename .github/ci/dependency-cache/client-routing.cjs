@@ -101,12 +101,17 @@ async function bridgeRelay(upstream, address) {
     const upstreamRequest = http.request(new URL(resource, upstream), { method: request.method, headers }, async r => {
       try { response.writeHead(r.statusCode, r.headers); await pipeline(r, response); } catch { response.destroy(); }
     });
-    upstreamRequest.on('error', () => response.writeHead(502).end());
+    upstreamRequest.on('error', () => upstreamFailure(response));
     request.on('aborted', () => upstreamRequest.destroy());
     upstreamRequest.end();
   });
   await listen(server, 0, address);
   return { port: server.address().port, close: () => stopServer(server) };
+}
+
+function upstreamFailure(response) {
+  if (response.headersSent || response.destroyed) response.destroy();
+  else response.writeHead(502).end();
 }
 
 function daemonCall(socket, method, requestPath, headers = {}) {
@@ -176,7 +181,7 @@ async function engineAdapter(socket, listener, endpoint, k3sRegistryFile, strict
             await pipeline(response, res);
           } catch { res.destroy(); }
         });
-        upstream.on('error', () => res.writeHead(502).end());
+        upstream.on('error', () => upstreamFailure(res));
         if (body) upstream.end(body); else req.pipe(upstream);
         return;
       }
