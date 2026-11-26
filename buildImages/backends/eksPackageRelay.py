@@ -17,15 +17,14 @@ import urllib.parse
 class PackageRequest(http.server.BaseHTTPRequestHandler):
     def forward(self):
         path = urllib.parse.urlsplit(self.path)
-        if (path.scheme or path.netloc or path.query or path.fragment or
-                not path.path.startswith(('/raw/alpine/', '/raw/al2023/', '/raw/elastic/', '/raw/elastic-legacy/')) or
-                '..' in urllib.parse.unquote(path.path).split('/')):
+        if path.scheme or path.netloc or path.fragment or not self.path.startswith('/'):
             self.send_error(403)
             return
-        broker = urllib.parse.urlsplit(os.environ['CI_DEPENDENCY_PROXY_URL'])
+        # The shared Docker bridge validates package routes and canonicalizes repository queries.
+        broker = urllib.parse.urlsplit('http://' + os.environ['CI_EKS_PACKAGE_BRIDGE'])
         upstream = http.client.HTTPConnection(broker.hostname, broker.port, timeout=180)
         try:
-            upstream.request(self.command, path.path, headers={k: self.headers[k] for k in ('Range', 'If-None-Match', 'If-Modified-Since') if k in self.headers})
+            upstream.request(self.command, self.path, headers={k: self.headers[k] for k in ('Accept', 'Range', 'If-Range', 'If-None-Match') if k in self.headers})
             response = upstream.getresponse()
             self.send_response(response.status)
             for key, value in response.getheaders():

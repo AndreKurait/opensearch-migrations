@@ -340,6 +340,13 @@ async function setupClients({ url, mode, repository = process.cwd() }) {
       cleanup.push(adapter.close);
       env.DOCKER_HOST = `unix://${listener}`;
     }
+    if (process.env.CODEBUILD_BUILD_ID && env.CI_DEPENDENCY_REGISTRY_ENDPOINT) {
+      env.CI_EKS_PACKAGE_BRIDGE = env.CI_DEPENDENCY_REGISTRY_ENDPOINT;
+    } else if (process.env.CODEBUILD_BUILD_ID) {
+      const relay = await bridgeRelay(upstream, '127.0.0.1');
+      cleanup.push(relay.close);
+      env.CI_EKS_PACKAGE_BRIDGE = `127.0.0.1:${relay.port}`;
+    }
     return { env, close };
   } catch (error) { await close(); throw error; }
 }
