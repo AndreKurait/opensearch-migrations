@@ -571,6 +571,7 @@ jobs:
           name: test-reports-gradle-tests-stripe-${{ matrix.index }}
           path: |
             **/build/reports/tests/
+            **/build/test-results/**/TEST-*.xml
 
       - name: Upload coverage to Codecov
         if: always() && env.HAS_CODECOV_TOKEN == 'true'
