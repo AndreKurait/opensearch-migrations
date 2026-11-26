@@ -76,7 +76,10 @@ test('bridge accepts only canonical public OCI reads and never forwards registry
   assert.equal((await get({...options,path:repomd+'?instance_id=none'}))[0],200);
   assert.equal(seen.at(-1)[0],repomd);
   assert.equal((await get({...options,path:repomd+'?instance_id=unexpected'}))[0],400);
-  assert.equal(seen.length,5);
+  const updateInfo = repomd.replace('repomd.xml','updateinfo.xml.gz');
+  assert.equal((await get({...options,path:updateInfo+'?instance_id=none'}))[0],200);
+  assert.equal(seen.at(-1)[0],updateInfo);
+  assert.equal(seen.length,6);
 });
 
 test('a real Docker CLI talks solely to an isolated Unix-socket fixture and preserves non-Hub tag and digest pulls', async t => {
