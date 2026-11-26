@@ -30,7 +30,11 @@ phases:
         # Fetch only the fork's default branch and prove reachability before running the supplied SHA.
         git fetch --no-tags --filter=blob:none https://github.com/AndreKurait/opensearch-migrations.git refs/heads/main
         git merge-base --is-ancestor "$CI_CACHE_MAIN_SHA" FETCH_HEAD
-        git checkout --quiet --detach "$CI_CACHE_MAIN_SHA"
+        # Queued publishers can start after newer trusted recorders add routes to the shared S3 catalog.
+        # Keep the original worker SHA for provenance, and publish with the current trusted catalog reader.
+        revision="$CI_CACHE_MAIN_SHA"
+        if [[ "$CI_CACHE_MODE" == publish || "$CI_CACHE_MODE" == both ]]; then revision=FETCH_HEAD; fi
+        git checkout --quiet --detach "$revision"
         node -e 'if (process.versions.node.split(".")[0] !== "22") throw Error("Node 22 is required")'
         npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund
         npm ci --prefix .github/ci/dependency-cache/aws --ignore-scripts --no-audit --no-fund
