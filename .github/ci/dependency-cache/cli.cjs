@@ -100,7 +100,7 @@ async function nativeWorker(command, args) {
     receiptFile: process.env.CI_DEPENDENCY_RECEIPT,
     async fetchArtifact(key, file) {
       const entry = entries.get(key);
-      if (entry && (strict || reusableRecordingEntry(entry))) {
+      if (entry && (strict || reusableRecordingEntry(entry, Date.now(), entries))) {
         if (entry.missing) return null;
         await snapshot.materialize(entry, file);
         stats.restored++;
@@ -121,7 +121,7 @@ async function nativeWorker(command, args) {
   store.observeMetadata = (key, digest) => { observeMetadata(key, digest); metadataReads++; };
   store.metadataCatalog = {get(key) {
     const entry = entries.get(key);
-    return strict || reusableRecordingEntry(entry) ? entry : undefined;
+    return strict || reusableRecordingEntry(entry, Date.now(), entries) ? entry : undefined;
   }};
   try {
     await serve(store, 'record', env => run(command, args, {...process.env, ...env}));

@@ -178,3 +178,14 @@ test('workers reuse release image tags for at most a day while the publisher ref
   assert.equal(reusableRecordingEntry({...entry, key: prefix + 'latest'}, 600_000), false);
   assert.equal(reusableRecordingEntry({...entry, missing: true}, 600_000), false);
 });
+
+test('cached Maven artifact absences require an existing release POM for extended reuse', () => {
+  const base = '/maven/org/example/demo/1.2.3/demo-1.2.3';
+  const catalog = new Map([[base + '.pom', {digest: 'a'.repeat(64)}]]);
+  for (const ext of ['.jar', '.module']) {
+    const entry = {key: base + ext, verifiedAt: 0, missing: true};
+    assert.equal(reusableRecordingEntry(entry, 600_000, catalog), true);
+    assert.equal(reusableRecordingEntry(entry, 600_000, new Map()), false);
+    assert.equal(reusableRecordingEntry(entry, 86_400_000, catalog), false);
+  }
+});

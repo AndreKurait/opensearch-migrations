@@ -59,7 +59,7 @@ function isFreshEntry(entry, now = Date.now()) {
 
 // Main workers submit receipts to the publisher, which revalidates mutable indexes.
 // Bound the age served if publication has fallen behind.
-function reusableRecordingEntry(entry, now = Date.now()) {
+function reusableRecordingEntry(entry, now = Date.now(), catalog) {
   if (isFreshEntry(entry, now)) return true;
   if (!entry || now - (entry.verifiedAt ?? entry.accessed) >= 24 * 60 * 60 * 1000) return false;
   if (!entry.missing) {
@@ -67,7 +67,11 @@ function reusableRecordingEntry(entry, now = Date.now()) {
     return isPackageIndex(entry.key) || /^\/v2\/.+\/manifests\/v?\d+\.\d+\.\d+$/.test(entry.key);
   }
   // Gradle probes for a JAR even when a released plugin marker contains only a POM.
-  return immutablePublicKey(entry.key) && /^\/maven\/.+\.gradle\.plugin\/[^/]+\/[^/]+\.jar$/.test(entry.key);
+  if (!entry.key.startsWith('/maven/') || !immutablePublicKey(entry.key)) return false;
+  if (/\.gradle\.plugin\/[^/]+\/[^/]+\.jar$/.test(entry.key)) return true;
+  if (!/\.(jar|module)$/.test(entry.key)) return false;
+  const pom = catalog?.get(entry.key.replace(/\.(jar|module)$/, '.pom'));
+  return Boolean(pom?.digest && !pom.missing);
 }
 
 async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now = Date.now, lookup}) {

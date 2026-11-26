@@ -35,12 +35,14 @@ async function service(mode, dir) {
       try {
         const snapshot = await openReader();
         const {reusableRecordingEntry} = require('./receipts.cjs');
-        const entries = snapshot.entries.filter(entry => reusableRecordingEntry(entry));
+        const catalog = new Map(snapshot.entries.map(entry => [entry.key, entry]));
+        const reusable = entry => reusableRecordingEntry(entry, Date.now(), catalog);
+        const entries = snapshot.entries.filter(reusable);
         const byKey = new Map(entries.map(entry => [entry.key, entry]));
-        seed = {...snapshot, entries, resolve: key => reusableRecordingEntry(byKey.get(key)) ? snapshot.resolve(key) : undefined};
+        seed = {...snapshot, entries, resolve: key => reusable(byKey.get(key)) ? snapshot.resolve(key) : undefined};
         store.metadataCatalog = {get(key) {
           const entry = byKey.get(key);
-          return reusableRecordingEntry(entry) ? entry : undefined;
+          return reusable(entry) ? entry : undefined;
         }};
       } catch (error) {
         console.warn(
