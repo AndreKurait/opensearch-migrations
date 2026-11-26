@@ -9,7 +9,7 @@ const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 const { promisify } = require('node:util');
 const { buildkitRoute } = require('./buildkit-cache.cjs');
-const { validateKey } = require('./proxy.cjs');
+const { validateKey, canonicalKey } = require('./proxy.cjs');
 const { brokerProperties } = require('./gradle-wrapper.cjs');
 
 const run = promisify(execFile);
@@ -95,7 +95,7 @@ async function bridgeRelay(upstream, address) {
       if (target.origin !== 'http://localhost' || target.hash ||
           ([...target.searchParams.keys()].some(k => k !== 'ns') &&
             !(target.pathname.startsWith('/raw/al2023/') && target.search === '?instance_id=none'))) throw new Error();
-      resource = target.pathname;
+      resource = canonicalKey(target.pathname);
       if (resource.startsWith('/pypi/simple/')) resource = resource.replace(/\/$/, '');
       if (resource !== '/v2/' && !buildkitRoute.test(resource)) validateKey(resource);
     } catch { response.writeHead(400).end(); return; }

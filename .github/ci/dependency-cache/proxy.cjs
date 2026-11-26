@@ -66,8 +66,9 @@ const mavenCdn = ['plugins-artifacts.gradle.org', 'repo.maven.apache.org', 'repo
 function canonicalKey(key) {
   // DNF appends the anonymous instance identifier to repo metadata requests.
   if (typeof key === 'string' && key.startsWith('/raw/al2023/') && key.endsWith('?instance_id=none')) {
-    return key.slice(0, -'?instance_id=none'.length);
+    return key.slice(0, -'?instance_id=none'.length).replace(/%2b/gi, '+');
   }
+  if (typeof key === 'string' && key.startsWith('/raw/al2023/blobstore/')) return key.replace(/%2b/gi, '+');
   if (typeof key === 'string' && /^\/npm\/@[a-z0-9._-]+%2f[a-z0-9._-]+$/i.test(key)) return key.replace(/%2f/i, '/');
   if (typeof key === 'string' && /^\/pypi\/simple\/[a-z0-9._-]+\/$/i.test(key)) return key.slice(0, -1);
   return key;
@@ -455,4 +456,4 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, packa
   })};
 }
 
-module.exports = {startProxy, fetchPublic, validateKey, pinnedElasticDigest: key => elasticReleases[key]};
+module.exports = {startProxy, fetchPublic, validateKey, canonicalKey, pinnedElasticDigest: key => elasticReleases[key]};
