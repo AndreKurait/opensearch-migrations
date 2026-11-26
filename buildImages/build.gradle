@@ -39,6 +39,13 @@ def getRepoNameIfPublishing = { Map cfg ->
 
 def correttoBase = ptc.baseImageConfig("docker.io", "library", "amazoncorretto", "21-al2023-headless")
 
+// Jib fetches its base directly, independently of the Docker daemon's registry mirror.
+def dependencyRegistry = providers.environmentVariable('CI_DEPENDENCY_PROXY_URL').orNull
+if (dependencyRegistry) {
+    def authority = new URI(dependencyRegistry).authority
+    correttoBase.baseImageOverride = "${authority}/dockerhub/library/${correttoBase.baseImageName}:${correttoBase.baseImageTag}"
+}
+
 def defaultJvmFlags = ['-XX:MaxRAMPercentage=80.0', '-XX:+ExitOnOutOfMemoryError']
 
 def jibProjects = [

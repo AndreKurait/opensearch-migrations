@@ -60,6 +60,10 @@ const mavenOrigins = ['https://repo.maven.apache.org/maven2/', 'https://plugins.
 const mavenCdn = ['plugins-artifacts.gradle.org', 'repo.maven.apache.org', 'repo1.maven.org'];
 
 function canonicalKey(key) {
+  // DNF appends the anonymous instance identifier to repo metadata requests.
+  if (typeof key === 'string' && key.startsWith('/raw/al2023/') && key.endsWith('/repodata/repomd.xml?instance_id=none')) {
+    return key.slice(0, -'?instance_id=none'.length);
+  }
   if (typeof key === 'string' && /^\/npm\/@[a-z0-9._-]+%2f[a-z0-9._-]+$/i.test(key)) return key.replace(/%2f/i, '/');
   if (typeof key === 'string' && /^\/pypi\/simple\/[a-z0-9._-]+\/$/i.test(key)) return key.slice(0, -1);
   return key;
