@@ -2,8 +2,9 @@
 """Run an integration suite in its own CodeBuild worker and AWS namespace."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, wait
 from contextlib import contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, copy_context
 from dataclasses import asdict
 import hashlib
 import ipaddress
@@ -410,8 +411,8 @@ class Worker:
     def pod_role(self):
         return f'arn:aws:iam::{self.account}:role/{self.cluster}-migrations-role'
 
-    def clusters(self):
-        vpc = self.exports['VPC_ID']
+    def clusters(self, vpc=None):
+        vpc = vpc or self.exports['VPC_ID']
         eks_net = self.aws('eks', 'describe-cluster', '--name', self.cluster)['cluster']['resourcesVpcConfig']
         endpoints = self.cfn(
             self.stage + '-endpoints',
@@ -605,8 +606,27 @@ class Worker:
         bootstrap_minutes = 90 if self.suite in ('aoss', 'isolated', 'cfn-import', 'cfn-create') else 150
         # Managed clusters for these three suites share the private EKS VPC; their deploys use the same deadline.
         bootstrap_end = time.monotonic() + bootstrap_minutes * 60
+        endpoints = None
         with phase('EKS deployment and install', bootstrap_minutes):
-            self.bootstrap()
+            if self.suite in ('eks', 'cdc', 'cdc-k6'):
+                # Domain creation only needs the completed EKS infrastructure, not the image builds or Helm install.
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    install = executor.submit(copy_context().run, self.bootstrap)
+                    while not wait([install], timeout=20).done:
+                        try:
+                            stack = self.aws('cloudformation', 'describe-stacks', '--stack-name', self.ma)['Stacks'][0]
+                        except subprocess.CalledProcessError as error:
+                            if 'does not exist' in (error.stderr or ''):
+                                continue
+                            raise
+                        if stack['StackStatus'] == 'CREATE_COMPLETE':
+                            network = self.aws('eks', 'describe-cluster', '--name', self.cluster)['cluster']['resourcesVpcConfig']
+                            with phase('private cluster deployment', bootstrap_minutes):
+                                endpoints = self.clusters(network['vpcId'])
+                            break
+                    install.result()
+            else:
+                self.bootstrap()
         if self.suite.startswith('cfn-'):
             with phase('console deployment validation', 15):
                 self.kube('wait', '--for=condition=ready', 'pod/migration-console-0', '--timeout=600s')
@@ -628,8 +648,9 @@ class Worker:
         cluster_minutes = {'aoss': 60, 'byos': 45, 'cdc-aoss': 60, 'isolated': 30}.get(self.suite)
         if cluster_minutes is None:
             cluster_minutes = (bootstrap_end - time.monotonic()) / 60
-        with phase('private cluster deployment', cluster_minutes):
-            endpoints = self.clusters()
+        if endpoints is None:
+            with phase('private cluster deployment', cluster_minutes):
+                endpoints = self.clusters()
         self.configure_clusters(endpoints)
         if self.suite == 'eks':
             with phase('dashboard validation', 5):
