@@ -205,3 +205,31 @@ test('Docker wait returns headers before container startup produces its exit eve
     req.end();
   });
 });
+
+test('abandoning a Docker build upload closes the daemon request and leaves the adapter usable', {timeout: 5000}, async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'aborted-docker-build-'));
+  const backend = path.join(dir, 'backend.sock'), broker = path.join(dir, 'broker.sock');
+  let uploading, disconnected;
+  const started = new Promise(resolve => { uploading = resolve; });
+  const closed = new Promise(resolve => { disconnected = resolve; });
+  const daemon = http.createServer((req, res) => {
+    if (req.url === '/_ping') return res.end('OK');
+    req.on('data', uploading);
+    req.on('aborted', disconnected);
+  });
+  const stop = await serve(daemon, backend);
+  const adapter = await engineAdapter(backend, broker, 'localhost:1234');
+  try {
+    const client = http.request({socketPath: broker, method: 'POST', path: '/v1.44/build'});
+    client.on('error', () => {});
+    client.write('partial build context');
+    await started;
+    client.destroy();
+    await closed;
+    assert.deepEqual(await get({socketPath: broker, path: '/_ping'}), [200, 'OK']);
+  } finally {
+    await adapter.close();
+    await stop();
+    await fs.rm(dir, {recursive: true, force: true});
+  }
+});

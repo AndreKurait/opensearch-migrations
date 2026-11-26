@@ -185,7 +185,13 @@ async function engineAdapter(socket, listener, endpoint, k3sRegistryFile, strict
           } catch { res.destroy(); }
         });
         upstream.on('error', () => upstreamFailure(res));
-        if (body) upstream.end(body); else req.pipe(upstream);
+        if (body) upstream.end(body);
+        else {
+          // An aborted upload must also close the daemon request. A missing final chunk
+          // otherwise leaves the backend waiting even after the client has gone away.
+          req.once('aborted', () => upstream.destroy());
+          req.pipe(upstream);
+        }
         return;
       }
       req.resume();
@@ -227,6 +233,7 @@ async function engineAdapter(socket, listener, endpoint, k3sRegistryFile, strict
       }
       res.end();
     } catch (error) {
+      if (res.destroyed || res.writableEnded) return;
       if (!res.headersSent) res.writeHead(502, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: error.message, message: error.message }) + '\n');
     }

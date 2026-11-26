@@ -109,6 +109,18 @@ async function service(mode, dir) {
   await fs.writeFile(path.join(dir, 'done'), '');
 }
 const [mode, dir] = process.argv.slice(2);
+// Preserve Node's normal fatal exit. Only emit the error code and source basename/line,
+// because raw exception messages can contain signed artifact URLs or credentials.
+const diagnosticFiles = new Set(['client-routing.cjs', 'proxy.cjs', 'service.cjs', 'github-store.cjs', 'adapter.cjs',
+  'transport.cjs', 'gradle-build-cache.cjs', 'buildkit-cache.cjs', 'events', 'net', 'task_queues', 'readable',
+  'writable', 'destroy', '_http_client', '_http_outgoing', '_http_server']);
+process.on('uncaughtExceptionMonitor', (error, origin) => {
+  const code = /^(?:E[A-Z0-9_]{1,64}|UND_ERR_[A-Z_]+)$/.test(error?.code) ? error.code : 'UNKNOWN';
+  const frames = String(error?.stack || '').split('\n').slice(1)
+    .map(frame => /(?:^|[/:])([A-Za-z0-9_.-]+\.(?:cjs|js)|[a-z_]+):(\d+):(\d+)\)?$/.exec(frame))
+    .filter(frame => frame && diagnosticFiles.has(frame[1])).slice(0, 5).map(([, file, line]) => `${file}:${line}`);
+  require('node:fs').writeSync(2, `Broker fatal ${origin} ${code} ${frames.join(' ')}\n`);
+});
 service(mode, dir).catch(async (error) => {
   await fs.writeFile(path.join(dir, 'failed'), error.message);
   process.exitCode = 1;

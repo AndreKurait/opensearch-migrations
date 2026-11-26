@@ -117,7 +117,7 @@ async function finish() {
     }
     const log = await fs.readFile(path.join(dir, 'service.log'), 'utf8').catch(() => '');
     // Report diagnostic classes only; an exception message or stack may contain signed cache URLs.
-    const fatal = log.match(/(?:^FATAL ERROR: [^\n]*heap out of memory|^Error \[ERR_[A-Z_]+\]|^node:events:\d+|^RangeError: Invalid string length)/gm) || [];
+    const fatal = log.match(/(?:^Broker fatal (?:uncaughtException|unhandledRejection) [A-Z0-9_]+(?: [A-Za-z0-9_.-]+:\d+){0,5}|^FATAL ERROR: [^\n]*heap out of memory|^Error \[ERR_[A-Z_]+\]|^node:events:\d+|^RangeError: Invalid string length)/gm) || [];
     for (const reason of new Set(fatal)) console.warn(`Dependency broker process: ${reason}`);
     const failures = log.match(/^Cache (?:archive|metadata) at [a-z0-9.-]+ failed \([a-z0-9_, ]{1,120}\)\.$/gim) || [];
     for (const reason of new Set(failures.slice(-10))) console.warn(reason);
