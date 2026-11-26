@@ -91,6 +91,10 @@ async function finish() {
       ? 'Upstream request log unavailable. The upstream request count is unknown.'
       : `${rows.length} requests. The job log lists every request, including redirects, retries and registry authentication.`;
     if (origins === null) console.warn(originSummary);
+    if (process.env.CI_DEPENDENCY_STRICT_READ === '1' && (origins === null || rows.length > 0)) {
+      console.error('Strict cache replay requires an available upstream request log with zero requests.');
+      process.exitCode = 1;
+    }
     for (const row of rows) console.log('Dependency broker upstream HTTP request ' + row);
     if (process.env.GITHUB_STEP_SUMMARY) {
       const lines = ['', '### Dependency broker upstream HTTP requests', '',
