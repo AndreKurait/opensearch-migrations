@@ -42,6 +42,8 @@ def correttoBase = ptc.baseImageConfig("docker.io", "library", "amazoncorretto",
 // Jib fetches its base directly, independently of the Docker daemon's registry mirror.
 def dependencyRegistry = providers.environmentVariable('CI_DEPENDENCY_PROXY_URL').orNull
 if (dependencyRegistry) {
+    // Jib checks for plugin updates outside its configured image registry.
+    System.setProperty('jib.disableUpdateChecks', 'true')
     def authority = new URI(dependencyRegistry).authority
     correttoBase.baseImageOverride = "${authority}/dockerhub/library/${correttoBase.baseImageName}:${correttoBase.baseImageTag}"
 }
