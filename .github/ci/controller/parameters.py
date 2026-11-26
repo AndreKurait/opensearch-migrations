@@ -51,6 +51,8 @@ def parameters(suites, raw):
         if type(value) not in (str, int):
             raise ValueError(f'{key} must be a string or integer')
         value = str(value)
+        if suite == 'aoss' and key in ('AOSS_TEST_IDS', 'TEST_IDS'):
+            value = ','.join(token for token in re.split(r'[,;\s]+', value) if token)
         if key in choices and value in choices[key] or key in patterns and re.fullmatch(patterns[key], value):
             result[key] = value
         else:

@@ -117,6 +117,8 @@ class ApprovalTests(unittest.TestCase):
 
     def test_only_supported_inputs_for_each_suite(self):
         self.assertEqual({'TEST_IDS': '0040,0042'}, parameters(['cdc'], '{"TEST_IDS":"0040,0042"}'))
+        for key in ('AOSS_TEST_IDS', 'TEST_IDS'):
+            self.assertEqual({key: '0021,0024'}, parameters(['aoss-vector'], json.dumps({key: '0021; 0024'})))
         for suites, opts in [(['cdc'], {'CI_ROLE_BOUNDARY_ARN': 'other'}), (['eks'], {'TEST_IDS': '42\nX='}),
                              (['aoss'], {'TEST_IDS': 'all'}), (['byos'], {'S3_REPO_URI': 's3://other/secret'}),
                              (['cdc', 'eks'], {'TEST_IDS': '0001'}), (['cfn-import'], {'TEST_IDS': '0001'}),
