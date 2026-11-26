@@ -620,7 +620,8 @@ class Worker:
                                 continue
                             raise
                         if stack['StackStatus'] == 'CREATE_COMPLETE':
-                            network = self.aws('eks', 'describe-cluster', '--name', self.cluster)['cluster']['resourcesVpcConfig']
+                            cluster = self.aws('eks', 'describe-cluster', '--name', self.cluster)['cluster']
+                            network = cluster['resourcesVpcConfig']
                             with phase('private cluster deployment', bootstrap_minutes):
                                 endpoints = self.clusters(network['vpcId'])
                             break
