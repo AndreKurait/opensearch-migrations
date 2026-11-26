@@ -1,6 +1,10 @@
 name: Run an AWS integration suite
 on:
   workflow_call:
+    outputs:
+      build-id:
+        description: AWS CodeBuild ID for dependency receipt publication
+        value: ${{ jobs.start.outputs.build-id }}
     secrets:
       AWS_CI_CONFIG: {required: true}
     inputs:
@@ -167,26 +171,3 @@ jobs:
           fi
           echo "**$SUITE** · \`$SHA\` · **$state**" >> "$GITHUB_STEP_SUMMARY"
           test "$state" = success
-  publish-main-dependencies:
-    needs: [start, outcome]
-    if: >-
-      !cancelled() && vars.DEPENDENCY_PROXY_ENABLED == 'true' && inputs.pr == '' &&
-      inputs.ref == 'refs/heads/main' && github.ref == 'refs/heads/main' && needs.start.outputs.build-id != ''
-    runs-on: ubuntu-24.04
-    permissions: {actions: write}
-    steps:
-      # BEGIN generated network guard
-      - name: Restrict runner and container egress
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: block
-          disable-telemetry: true
-          allowed-endpoints: >-
-            api.github.com:443 github.com:443 raw.githubusercontent.com:443
-            sts.us-west-2.amazonaws.com:443 sts.amazonaws.com:443 codebuild.us-west-2.amazonaws.com:443 ssm.us-west-2.amazonaws.com:443
-      - *enforce_unprivileged
-      # END generated network guard
-
-      - name: Dispatch the protected publisher for this main worker
-        env: {GH_TOKEN: '${{ github.token }}', BUILD_ID: '${{ needs.start.outputs.build-id }}', WORKER_SHA: '${{ inputs.sha }}'}
-        run: gh workflow run dependency-cache-sync.yml --ref main --repo "$GITHUB_REPOSITORY" -f "build=$BUILD_ID" -f "sha=$WORKER_SHA"

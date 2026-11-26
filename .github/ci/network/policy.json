@@ -374,6 +374,9 @@
       "nativePrivileges": false
     },
     "aws-integration.yml/test": {
+      "delegates": "./.github/workflows/aws-suite-publication.yml"
+    },
+    "aws-suite-publication.yml/worker": {
       "delegates": "./.github/workflows/aws-suite.yml"
     },
     "aws-suite.yml/start": {
@@ -402,7 +405,7 @@
       ],
       "nativePrivileges": false
     },
-    "aws-suite.yml/publish-main-dependencies": {
+    "aws-suite-publication.yml/publish-main-dependencies": {
       "purposes": [
         "github",
         "aws-launch"

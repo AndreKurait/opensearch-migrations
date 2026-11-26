@@ -122,7 +122,7 @@ jobs:
       id-token: write
       statuses: write
       actions: write
-    uses: ./.github/workflows/aws-suite.yml
+    uses: ./.github/workflows/aws-suite-publication.yml
     secrets:
       AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}
     with:

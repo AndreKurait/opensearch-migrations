@@ -1,0 +1,65 @@
+name: Run an AWS suite and publish its dependencies
+on:
+  workflow_call:
+    secrets:
+      AWS_CI_CONFIG: {required: true}
+    inputs:
+      sha: {type: string, required: true}
+      ref: {type: string, required: true}
+      suite: {type: string, required: true}
+      lane: {type: number, required: true}
+      pr: {type: string, default: ''}
+      parameters: {type: string, default: '{}'}
+      release: {type: string, default: ''}
+permissions: {}
+jobs:
+  worker:
+    uses: ./.github/workflows/aws-suite.yml
+    permissions: {contents: read, id-token: write, statuses: write}
+    secrets:
+      AWS_CI_CONFIG: ${{ secrets.AWS_CI_CONFIG }}
+    with:
+      sha: ${{ inputs.sha }}
+      ref: ${{ inputs.ref }}
+      suite: ${{ inputs.suite }}
+      lane: ${{ inputs.lane }}
+      pr: ${{ inputs.pr }}
+      parameters: ${{ inputs.parameters }}
+      release: ${{ inputs.release }}
+  publish-main-dependencies:
+    needs: worker
+    if: >-
+      !cancelled() && vars.DEPENDENCY_PROXY_ENABLED == 'true' && inputs.pr == '' &&
+      inputs.ref == 'refs/heads/main' && github.ref == 'refs/heads/main' && needs.worker.outputs.build-id != ''
+    runs-on: ubuntu-24.04
+    permissions: {actions: write}
+    steps:
+      # BEGIN generated network guard
+      - name: Restrict runner and container egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443 github.com:443 raw.githubusercontent.com:443
+            sts.us-west-2.amazonaws.com:443 sts.amazonaws.com:443 codebuild.us-west-2.amazonaws.com:443 ssm.us-west-2.amazonaws.com:443
+      - name: Enforce Linux network policy before candidate checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          guard="$RUNNER_TEMP/linux_guard.py"
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/linux_guard.py" -o "$guard"
+          expected=e4d53ca074837dac963d7a0cdc72a1a202d40b19e172559a8be525f146e0a878
+          test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
+          sudo /usr/bin/env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 "$guard" install
+          /usr/bin/python3 "$guard" probe
+          sudo /usr/bin/python3 "$guard" lock-down
+          if sudo -n true >/dev/null 2>&1 || docker info >/dev/null 2>&1; then exit 1; fi
+      # END generated network guard
+
+      - name: Dispatch the protected publisher for this main worker
+        env: {GH_TOKEN: '${{ github.token }}', BUILD_ID: '${{ needs.worker.outputs.build-id }}', WORKER_SHA: '${{ inputs.sha }}'}
+        run: gh workflow run dependency-cache-sync.yml --ref main --repo "$GITHUB_REPOSITORY" -f "build=$BUILD_ID" -f "sha=$WORKER_SHA"
