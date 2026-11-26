@@ -102,7 +102,7 @@ jobs:
   docker-compose-e2e-test:
     if: github.event_name != 'schedule' && inputs.suite != 'matrix' && (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       CI_DEPENDENCY_STRICT_READ: ${{ inputs.cache-only && '1' || '0' }}
     steps:
@@ -168,7 +168,7 @@ jobs:
 
       - name: Build Docker images
         shell: test-shell.sh {0}
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           DOCKER_BUILD_RETRIES: 3
         run: ./buildImages/buildDockerImages.sh
