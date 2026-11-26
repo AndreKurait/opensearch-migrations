@@ -86,7 +86,8 @@ phases:
           export PATH="$tool_dir/record:$PATH"
         fi
         command -v jq && docker buildx version && docker info >/dev/null
-        if [[ "${CI_DEPENDENCY_MODE:-}" == replay ]]; then
+        if [[ -n "${CI_DEPENDENCY_PROXY_URL:-}" ]]; then
+          # On a miss the broker fetches upstream and records it for publication.
           export CI_AWS_DOCKERFILE_NETWORK=none
         fi
         command="$CI_SUITE"

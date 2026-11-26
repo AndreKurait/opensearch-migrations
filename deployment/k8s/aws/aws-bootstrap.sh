@@ -2372,7 +2372,7 @@ if [[ "$build" == "true" && -z "$ma_images_source" ]]; then
   fi
 
   start_eks_package_relay || exit 1
-  restrict_eks_buildkit_egress
+  restrict_eks_buildkit_egress || exit 1
   echo "Building images to MIGRATIONS_ECR_REGISTRY=$MIGRATIONS_ECR_REGISTRY"
   ecr_domain="${MIGRATIONS_ECR_REGISTRY%%/*}"
   echo "Logging in to ECR registry: $ecr_domain"
