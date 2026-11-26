@@ -50,6 +50,11 @@ class TestCloudWorker(unittest.TestCase):
             'https://github.com/opensearch-project/opensearch-migrations/releases/download/3.4.2/aws-bootstrap.sh',
         )
 
+    def test_published_release_uses_configured_dependency_proxy(self):
+        with patch.dict(os.environ, CI_RELEASE_VERSION='3.4.2', CI_DEPENDENCY_PROXY_URL='http://localhost:1234/'), patch('run.command') as execute:
+            Worker('eks', self.temp).build()
+        self.assertEqual(execute.call_args.args[-1], 'http://localhost:1234/migration-release/3.4.2/aws-bootstrap.sh')
+
     def test_isolated_recovery_includes_both_clusters_and_the_external_vpc(self):
         worker = Worker('isolated', self.temp)
         with patch.object(worker, 'remove_ma') as ma, patch.object(worker, 'remove_stack') as stack:

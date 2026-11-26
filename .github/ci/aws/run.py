@@ -262,6 +262,9 @@ class Worker:
                 raise ValueError('CI_RELEASE_VERSION requires the exact published semver tag')
             self.bootstrap_script = self.temp / 'aws-bootstrap.sh'
             release_url = 'https://github.com/opensearch-project/opensearch-migrations/releases/download'
+            proxy = os.environ.get('CI_DEPENDENCY_PROXY_URL')
+            if proxy:
+                release_url = proxy.rstrip('/') + '/migration-release'
             url = f'{release_url}/{self.release}/aws-bootstrap.sh'
             command(
                 'curl',
