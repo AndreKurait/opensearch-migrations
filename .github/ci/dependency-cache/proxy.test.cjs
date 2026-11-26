@@ -253,14 +253,17 @@ test('OCI manifest and blob probes use catalog metadata and defer byte verificat
   assert.deepEqual(observed, [manifest, manifest, blob, blob]);
 });
 
-test('Go modules and checksum database reads use the public Go proxy', async t => {
+test('Go proxy advertises checksum support and fetches signed data from its database', async t => {
   const dir = await scratch(t);
-  const keys = ['github.com/!burnt!sushi/toml/@v/v1.4.0.mod', 'sumdb/sum.golang.org/supported',
+  const proxy = await startProxy({resolve: () => assert.fail('fetched local capability marker')});
+  t.after(proxy.close);
+  assert.equal((await get(proxy.url, '/gomod/sumdb/sum.golang.org/supported')).status, 200);
+  const keys = ['github.com/!burnt!sushi/toml/@v/v1.4.0.mod',
     'sumdb/sum.golang.org/lookup/github.com/!burnt!sushi/toml@v1.4.0', 'sumdb/sum.golang.org/tile/8/0/x001/002'];
   const calls = mockFetch(t, keys.map(() => new Response('data')));
   for (const [i, asset] of keys.entries()) {
     await fetchPublic(`/gomod/${asset}`, path.join(dir, String(i)));
-    assert.equal(calls[i].url.href, `https://proxy.golang.org/${asset}`);
+    assert.equal(calls[i].url.href, asset.startsWith('sumdb/') ? `https://${asset.slice(6)}` : `https://proxy.golang.org/${asset}`);
   }
   for (const invalid of ['sumdb/elsewhere/supported', '../@v/base.mod', 'host:443/foo/@v/file.zip']) {
     assert.throws(() => validateKey(`/gomod/${invalid}`));

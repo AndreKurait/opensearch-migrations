@@ -93,6 +93,7 @@ function parseKey(key) {
     const moduleRequest = /^(?!sumdb\/).+\/(?:@latest|@v\/(?:list|[a-zA-Z0-9._+!-]+\.(?:zip|mod|info)))$/.test(artifact);
     const checksumRequest = /^sumdb\/sum\.golang\.org\/(?:supported|latest|lookup\/.+@[^/]+|tile\/[0-9]+\/.+)$/.test(artifact);
     if (!moduleRequest && !checksumRequest) throw new Error('Unsupported Go module proxy request');
+    if (checksumRequest) return {urls: [new URL('./' + segments.slice(2).join('/'), 'https://sum.golang.org/')], cdn: []};
     return {urls: [new URL('./' + artifact, 'https://proxy.golang.org/')], cdn: ['storage.googleapis.com']};
   }
   if (parts.some(part => !/^[A-Za-z0-9._+@:-]+$/.test(part) || part === '.' || part === '..')) {
@@ -405,6 +406,11 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, obser
       }
       const key = canonicalKey(req.url);
       if (key.startsWith('/v2/')) res.setHeader('docker-distribution-api-version', 'registry/2.0');
+      if (key === '/gomod/sumdb/sum.golang.org/supported') {
+        res.writeHead(200, {'content-length': 0});
+        res.end();
+        return;
+      }
       if (key === '/v2/') {
         res.writeHead(200, {'content-type': 'application/json', 'content-length': 2});
         res.end('{}');
