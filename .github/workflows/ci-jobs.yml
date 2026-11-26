@@ -483,6 +483,7 @@ jobs:
       matrix:
         index: ${{ fromJson(needs.generate-test-matrix.outputs.matrix) }}
     env:
+      CI_GRADLE_STRIPE: ${{ matrix.index }}
       # The secrets context is unavailable in a step `if`, so gate on this instead.
       HAS_CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN != '' }}
     steps:

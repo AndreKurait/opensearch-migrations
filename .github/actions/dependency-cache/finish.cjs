@@ -112,7 +112,8 @@ async function finish() {
         catch (error) { if (error.code !== 'ENOENT') throw error; }
       }
       const {default: artifacts} = await import('../../ci/dependency-cache/node_modules/@actions/artifact/lib/artifact.js');
-      const name = `dependency-report-${process.env.GITHUB_JOB}-${process.env.GITHUB_RUN_ATTEMPT}-${randomUUID()}`;
+      const stripe = /^\d+$/.test(process.env.CI_GRADLE_STRIPE) ? `-stripe-${process.env.CI_GRADLE_STRIPE}` : '';
+      const name = `dependency-report-${process.env.GITHUB_JOB}${stripe}-${process.env.GITHUB_RUN_ATTEMPT}-${randomUUID()}`;
       await artifacts.uploadArtifact(name, files, dir, {retentionDays: 7});
     }
     const log = await fs.readFile(path.join(dir, 'service.log'), 'utf8').catch(() => '');
