@@ -282,6 +282,7 @@ function createStore(toolkit, options = {}) {
   async function openReader({ indexKey } = {}) {
     const temp = await stageDirectory();
     let index;
+    let restoredIndexKey;
     try {
       const destination = path.join(temp, 'index.json');
       if (indexKey && !validIndexKey(indexKey)) throw new Error('Invalid base branch dependency index key');
@@ -292,6 +293,7 @@ function createStore(toolkit, options = {}) {
       if (![1, 2].includes(index.version) || key !== `${INDEX}${index.generation}-${hash(data)}` || !Array.isArray(index.entries)) {
         throw new Error(`Invalid dependency cache index ${key}`);
       }
+      restoredIndexKey = key;
       index.entries = index.entries.map(prepareEntry);
     } catch (error) {
       await fs.rm(temp, { recursive: true, force: true });
@@ -300,7 +302,7 @@ function createStore(toolkit, options = {}) {
     const entries = manifestLookup(index.entries);
     const { blobs, locations } = layout(index.entries, index.version === 2);
     const blobMap = new Map(blobs.map(blob => [blob.id, blob]));
-    const metrics = { archiveTransfers: 0, archivePayloadBytes: 0, catalogObjects: locations.size, restoredObjects: 0 };
+    const metrics = { indexKey: restoredIndexKey, archiveTransfers: 0, archivePayloadBytes: 0, catalogObjects: locations.size, restoredObjects: 0 };
     const pending = new Map();
     const limit = limiter(4);
     let closed = false;
