@@ -477,4 +477,9 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, obser
   })};
 }
 
-module.exports = {startProxy, fetchPublic, validateKey, canonicalKey, pinnedElasticDigest: key => elasticReleases[key]};
+function isPackageIndex(key) {
+  const route = parseKey(key);
+  return Boolean(route.npmMetadata || route.pypiMetadata);
+}
+
+module.exports = {isPackageIndex, startProxy, fetchPublic, validateKey, canonicalKey, pinnedElasticDigest: key => elasticReleases[key]};

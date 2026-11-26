@@ -176,7 +176,12 @@ async function openRecorder(options = {}) {
           const filename = path.join(temp, randomUUID());
           const data = await proxy.fetchPublic(key, filename);
           if ((observation?.digest && data?.digest !== observation.digest) || (observation?.missing && data !== null)) {
-            throw new Error('Public origin no longer matches the main-worker dependency observation');
+            // Registry indexes can change between a build and its asynchronous receipt import.
+            // Publish only the fresh bytes fetched by this worker from the fixed registry.
+            if (wantFile || !observation.digest || !data || !proxy.isPackageIndex?.(key)) {
+              throw new Error(`Public origin no longer matches the main-worker dependency observation for ${key}`);
+            }
+            console.info(`Refreshed changed package index ${key}`);
           }
           const entry = checkEntry(data === null ? {key, missing: true, digest: null, size: 0, type: '', accessed: observedAt, verifiedAt: current} :
             {key, digest: data.digest, size: data.size, type: data.type, accessed: observedAt, verifiedAt: current}, proxy.validateKey);

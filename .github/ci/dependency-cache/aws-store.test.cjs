@@ -153,3 +153,17 @@ test('native snapshots ignore newer routes without making them restorable or wri
   await assert.rejects(snapshot.materialize({...snapshot.entries[0],key:'/future/item'}, '/unused'), /unpublished/);
   await snapshot.close();
 });
+
+
+test('receipt import independently refreshes a changed package index and still verifies tarballs', async () => {
+  const {storage} = fixture();
+  const proxy = {...origin('new registry bytes'), isPackageIndex: require('./proxy.cjs').isPackageIndex};
+  const recorder = await openRecorder({storage, proxy, now: () => 100});
+  const observation = {digest: 'a'.repeat(64), accessed: 90};
+  await recorder.importObservation({...observation, key: '/npm/typescript'});
+  await assert.rejects(recorder.importObservation({...observation, key: '/npm/typescript/-/typescript-5.8.0.tgz'}), /no longer matches/);
+  const [entry] = await recorder.close();
+  assert.equal(entry.digest, createHash('sha256').update('new registry bytes').digest('hex'));
+  assert.equal(entry.verifiedAt, 100);
+  assert.equal(entry.accessed, 90);
+});
