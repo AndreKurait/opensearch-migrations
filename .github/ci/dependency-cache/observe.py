@@ -16,7 +16,9 @@ def observe(repo, run, attempt):
     prefix = f'migrations-main-requests-v1-{run}-{attempt}-'
     dispatched = set()
     terminal = 0
-    while terminal < 2:
+    # A separate workflow_run completion event sweeps every remaining receipt.
+    # Release this hosted runner while the source jobs are still queued.
+    for poll in range(3):
         caches = json.loads(gh('api', '--paginate', '--slurp', '-X', 'GET', f'repos/{repo}/actions/caches',
                                '-f', 'ref=refs/heads/main', '-f', f'key={prefix}', '-F', 'per_page=100'))
         visible = {row['key'] for page in caches for row in page['actions_caches']
@@ -41,8 +43,9 @@ def observe(repo, run, attempt):
                 dispatched.update(batch)
         status = gh('api', f'repos/{repo}/actions/runs/{run}', '--jq', '.status').strip()
         terminal = terminal + 1 if status == 'completed' else 0
-        if terminal < 2:
-            time.sleep(15 if terminal else 45)
+        if terminal == 2 or poll == 2:
+            return
+        time.sleep(15 if terminal else 45)
 
 
 if __name__ == '__main__':
