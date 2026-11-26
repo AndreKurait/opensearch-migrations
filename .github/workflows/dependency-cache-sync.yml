@@ -31,7 +31,8 @@ jobs:
     needs: [ingest, seed]
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     concurrency:
-      group: migrations-main-dependency-cache-publish
+      # Older workflow revisions replace pending jobs in their original group.
+      group: migrations-main-dependency-cache-publish-queued
       queue: max
     uses: ./.github/workflows/dependency-cache-publish.yml
     permissions: {actions: read, contents: read, id-token: write}
