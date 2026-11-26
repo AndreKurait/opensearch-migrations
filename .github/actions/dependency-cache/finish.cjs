@@ -96,11 +96,20 @@ async function finish() {
     const observations = readReceipt(text);
     if (!observations.length) return;
     const cache = await require('../../ci/dependency-cache/github-store.cjs').loadToolkit();
-    const key = `migrations-main-requests-v1-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-${randomUUID()}`;
+    const prefix = `migrations-main-requests-v1-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-`;
     await fs.mkdir(path.dirname(receiptPath), {recursive: true});
     await fs.writeFile(receiptPath, text, {mode: 0o600});
     try {
-      if (await cache.saveCache([receiptPath], key) < 0) throw new Error('Could not save main worker observations');
+      for (let attempt = 0; ; attempt++) {
+        // A failed upload may have reserved its write-once key.
+        try {
+          if (await cache.saveCache([receiptPath], prefix + randomUUID()) >= 0) break;
+          throw new Error('Could not save main worker observations');
+        } catch (error) {
+          if (attempt === 2) throw error;
+          await delay(1000 * 2 ** attempt);
+        }
+      }
       console.log(`Saved ${observations.length} main worker observations.`);
     } finally { await fs.rm(receiptPath, {force: true}); }
   } finally {
