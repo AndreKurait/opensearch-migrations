@@ -9,7 +9,6 @@ from contextlib import contextmanager
 import os
 from pathlib import Path
 import re
-import secrets
 import shutil
 import socket
 import ssl
@@ -152,41 +151,31 @@ def install():
 
 @contextmanager
 def local_ipc():
-    # Gradle's incoming worker connector binds port zero. Restrict this ephemeral VM's allocator
-    # to an unused short interval and give Seatbelt those exact TCP ports (one rule per port).
-    # PF still rejects public inbound TCP; the worker profile accepts and connects on loopback.
     if sys.platform != 'darwin' or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
         raise RuntimeError('Expected a disposable GitHub macOS worker')
-    keys = ['net.inet.ip.portrange.' + key for key in ('first', 'last')]
-    old = {key: command(['/usr/sbin/sysctl', '-n', key], capture_output=True).stdout.strip() for key in keys}
-    listeners = ['/usr/bin/sudo', '-n', '/usr/sbin/lsof', '-nP', '-iTCP', '-sTCP:LISTEN', '-Fn']
-    listed = command(listeners, capture_output=True).stdout
-    occupied = {int(port) for port in re.findall(r'(?m)^n.*:(\d+)$', listed)}
-    choices = [first for first in range(18000, 28000, 96) if occupied.isdisjoint(range(first, first + 96))]
-    first = secrets.choice(choices)
-    ports = range(first, first + 96)
-
-    def set_key(key, value):
-        command(['/usr/bin/sudo', '-n', '/usr/sbin/sysctl', '-w', f'{key}={value}'], capture_output=True)
-
+    first, last = [int(command(['/usr/sbin/sysctl', '-n', 'net.inet.ip.portrange.' + key],
+                               capture_output=True).stdout) for key in ('first', 'last')]
+    if not (1024 <= first < last <= 65535):
+        raise RuntimeError('Unexpected ephemeral TCP port range')
+    ports = range(first, last + 1)
+    anchor = ANCHOR + '/gradle-ipc'
+    existing = subprocess.run(['/usr/bin/pgrep', '-u', str(GUEST_UID)], capture_output=True)
+    if existing.returncode != 1:
+        raise RuntimeError('Expected an unused non-administrative UID for the worker')
+    broker_port = urllib.parse.urlsplit(os.environ.get('CI_DEPENDENCY_PROXY_URL', '')).port or 30071
+    # Classify candidate connections on output, then check the receiving listener's UID on input.
+    # Runner and broker connections use the VM's ordinary allocator and never receive this tag.
+    rules = (f'pass out quick on lo0 inet proto tcp to 127.0.0.1 port {broker_port} user {GUEST_UID} keep state\n'
+             f'pass out quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{last} user {GUEST_UID} '
+             'no state tag MIGRATIONS_GUEST\n'
+             f'block return-rst out quick on lo0 proto tcp user {GUEST_UID}\n'
+             f'block return-rst in quick on lo0 inet proto tcp to 127.0.0.1 user != {GUEST_UID} '
+             'tagged MIGRATIONS_GUEST\n')
     try:
-        set_key(keys[0], first)
-        set_key(keys[1], ports[-1])
-        anchor = ANCHOR + '/gradle-ipc'
-        # PF_IN resolves the receiving TCP listener UID. Candidates in a distinct uid cannot
-        # reach a runner-owned TCP listener that appears in their permitted range after preflight.
-        existing = subprocess.run(['/usr/bin/pgrep', '-u', str(GUEST_UID)], capture_output=True)
-        if existing.returncode != 1:
-            raise RuntimeError('Expected an unused non-administrative UID for the worker')
-        rules = (f'pass out quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{ports[-1]} no state\n'
-                 f'block return-rst in quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{ports[-1]} '
-                 f'user != {GUEST_UID}\n')
         command(['/usr/bin/sudo', '-n', PF, '-a', anchor, '-f', '-'], input=rules)
         yield ports
     finally:
-        command(['/usr/bin/sudo', '-n', PF, '-a', ANCHOR + '/gradle-ipc', '-F', 'rules'], capture_output=True)
-        set_key(keys[1], old[keys[1]])
-        set_key(keys[0], old[keys[0]])
+        command(['/usr/bin/sudo', '-n', PF, '-a', anchor, '-F', 'rules'], capture_output=True)
 
 
 def seatbelt(temp, java, port, ipc):
@@ -217,10 +206,10 @@ def seatbelt(temp, java, port, ipc):
             '(deny network*)',
             f'(allow network-outbound (remote tcp "localhost:{port}"))',
             # Darwin checks bind before it has assigned the ephemeral port. Inbound/listen and
-            # outbound are independently limited to the known-empty job interval on loopback.
+            # outbound are restricted to IPv4 loopback, with receiver ownership enforced by PF.
             '(allow network-bind (local tcp "localhost:*"))',
-            '(allow network-inbound ' + ' '.join(f'(local tcp "localhost:{p}")' for p in ipc) + ')',
-            '(allow network-outbound ' + ' '.join(f'(remote tcp "localhost:{p}")' for p in ipc) + ')',
+            '(allow network-inbound (local tcp "127.0.0.1:*"))',
+            '(allow network-outbound (remote tcp "127.0.0.1:*"))',
             # Gradle 8 requests an ephemeral UDP port for its file-lock service. Seatbelt expresses
             # the resulting unknown port as '*'. Sending and receiving remain separate operations.
             '(allow network-bind (local udp "*:*"))',
@@ -369,9 +358,9 @@ def fixture(ipc):
         # Bind a runner-owned service inside the allowed range AFTER the empty-port preflight.
         # Seatbelt permits this port. PF must deny it based on the receiving socket's ownership.
         with socket.socket() as host_after:
-            host_after.bind(('127.0.0.1', ipc[0]))
+            host_after.bind(('127.0.0.1', 0))
             host_after.listen()
-            if execute(['/usr/bin/nc', '-z', '-G', '2', '127.0.0.1', str(ipc[0])]).returncode == 0:
+            if execute(['/usr/bin/nc', '-z', '-G', '2', '127.0.0.1', str(host_after.getsockname()[1])]).returncode == 0:
                 raise RuntimeError('Candidate connected to a later host-owned listener inside its IPC range')
         response = execute(['/usr/bin/curl', '-fsS', '--max-time', '5', f'http://127.0.0.1:{port}/fixture'])
         if response.returncode or response.stdout != 'local broker':

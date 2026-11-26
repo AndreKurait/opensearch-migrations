@@ -100,6 +100,8 @@ function parseKey(key) {
   }
   if (kind === 'raw' && originId === 'node') {
     const digests = {
+      'node-v22.14.0-darwin-arm64.tar.gz': 'e9404633bc02a5162c5c573b1e2490f5fb44648345d64a958b17e325729a5e42',
+      'node-v22.14.0-darwin-x64.tar.gz': '6698587713ab565a94a360e091df9f6d91c8fadda6d00f0cf6526e9b40bed250',
       'node-v22.14.0-linux-x64.tar.gz': '9d942932535988091034dc94cc5f42b6dc8784d6366df3a36c4c9ccb3996f0c2',
       'node-v22.14.0-linux-arm64.tar.gz': '8cf30ff7250f9463b53c18f89c6c606dfda70378215b2c905d0a9a8b08bd45e0',
     };
