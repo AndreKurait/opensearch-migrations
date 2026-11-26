@@ -12,15 +12,37 @@ async function finish() {
   try {
     const pid = Number(process.env.STATE_service_pid);
     if (!Number.isSafeInteger(pid) || pid < 2) throw new Error('Invalid dependency proxy process');
-    let alive = true;
-    try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; alive = false; }
-    for (let i = 0; ; ++i) {
-      const failed = await fs.readFile(path.join(dir, 'failed'), 'utf8').catch(() => null);
-      if (failed) throw new Error(failed);
-      if (await fs.access(path.join(dir, 'done')).then(() => true, () => false)) break;
-      if (!alive) throw new Error('Dependency broker exited before it finalized its observations');
-      if (i > 300) throw new Error('Timed out while finalizing dependency observations');
-      await delay(200);
+    try {
+      let alive = true;
+      try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; alive = false; }
+      for (let i = 0; ; ++i) {
+        const failed = await fs.readFile(path.join(dir, 'failed'), 'utf8').catch(() => null);
+        if (failed) throw new Error(failed);
+        if (await fs.access(path.join(dir, 'done')).then(() => true, () => false)) break;
+        if (!alive) throw new Error('Dependency broker exited before it finalized its observations');
+        if (i > 300) throw new Error('Timed out while finalizing dependency observations');
+        await delay(200);
+      }
+    } catch (error) {
+      // A broker crash must still fail the job. Recover the paths already logged so
+      // the protected publisher can independently resolve them for the next run.
+      console.error(error.message);
+      process.exitCode = 1;
+      const journal = await fs.readFile(path.join(dir, 'origin-requests.jsonl'), 'utf8');
+      const accessed = Date.now();
+      const keys = new Set();
+      for (const line of journal.split('\n').slice(0, -1)) {
+        if (line) keys.add(JSON.parse(line).key);
+      }
+      if (keys.size) {
+        const text = JSON.stringify(Array.from(keys, key => ({key, accessed})));
+        readReceipt(text);
+        try {
+          await fs.writeFile(path.join(dir, 'receipt.json'), text, {flag: 'wx', mode: 0o600});
+        } catch (writeError) {
+          if (writeError.code !== 'EEXIST') throw writeError;
+        }
+      }
     }
     const metrics = await fs.readFile(path.join(dir,'openartifact-metrics.json'),'utf8').catch(() => null);
     if (metrics) console.log(`OpenArtifact storage ${metrics}`);
