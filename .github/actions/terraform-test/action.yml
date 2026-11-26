@@ -13,16 +13,44 @@ runs:
     - id: period
       shell: bash
       run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
-    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-      id: cache
+    - id: installed
+      shell: bash
+      run: |
+        tools="$RUNNER_TEMP/terraform-tools"
+        mkdir -p "$tools"
+        if command -v terraform >/dev/null && CHECKPOINT_DISABLE=1 terraform version -json | jq -e '.terraform_version == "1.17.2"' >/dev/null; then
+          cp "$(command -v terraform)" "$tools/terraform"
+          echo 'available=true' >> "$GITHUB_OUTPUT"
+        fi
+    - name: Restore the requested Terraform CLI
+      if: steps.installed.outputs.available != 'true'
+      id: cli
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
-        path: ${{ runner.temp }}/terraform-tools
-        key: terraform-tools-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.period.outputs.month }}-${{ hashFiles(format('{0}/**/*.tf', inputs.module)) }}
+        path: ${{ runner.temp }}/terraform-tools/terraform
+        key: terraform-cli-v1-${{ runner.os }}-${{ runner.arch }}-1.17.2
         fail-on-cache-miss: ${{ inputs.cache-only == 'true' }}
     - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
-      if: steps.cache.outputs.cache-hit != 'true'
+      if: steps.installed.outputs.available != 'true' && steps.cli.outputs.cache-hit != 'true'
       with:
+        terraform_version: 1.17.2
         terraform_wrapper: false
+    - if: steps.installed.outputs.available != 'true' && steps.cli.outputs.cache-hit != 'true'
+      shell: bash
+      run: cp "$(command -v terraform)" "$RUNNER_TEMP/terraform-tools/terraform"
+    - name: Publish reusable CLI
+      if: steps.cli.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name) && inputs.cache-only != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: ${{ runner.temp }}/terraform-tools/terraform
+        key: terraform-cli-v1-${{ runner.os }}-${{ runner.arch }}-1.17.2
+    - name: Restore providers for the selected module
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      id: cache
+      with:
+        path: ${{ runner.temp }}/terraform-tools/providers
+        key: terraform-providers-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.period.outputs.month }}-${{ hashFiles(format('{0}/**/*.tf', inputs.module)) }}
+        fail-on-cache-miss: ${{ inputs.cache-only == 'true' }}
     - name: Populate the provider mirror
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
@@ -31,14 +59,13 @@ runs:
         set -euo pipefail
         tools="$RUNNER_TEMP/terraform-tools"
         mkdir -p "$tools/providers"
-        cp "$(command -v terraform)" "$tools/terraform"
         CHECKPOINT_DISABLE=1 "$tools/terraform" get
         CHECKPOINT_DISABLE=1 "$tools/terraform" providers mirror "$tools/providers"
-    - name: Publish the CLI and provider mirror
+    - name: Publish the selected module provider mirror
       if: steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name)
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
-        path: ${{ runner.temp }}/terraform-tools
+        path: ${{ runner.temp }}/terraform-tools/providers
         key: ${{ steps.cache.outputs.cache-primary-key }}
     - name: Run Terraform tests from the local provider mirror
       shell: bash
