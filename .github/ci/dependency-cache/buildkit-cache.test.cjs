@@ -35,9 +35,10 @@ test('registry reads the selected manifest and layer and never transfers a probe
   const toolkit = {
     async saveCache([file], key) {
       blobs.set(key, await fs.readFile(file));
+      return blobs.size;
     },
     async restoreCache(_, key, __, options) {
-      if (!blobs.has(key)) return;
+      if (options.lookupOnly || !blobs.has(key)) return;
       if (!options.lookupOnly) {
         reads.push(key);
         await fs.writeFile(options.destination, blobs.get(key));

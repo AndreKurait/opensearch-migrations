@@ -4,6 +4,7 @@ const { createHash } = require('node:crypto');
 const { createReadStream, promises: fs } = require('node:fs');
 const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
+const { setTimeout: delay } = require('node:timers/promises');
 const { listMainCaches } = require('./cache-metadata.cjs');
 
 const buildkitRoute = /^\/v2\/buildkit-cache\/([a-z0-9]+(?:[._-]+[a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-]+[a-z0-9]+)*)*)\/(manifests|blobs)\/(cache(?:_amd64|_arm64)?|sha256:[0-9a-f]{64})$/;
@@ -120,9 +121,14 @@ async function publish(root, toolkit) {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.copyFile(data, file);
     try {
-      await toolkit.saveCache([file], key);
-      if ((await toolkit.restoreCache([file], key, [], { lookupOnly: true })) !== key)
-        throw new Error('BuildKit cache write unavailable');
+      const id = await toolkit.saveCache([file], key);
+      if (Number.isSafeInteger(id) && id >= 0) return;
+      // Another worker may be finalizing the same immutable object.
+      for (const wait of [0, 250, 1000, 3000, 5000]) {
+        if (wait) await delay(wait);
+        if ((await toolkit.restoreCache([file], key, [], {lookupOnly:true})) === key) return;
+      }
+      throw new Error(`BuildKit cache write unavailable for ${key}`);
     } finally {
       await fs.rm(file, { force: true });
     }
