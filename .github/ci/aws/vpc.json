@@ -306,6 +306,51 @@
           }
         ]
       }
+    },
+    "IsolatedRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Condition": "Isolated",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "test-isolated-rt-${Stage}"
+            }
+          },
+          {
+            "Key": "MigrationCI",
+            "Value": "github"
+          }
+        ]
+      }
+    },
+    "IsolatedSubnetARouteTableAssoc": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "Isolated",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "IsolatedSubnetA"
+        },
+        "RouteTableId": {
+          "Ref": "IsolatedRouteTable"
+        }
+      }
+    },
+    "IsolatedSubnetBRouteTableAssoc": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "Isolated",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "IsolatedSubnetB"
+        },
+        "RouteTableId": {
+          "Ref": "IsolatedRouteTable"
+        }
+      }
     }
   },
   "Outputs": {
