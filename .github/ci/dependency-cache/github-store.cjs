@@ -138,7 +138,8 @@ function budget(name, fallback) {
 function toolkitStore(toolkit, options = {}) {
   const read = options.read || paced(READ_RATE, budget('DEPENDENCY_CACHE_READER_JOBS', 48));
   const publishRead = options.read || paced(PUBLISH_LOOKUP_RATE, budget('DEPENDENCY_CACHE_WRITER_JOBS', 1));
-  const write = options.write || paced(180, budget('DEPENDENCY_CACHE_WRITER_JOBS', 1));
+  // Each v2 cache upload uses separate create and finalize write requests.
+  const write = options.write || paced(75, budget('DEPENDENCY_CACHE_WRITER_JOBS', 1));
   const restore = (file, key, prefixes = [], lookupOnly = false, bounds = {}) =>
     read(() => toolkit.restoreCache([file], key, prefixes, { lookupOnly, ...bounds }));
   const publicationRestore = (file, key, prefixes = [], lookupOnly = false, bounds = {}) =>
@@ -153,7 +154,9 @@ function toolkitStore(toolkit, options = {}) {
       } catch (e) { error = e; }
       // A competing writer or a lost finalize response can leave a usable immutable entry.
       if (await exists(file, key)) return;
-      if (attempt < 2) await (options.delay || sleep)(1000 * (attempt + 1));
+      // The toolkit collapses reserve throttling and competing writes into the same -1.
+      // Once the exact key lookup misses, wait out a complete rate-limit window.
+      if (attempt < 2) await (options.delay || sleep)(61_000 * (attempt + 1));
     }
     throw new Error(`GitHub cache publication failed for ${key}`, { cause: error });
   }
