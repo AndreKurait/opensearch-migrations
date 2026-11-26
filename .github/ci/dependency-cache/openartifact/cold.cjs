@@ -5,7 +5,7 @@ const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { fetchPublic, validateKey } = require('../proxy.cjs');
 
-const {isFreshEntry} = require('../receipts.cjs');
+const {isFreshEntry, MAX_RECEIPT_ENTRIES} = require('../receipts.cjs');
 
 async function openReadStore({ openReader, cold, reportMiss }) {
   let reader;
@@ -51,15 +51,20 @@ async function openColdStore(
   const pending = new Map();
   let unreserved = maxBytes,
     closed = false;
-  const observations = [];
+  const observations = new Map();
   const inflight = new Set();
   const metrics = { originLookups: 0, originPayloadBytes: 0 };
   return {
     metrics,
-    observations,
+    get observations() { return Array.from(observations.values()); },
     async resolve(key) {
       validateKey(key);
       if (closed) throw new Error('Cold dependency store closed');
+      // The protected publisher can resolve a path even when this job's transfer fails.
+      if (!observations.has(key) && observations.size >= MAX_RECEIPT_ENTRIES) throw new Error('Too many dependency requests');
+      const observation = observations.get(key) || {key};
+      observation.accessed = Date.now();
+      observations.set(key, observation);
       if (pending.has(key)) return pending.get(key);
       if (pending.size >= maxEntries) throw new Error('Cold dependency budget exhausted');
       const dest = path.join(dir, randomUUID());
@@ -77,7 +82,8 @@ async function openColdStore(
         try {
           metrics.originLookups++;
           const entry = await fetchArtifact(key, dest, { maxBytes: allowance });
-          observations.push({key, accessed: Date.now(), ...(entry ? {digest: entry.digest} : {missing: true})});
+          if (entry) observation.digest = entry.digest;
+          else observation.missing = true;
           metrics.originPayloadBytes += entry?.size || 0;
           unreserved += allowance - (entry?.size || 0);
           return entry ? { ...entry, path: dest } : null;

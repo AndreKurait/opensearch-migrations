@@ -88,6 +88,8 @@ test('unpublished public dependencies coalesce, are bounded and disappear with t
   await assert.rejects(cold.resolve('/maven/too-big'), /oversize/);
   await cold.resolve('/maven/example/b.jar');
   await assert.rejects(cold.resolve('/maven/example/c.jar'), /budget/);
+  const unresolved = cold.observations.filter(row => !row.digest && !row.missing);
+  assert.deepEqual(unresolved.map(row => row.key), ['/maven/too-big', '/maven/example/c.jar']);
   await cold.close();
   await assert.rejects(fs.stat(items[0].path), { code: 'ENOENT' });
 });
