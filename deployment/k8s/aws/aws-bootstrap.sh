@@ -873,6 +873,9 @@ include_ma_images=false
 
 cleanup_bootstrap_mirroring() {
   [[ "${BASH_SUBSHELL:-0}" -eq 0 ]] || return
+  if [[ -n ${CI_PACKAGE_WORKER_PID:-} ]]; then kill "$CI_PACKAGE_WORKER_PID" 2>/dev/null || true; fi
+  if [[ -n ${CI_PACKAGE_FORWARD_PID:-} ]]; then kill "$CI_PACKAGE_FORWARD_PID" 2>/dev/null || true; fi
+  if [[ -n ${CI_PACKAGE_FORWARD_LOG:-} ]]; then rm -f "$CI_PACKAGE_FORWARD_LOG"; fi
   if [[ -n "$mirror_pid" ]] && kill -0 "$mirror_pid" 2>/dev/null; then
     echo "Stopping in-flight ECR mirroring..." >&2
     kill "$mirror_pid" 2>/dev/null || true
@@ -2367,6 +2370,7 @@ if [[ "$build" == "true" && -z "$ma_images_source" ]]; then
     ensure_eks_buildx_builder
   fi
 
+  start_eks_package_relay || exit 1
   restrict_eks_buildkit_egress
   echo "Building images to MIGRATIONS_ECR_REGISTRY=$MIGRATIONS_ECR_REGISTRY"
   ecr_domain="${MIGRATIONS_ECR_REGISTRY%%/*}"

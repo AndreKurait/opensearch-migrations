@@ -281,6 +281,10 @@ restrict_eks_buildkit_egress() {
       ip6tables -t raw -I PREROUTING -i buildkit0 -j DROP
       ip6tables -t raw -C PREROUTING -i buildkit0 -j DROP
     fi'
+  if [[ -n ${CI_BUILDKIT_PACKAGE_ENDPOINT:-} ]]; then
+    [[ $CI_BUILDKIT_PACKAGE_ENDPOINT =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}:8080$ ]] || return 1
+    rules+=$'\n'"iptables -t raw -I PREROUTING -i buildkit0 -p tcp -d ${CI_BUILDKIT_PACKAGE_ENDPOINT%:*}/32 --dport 8080 -j ACCEPT"
+  fi
   for name in builder-amd64 builder-arm64; do
     deployment=$("${kube[@]}" get deployment "$name" -o json)
     jq -e '.spec.template.spec.containers[] | select(.name == "buildkitd") | .args | index("--oci-worker-net=bridge") != null' <<<"$deployment" >/dev/null || return 1
@@ -289,4 +293,35 @@ restrict_eks_buildkit_egress() {
     "${kube[@]}" patch deployment "$name" --type=strategic --patch "$patch" >/dev/null || return 1
     "${kube[@]}" rollout status deployment/"$name" --timeout=10m || return 1
   done
+}
+
+start_eks_package_relay() {
+  [[ -n ${CI_DEPENDENCY_PROXY_URL:-} && -n ${CODEBUILD_BUILD_ID:-} ]] || return 0
+  local namespace=${BUILDKIT_NAMESPACE:-buildkit} name=ci-package-relay
+  local -a kube=(kubectl "${CONTEXT_ARGS[@]}" -n "$namespace")
+  local source="$base_dir/buildImages/backends/eksPackageRelay.py" image service_ip selectors port i
+  image="${ECR_HOST:?}/$(mirror_ecr_repo_name mirror.gcr.io/library/amazoncorretto):21-al2023-headless"
+  service_ip=$(kubectl "${CONTEXT_ARGS[@]}" -n default get svc kubernetes -o jsonpath='{.spec.clusterIP}')
+  service_ip="${service_ip%.*}.9"
+  selectors=$("${kube[@]}" get deployment builder-amd64 builder-arm64 -o json | jq -ce '[.items[].spec.selector | {podSelector:.}] | select(length==2)')
+  "${kube[@]}" create configmap "$name" --from-file="relay.py=$source" --dry-run=client -o yaml | "${kube[@]}" apply -f - || return 1
+  jq -n --argjson from "$selectors" --arg ip "$service_ip" --arg image "$image" --arg name "$name" '
+    {app:$name} as $labels | {name:$name} as $meta | {kind:"List",apiVersion:"v1",items:[
+      {apiVersion:"networking.k8s.io/v1",kind:"NetworkPolicy",metadata:$meta,spec:{podSelector:{matchLabels:$labels},policyTypes:["Ingress","Egress"],egress:[],ingress:[{from:$from,ports:[{port:8080,protocol:"TCP"}]}]}},
+      {apiVersion:"v1",kind:"Service",metadata:$meta,spec:{selector:$labels,clusterIP:$ip,ports:[{port:8080}]}},
+      {apiVersion:"v1",kind:"Pod",metadata:($meta+{labels:$labels}),spec:{automountServiceAccountToken:false,volumes:[{name:"code",configMap:{name:$name}}],containers:[{name:"relay",image:$image,command:["/usr/bin/python3","/app/relay.py","pod","8080","8081"],volumeMounts:[{name:"code",mountPath:"/app",readOnly:true}],securityContext:{runAsUser:65534,allowPrivilegeEscalation:false,readOnlyRootFilesystem:true,capabilities:{drop:["ALL"]}}}]}}]}' | "${kube[@]}" apply -f - || return 1
+  "${kube[@]}" wait --for=condition=Ready pod/"$name" --timeout=5m || return 1
+  CI_PACKAGE_FORWARD_LOG=$(mktemp)
+  "${kube[@]}" port-forward "pod/$name" :8081 --address 127.0.0.1 >"$CI_PACKAGE_FORWARD_LOG" 2>&1 &
+  CI_PACKAGE_FORWARD_PID=$!
+  for ((i=0; i<100; i++)); do
+    port=$(sed -nE 's/^Forwarding from 127\.0\.0\.1:([0-9]+) -> .*/\1/p' "$CI_PACKAGE_FORWARD_LOG")
+    [[ -z $port ]] || break
+    kill -0 "$CI_PACKAGE_FORWARD_PID" || break
+    sleep 0.1
+  done
+  [[ -n $port ]] || { cat "$CI_PACKAGE_FORWARD_LOG" >&2; return 1; }
+  python3 "$source" worker "$port" &
+  CI_PACKAGE_WORKER_PID=$!
+  export CI_BUILDKIT_PACKAGE_ENDPOINT="$service_ip:8080"
 }
