@@ -19,7 +19,7 @@ jobs:
           set -euo pipefail
           guard="$RUNNER_TEMP/darwin_guard.py"
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$POLICY_SHA/.github/ci/network/darwin_guard.py" -o "$guard"
-          expected=a6ba6e0f2837ab51fa7c9ed05dcc7b4bf49c7830efcf3b440b0c88a235e76de8
+          expected=2d89165e31317c54f3e2d0e6a6dbc327ab975812889bf45dbdcf7a3bdbdc9f8b
           test "$(shasum -a 256 "$guard" | cut -d' ' -f1)" = "$expected"
           /usr/bin/python3 "$guard" install
       # END generated network guard

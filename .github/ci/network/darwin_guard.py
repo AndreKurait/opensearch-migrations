@@ -125,7 +125,7 @@ def install():
         str(ipaddress.ip_address(value.split('%')[0]))
         for value in re.findall(r'nameserver\[\d+\]\s*:\s*(\S+)', dns)
     }
-    policy = ['anchor "gradle-ipc" quick on lo0', 'pass quick on lo0 all']
+    policy = ['anchor "gradle-ipc" quick on lo0', 'pass quick on lo0 all no state']
     runner_uid = os.getuid()
     if runner_uid in (0, GUEST_UID):
         raise RuntimeError('Expected a distinct unprivileged runner account')
