@@ -117,7 +117,7 @@ def stream(logs, cursor, max_pages=50):
     return cursor
 
 
-def collect(build):
+def collect(build, *, cleanup=False):
     location = build.get('artifacts', {}).get('location')
     if not location:
         return False
@@ -135,9 +135,13 @@ def collect(build):
     try:
         aws('s3api', 'get-object', '--bucket', bucket, '--key', key, str(private))
         with zipfile.ZipFile(private) as archive:
-            if 'dependency-requests.json' in archive.namelist():
+            if not cleanup and 'dependency-requests.json' in archive.namelist():
                 output(receipt='true')
-        report, counts = render(private, output_dir=temp / 'aws-test-results')
+        directory = temp / 'aws-test-results'
+        if cleanup:
+            directory.mkdir(exist_ok=True)
+            directory = directory / 'cleanup'
+        report, counts = render(private, output_dir=directory)
     finally:
         private.unlink(missing_ok=True)
     summary(report)
@@ -170,6 +174,7 @@ def wait_for_cleanup(build_id, deadline):
             cursors[key] = stream(attempt.get('logs', {}), cursors.get(key, ''))
             if attempt['buildStatus'] == 'SUCCEEDED':
                 summary(f'Cleanup `{key}` succeeded.')
+                collect(attempt, cleanup=True)
                 return 'SUCCEEDED'
         if len(attempts) >= 3 and all(a['buildStatus'] in TERMINAL for a in attempts):
             return 'FAILED'

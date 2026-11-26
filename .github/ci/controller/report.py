@@ -45,7 +45,7 @@ def render(path, output_dir=None):
         dependencies = dependency_report(archive)
         if output_dir and dependencies is not None:
             stats, rows = dependencies
-            output_dir.mkdir()
+            output_dir.mkdir(exist_ok=True)
             (output_dir / 'dependency-origin.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
             (output_dir / 'dependency-cache-stats.json').write_text(json.dumps(stats) + '\n')
         entries = [entry for entry in archive.infolist() if entry.filename == 'junit.xml']
