@@ -55,6 +55,7 @@ args=(--unshare-all --unshare-user --disable-userns --die-with-parent --new-sess
   --dir /etc --ro-bind "$staging/hosts" /etc/hosts --ro-bind "$staging/resolv.conf" /etc/resolv.conf
   --ro-bind "$staging/passwd" /etc/passwd --ro-bind "$staging/group" /etc/group --ro-bind "$staging/nsswitch.conf" /etc/nsswitch.conf
   --dir /home --dir /home/worker --dir /work --dir /tools --dir /tools/bin
+  --ro-bind "$(realpath "$(command -v awk)")" /tools/bin/awk
   --ro-bind "$staging/source" /source --ro-bind "$staging/harness" /harness
   --ro-bind "$node_bin" /tools/bin/node --ro-bind "$skopeo_bin" /tools/bin/skopeo --ro-bind "$java_home" /tools/jdk
   --ro-bind "$npm_package" /tools/npm --ro-bind "$staging/npm" /tools/bin/npm
