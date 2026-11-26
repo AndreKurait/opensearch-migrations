@@ -120,6 +120,7 @@ jobs:
             dl.k8s.io:443 get.helm.sh:443 artifacts.elastic.co:443 download.elastic.co:443 charts.bitnami.com:443 kubernetes-sigs.github.io:443 prometheus-community.github.io:443 strimzi.io:443 argoproj.github.io:443 helm.min.io:443 opensearch-project.github.io:443
             cdn.amazonlinux.com:443 mountpoint-s3-release.s3.amazonaws.com:443
             maven.search-guard.com:443
+            codeload.github.com:443 opensearch-benchmark-workloads.s3.amazonaws.com:443
       - name: Enforce Linux network policy before candidate checkout
         shell: bash
         working-directory: ${{ runner.temp }}
@@ -190,7 +191,19 @@ jobs:
         shell: test-shell.sh {0}
         timeout-minutes: 15
         run: |
-          docker exec "$(docker ps --filter "name=migration-console" -q)" \
+          console=$(docker ps --filter "name=migration-console" -q)
+          benchmark_env=()
+          if [[ -n "${CI_DEPENDENCY_REGISTRY_ENDPOINT:-}" ]]; then
+            revision=fc64258a9b2ed2451423d7758ca1c5880626c520
+            archive="$RUNNER_TEMP/benchmark-workloads.tar.gz"
+            curl -fsS "${CI_DEPENDENCY_PROXY_URL%/}/benchmark/workloads/$revision.tar.gz" -o "$archive"
+            echo "7127ec3aeb6123f44b87319f54d3a83c1e129bb35198095bac44580099f3bf40  $archive" | sha256sum --check
+            docker exec "$console" mkdir -p /tmp/benchmark-workloads
+            docker exec -i "$console" tar xz -C /tmp/benchmark-workloads --strip-components=1 < "$archive"
+            docker exec -i "$console" python - /tmp/benchmark-workloads "http://$CI_DEPENDENCY_REGISTRY_ENDPOINT" < .github/ci/dependency-cache/prepare-benchmark.py
+            benchmark_env=(-e CI_BENCHMARK_WORKLOADS=/tmp/benchmark-workloads)
+          fi
+          docker exec "${benchmark_env[@]}" "$console" \
             pipenv run pytest /root/lib/integ_test/integ_test/replayer_tests.py --unique_id="testindex" -s \
               --junitxml=/tmp/replayer-tests.xml
 

@@ -178,6 +178,10 @@
       "storage.googleapis.com:443",
       "ghcr.io:443",
       "pkg-containers.githubusercontent.com:443"
+    ],
+    "benchmark": [
+      "codeload.github.com:443",
+      "opensearch-benchmark-workloads.s3.amazonaws.com:443"
     ]
   },
   "jobs": {
@@ -532,7 +536,8 @@
         "oci",
         "kubernetes",
         "console-image",
-        "searchguard"
+        "searchguard",
+        "benchmark"
       ],
       "nativePrivileges": true,
       "unreviewedForkSandbox": "false"

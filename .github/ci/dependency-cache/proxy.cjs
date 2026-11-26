@@ -89,6 +89,12 @@ function parseKey(key) {
     const url = new URL(chart.url);
     return {urls: [url], cdn: url.hostname === 'github.com' ? githubAssets : [], digest: chart.digest};
   }
+  if (key === '/benchmark/workloads/fc64258a9b2ed2451423d7758ca1c5880626c520.tar.gz') {
+    return {urls:[new URL('https://codeload.github.com/opensearch-project/opensearch-benchmark-workloads/tar.gz/fc64258a9b2ed2451423d7758ca1c5880626c520')], cdn:[], digest:'7127ec3aeb6123f44b87319f54d3a83c1e129bb35198095bac44580099f3bf40'};
+  }
+  if (/^\/benchmark\/corpora\/(geonames|http_logs|nested|nyc_taxis)\/[\w.-]+-1k(?:\.[\w.-]+)?$/.test(key)) {
+    return {urls:[new URL(key.slice('/benchmark'.length), 'https://opensearch-benchmark-workloads.s3.amazonaws.com')], cdn:[]};
+  }
   if (kind === 'raw' && Object.hasOwn(rawOrigins, originId) && parts.length >= 3) {
     const [origin, cdn] = rawOrigins[originId];
     return {urls: [new URL('./' + parts.slice(2).join('/'), origin)], cdn};

@@ -3,6 +3,8 @@ from urllib.parse import urlparse
 from enum import Enum
 import json
 import logging
+import os
+import shlex
 import subprocess
 import time
 from pydantic import BaseModel
@@ -376,10 +378,13 @@ class Cluster:
             client_options_parts.append(f"region:{region}")
         client_options = ",".join(client_options_parts)
         logger.info(f"Running opensearch-benchmark with '{workload}' workload")
+        workload_dir = os.environ.get("CI_BENCHMARK_WORKLOADS")
+        workload_arg = (f"--workload-path={shlex.quote(os.path.join(workload_dir, workload))}"
+                        if workload_dir else f"--workload={workload}")
         command = (f"opensearch-benchmark run "
                    f"--exclude-tasks=check-cluster-health "
                    f"--target-host={self.endpoint} "
-                   f"--workload={workload} "
+                   f"{workload_arg} "
                    f"--pipeline=benchmark-only "
                    "--test-mode --kill-running-processes "
                    f"--workload-params={workload_params} "
