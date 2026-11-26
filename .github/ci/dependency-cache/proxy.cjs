@@ -112,8 +112,10 @@ function parseKey(key) {
     const url = new URL(chart.url);
     return {urls: [url], cdn: url.hostname === 'github.com' ? githubAssets : [], digest: chart.digest};
   }
-  if (kind === 'migration-release' && parts.length === 3 && /^\d+\.\d+\.\d+$/.test(originId) && parts[2] === 'aws-bootstrap.sh') {
-    return {urls: [new URL(`https://github.com/opensearch-project/opensearch-migrations/releases/download/${originId}/aws-bootstrap.sh`)], cdn: githubAssets};
+  if (kind === 'migration-release' && parts.length === 3 && /^\d+\.\d+\.\d+$/.test(originId) &&
+      ['aws-bootstrap.sh', `migration-assistant-${originId}.tgz`, 'Migration-Assistant-Infra-Create-VPC-eks.template.json',
+        'Migration-Assistant-Infra-Import-VPC-eks.template.json'].includes(parts[2])) {
+    return {urls: [new URL(`https://github.com/opensearch-project/opensearch-migrations/releases/download/${originId}/${parts[2]}`)], cdn: githubAssets};
   }
   if (key === '/sample-cdk/5f3e2b7d7459f7435bd9a1539ff7360663dded6f.tar.gz') {
     return {urls: [new URL('https://codeload.github.com/aws-samples/amazon-opensearch-service-sample-cdk/tar.gz/5f3e2b7d7459f7435bd9a1539ff7360663dded6f')], cdn: [], digest: '22467ad1d1f341918dfb98f36704bc3738c8a87c818c7decda4e2a18945af2b8'};

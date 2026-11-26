@@ -94,6 +94,13 @@ def mirror_prefix(stage):
 def release_bootstrap(source, destination, stage):
     """Scope OCI repositories in immutable releases that predate --ecr-mirror-prefix."""
     script = source.read_text()
+    if os.environ.get('CI_DEPENDENCY_PROXY_URL'):
+        # Released scripts fetch the versioned chart and VPC template themselves.
+        upstream = 'https://github.com/opensearch-project/opensearch-migrations/releases/download/'
+        routed = script.replace(upstream, '${CI_DEPENDENCY_PROXY_URL%/}/migration-release/')
+        if routed != script:
+            destination.write_text(routed)
+            source, script = destination, routed
     if '--ecr-mirror-prefix' in script:
         return source
     prefix = mirror_prefix(stage)
