@@ -37,7 +37,7 @@ RUN sh /tmp/configure-ci-packages.sh && dnf ${CI_PACKAGE_ENDPOINT:+--setopt=repo
     if [ "${ES_ARCH}" = "aarch64" ]; then \
       HTTP_CODE=$(curl -sI -o /dev/null -w "%{http_code}" "${RESOLVED_URL}") && \
       if [ "${HTTP_CODE}" = "404" ]; then \
-        RESOLVED_URL=$(echo "${TARBALL_URL}" | sed "s/-linux-ARCH/-no-jdk-linux-x86_64/g"); \
+        RESOLVED_URL=$(echo "${RESOLVED_URL}" | sed "s/-linux-aarch64/-no-jdk-linux-x86_64/g"); \
       fi; \
     fi && \
     mkdir -p /opt/elasticsearch && \
