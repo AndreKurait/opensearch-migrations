@@ -108,3 +108,17 @@ test('an archive response interrupted before extraction rejects only that restor
   }), /Cache archive at cache.example.invalid failed/);
   await assert.rejects(fs.stat(destination), {code: 'ENOENT'});
 });
+
+test('retries an interrupted cache archive and verifies the replacement stream', async (t) => {
+  const {dir, member, source} = await fixture(t);
+  const destination = path.join(dir, 'restored');
+  const data = await fs.readFile(source);
+  let attempts = 0;
+  await safeRestore([member], 'wanted', [], {
+    destination,
+    download: async () => ({ok: true, matchedKey: 'wanted', signedDownloadUrl: signed}),
+    request: async () => new Response(++attempts === 1 ? data.subarray(0, 12) : data),
+  });
+  assert.equal(attempts, 2);
+  assert.equal(await fs.readFile(destination, 'utf8'), 'ordinary public cache bytes');
+});

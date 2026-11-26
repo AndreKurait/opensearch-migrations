@@ -149,12 +149,17 @@ async function safeRestore(
   if (lookupOnly) return response.matchedKey;
   const url = new URL(response.signedDownloadUrl);
   if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Invalid cache archive URL');
-  try {
-    const data = await request(url, {redirect: 'error', signal: AbortSignal.timeout(15 * 60 * 1000)});
-    if (!data.ok || !data.body) throw Object.assign(new Error('Cache archive HTTP error'), {code:`HTTP_${data.status}`});
-    await extractOne(data.body, paths[0], destination || path.resolve(paths[0]), maxBytes);
-  } catch (error) {
-    throw safeFailure(url.hostname, 'archive', error);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const data = await request(url, {redirect: 'error', signal: AbortSignal.timeout(15 * 60 * 1000)});
+      if (!data.ok || !data.body) throw Object.assign(new Error('Cache archive HTTP error'), {code:`HTTP_${data.status}`});
+      await extractOne(data.body, paths[0], destination || path.resolve(paths[0]), maxBytes);
+      break;
+    } catch (error) {
+      const failure = safeFailure(url.hostname, 'archive', error);
+      if (attempt === 3 || error.code === 'EEXIST' || /^HTTP_4(?!08|29)/.test(error.code)) throw failure;
+      await new Promise(resolve => setTimeout(resolve, attempt * 250));
+    }
   }
   return response.matchedKey;
 }
