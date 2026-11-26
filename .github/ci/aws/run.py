@@ -20,7 +20,7 @@ import time
 import traceback
 import urllib.request
 
-from suites import ALIASES, AOSS_SNAPSHOT_PREFIX, DISABLED_SUITES, SUITES, byos_snapshot, fixture_uri, nodepool
+from suites import cleanup_minutes, ALIASES, AOSS_SNAPSHOT_PREFIX, DISABLED_SUITES, SUITES, byos_snapshot, fixture_uri, nodepool
 from verification import dashboards, junit, nodepools
 
 HERE = Path(__file__).resolve().parent
@@ -952,13 +952,13 @@ def main():
             if cleanup:
                 worker.pipenv('install', '--deploy')
             else:
-                worker.execute()
+                with phase('integration suite', SUITES[suite].timeout_minutes):
+                    worker.execute()
         except (Exception, KeyboardInterrupt) as error:
             traceback.print_exc()
             errors.append(('integration', str(error)))
         finally:
-            cleanup_minutes = 60 if suite in ('cfn-create', 'cfn-import', 'aoss') else 75
-            with phase('stage cleanup', cleanup_minutes):
+            with phase('stage cleanup', cleanup_minutes(suite)):
                 errors.extend(worker.cleanup())
             # Copy the test harness logs before the temporary worker is reclaimed.
             logs = worker.root / 'libraries/testAutomation/logs'

@@ -57,6 +57,16 @@ SUITES = {
     'cfn-create': Suite(),
     'cfn-import': Suite(reservation=Reservation(eips=1, egws=0)),
 }
+def cleanup_minutes(suite):
+    return 60 if suite in ('cfn-create', 'cfn-import', 'aoss') else 75
+
+
+def worker_timeout_minutes(suite):
+    # The integration deadline excludes teardown. Reserve time for CodeBuild image
+    # startup, post-build receipt collection and native artifact upload as well.
+    return SUITES[suite].timeout_minutes + cleanup_minutes(suite) + 30
+
+
 ALIASES = {'aoss-timeseries': 'aoss', 'aoss-vector': 'aoss'}
 DISABLED_SUITES = frozenset(name for name, suite in SUITES.items() if suite.reservation is None)
 

@@ -133,6 +133,8 @@ class ObservationTests(unittest.TestCase):
                                          ('refs/pull/12/head', '{}', False)]:
                 build.start('cfn-create', SHA, ref, '', options)
                 self.assertEqual('--service-role-override' in api.call_args.args, writer)
+                args = api.call_args.args
+                self.assertEqual('270', args[args.index('--timeout-in-minutes-override') + 1])
 
     def test_start_uses_bounded_timeout_and_identity(self):
         env = dict(GITHUB_RUN_ID='123', GITHUB_REPOSITORY=REPO, GITHUB_RUN_ATTEMPT='2')
@@ -140,7 +142,7 @@ class ObservationTests(unittest.TestCase):
                 patch.object(build, 'aws', return_value={'build': {'id': BUILD}}) as api:
             build.start('cdc', SHA, 'refs/pull/12/head', '', '{"SPEEDUP_FACTOR":8}')
             args = api.call_args.args
-            self.assertEqual('300', args[args.index('--timeout-in-minutes-override') + 1])
+            self.assertEqual('405', args[args.index('--timeout-in-minutes-override') + 1])
             overrides = {i['name']: i['value'] for i in json.loads(args[-1])}
             self.assertEqual(('8', SHA), (overrides['SPEEDUP_FACTOR'], overrides['CI_GIT_SHA']))
             self.assertEqual(('123', '2'), (overrides['CI_GH_RUN_ID'], overrides['CI_GH_RUN_ATTEMPT']))

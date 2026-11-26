@@ -12,7 +12,8 @@ import sys
 import time
 
 from capacity import PROJECT, admit, client, config
-from parameters import ALIASES, SUITES, parameters
+from parameters import ALIASES, parameters
+from suites import worker_timeout_minutes
 from plan import RELEASE, SHA, select
 from report import public_text, render
 
@@ -65,7 +66,7 @@ def start(suite, sha, ref, release, options):
         account = config()['account']
         role = ['--service-role-override', f'arn:aws:iam::{account}:role/MigrationsGitHubMainWorker-us-west-2']
     build = aws('codebuild', 'start-build', '--project-name', PROJECT, '--idempotency-token', digest, *role,
-                '--timeout-in-minutes-override', str(SUITES[ALIASES.get(suite, suite)].timeout_minutes),
+                '--timeout-in-minutes-override', str(worker_timeout_minutes(ALIASES.get(suite, suite))),
                 '--environment-variables-override', json.dumps(variables))['build']
     if not re.fullmatch(BUILD_ID, build['id']):
         raise ValueError('CodeBuild returned an unexpected build ID')
