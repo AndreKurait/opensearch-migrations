@@ -87,10 +87,20 @@ curl -fsSL "${ARGO_MANIFEST_URL}" \
         match($0, /^[[:space:]]*/)
         print substr($0, 1, RLENGTH) "createBucketIfNotPresent: {}"
       }' \
+  | awk '
+      function emit() {
+        if (!(minio && workload)) printf "%s", document
+        document = ""; minio = workload = metadata = 0
+      }
+      /^---[[:space:]]*$/ { emit() }
+      /^[^[:space:]]/ { metadata = ($0 == "metadata:") }
+      /^kind: (Deployment|Service)[[:space:]]*$/ { workload = 1 }
+      metadata && /^  name: minio[[:space:]]*$/ { minio = 1 }
+      { document = document $0 "\n" }
+      END { emit() }' \
   | kubectl apply -n "${ARGO_NAMESPACE}" -f -
 
-# The bundled MinIO Deployment/Service are unusable (image no longer pullable) and now
-# unreferenced; remove them and stand up LocalStack in their place.
+# Clean up any MinIO resources from earlier installations.
 echo "Removing bundled MinIO artifact store..."
 kubectl -n "${ARGO_NAMESPACE}" delete deployment minio --ignore-not-found
 kubectl -n "${ARGO_NAMESPACE}" delete service minio --ignore-not-found
