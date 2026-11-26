@@ -132,3 +132,17 @@ test('later main runs reuse digest-addressed OCI blobs and refresh tag-addressed
   assert.equal(changed.hits, 1);
   await second.close();
 });
+
+test('native snapshots ignore newer routes without making them restorable or writable', async () => {
+  const {storage} = fixture();
+  const writer = await openRecorder({storage, proxy:origin('bytes')});
+  for (const key of ['/future/item', '/supported/item']) await writer.importObservation({key, accessed:Date.now()});
+  await writer.close();
+  const proxy = {validateKey(key) { if (key.startsWith('/future/')) throw Error('unsupported'); return key; }};
+  await assert.rejects(openPublisher({storage, proxy}), /unsupported/);
+  await assert.rejects(openRecorder({storage, proxy}), /unsupported/);
+  const snapshot = await openPublisher({storage, proxy, supportedRoutesOnly:true});
+  assert.deepEqual(snapshot.entries.map(row => row.key), ['/supported/item']);
+  await assert.rejects(snapshot.materialize({...snapshot.entries[0],key:'/future/item'}, '/unused'), /unpublished/);
+  await snapshot.close();
+});

@@ -263,9 +263,16 @@ async function openPublisher(options = {}) {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'main-dependency-publisher-'));
   const entries = new Map();
   try {
-    const catalog = await readCatalog(storage, temp, proxy.validateKey);
+    // An older native reader can serve its existing routes after the publisher adds new ones.
+    // Validate all row metadata and shard bindings before exposing only locally supported keys.
+    const catalog = await readCatalog(storage, temp, options.supportedRoutesOnly ? key => key : proxy.validateKey);
     for (const shard of catalog.values()) {
-      for (const [key, value] of shard.entries) entries.set(key, value);
+      for (const [key, value] of shard.entries) {
+        if (options.supportedRoutesOnly) {
+          try { proxy.validateKey(key); } catch { continue; }
+        }
+        entries.set(key, value);
+      }
     }
   } catch (error) {
     storage.close?.();
