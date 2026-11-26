@@ -252,6 +252,14 @@ async function cloudWorker() {
 }
 
 async function launchCloud() {
+  const status = await launchPublisher();
+  if (status === 'TIMED_OUT') {
+    console.log('Publisher timed out. Resuming from existing cache objects with a fresh grant.');
+    if (await launchPublisher() === 'TIMED_OUT') throw new Error('Cache publication timed out twice');
+  }
+}
+
+async function launchPublisher() {
   const env = process.env;
   if (env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_REPOSITORY !== 'AndreKurait/opensearch-migrations' ||
       !/^\d+$/.test(env.GITHUB_RUN_ID) || !/^\d+$/.test(env.GITHUB_RUN_ATTEMPT) || !/^[0-9a-f]{40}$/.test(env.CI_CACHE_MAIN_SHA || '')) throw new Error('Publication must run from the protected main workflow');
@@ -293,6 +301,7 @@ async function launchCloud() {
       const build = (await aws('codebuild', 'batch-get-builds', '--ids', id)).builds[0];
       if (build.buildComplete) {
         done = true;
+        if (build.buildStatus === 'TIMED_OUT' && !interrupted) return build.buildStatus;
         if (build.buildStatus !== 'SUCCEEDED') throw new Error(`Cache publication ${build.buildStatus} in ${id}`);
         console.log('Cache publication succeeded.');
         return;
