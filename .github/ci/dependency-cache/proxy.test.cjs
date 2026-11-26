@@ -91,14 +91,17 @@ test('Maven falls back on a true Central 404 and caches exact uncompressed bytes
   const dir = await scratch(t);
   const file = path.join(dir, 'artifact');
   const calls = mockFetch(t, [new Response('', {status: 404}), new Response('plugin', {headers: {'content-length': '6'}}),
-    new Response('', {status: 404}), new Response('', {status: 404}), new Response('', {status: 429})]);
+    new Response('', {status: 404}), new Response('', {status: 404}), new Response('', {status: 429}),
+    new Response('', {status: 429}), new Response('', {status: 429}), new Response('', {status: 404}), new Response('', {status: 404})]);
   assert.deepEqual(await fetchPublic('/maven/org/example/plugin.jar', file),
     {type: 'text/plain', size: 6, digest: hash('plugin')});
   assert.equal((await readFile(file)).toString(), 'plugin');
   assert.deepEqual(calls.map(c => c.url.hostname), ['repo.maven.apache.org', 'plugins.gradle.org']);
   assert.equal(await fetchPublic('/maven/org/example/not-found.pom', path.join(dir, 'missing')), null);
   await assert.rejects(fetchPublic('/maven/org/example/error.pom', path.join(dir, 'error')), /429/);
-  assert.equal(calls.length, 5);
+  assert.equal(await fetchPublic('/maven/org/example/optional-marker.jar', path.join(dir, 'optional')), null);
+  assert.deepEqual(calls.slice(-3).map(c => c.url.hostname),
+    ['repo.maven.apache.org', 'maven-central.storage-download.googleapis.com', 'plugins.gradle.org']);
 });
 
 test('OCI authenticates anonymously only to registry realm and drops the token on CDN redirects', async t => {

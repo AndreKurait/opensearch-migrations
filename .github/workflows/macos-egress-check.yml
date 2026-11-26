@@ -14,7 +14,7 @@ jobs:
         env:
           POLICY_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.workflow_sha }}
           GITHUB_META_TOKEN: ${{ github.token }}
-          PUBLIC_ENDPOINTS: api.github.com:443 github.com:443 raw.githubusercontent.com:443 objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443 repo.maven.apache.org:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
+          PUBLIC_ENDPOINTS: api.github.com:443 github.com:443 raw.githubusercontent.com:443 objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443 repo.maven.apache.org:443 maven-central.storage-download.googleapis.com:443 repo1.maven.org:443 plugins.gradle.org:443 plugins-artifacts.gradle.org:443 services.gradle.org:443 downloads.gradle.org:443 corretto.aws:443 cdn.amazoncorretto.com:443 pypi.org:443 files.pythonhosted.org:443
         run: |
           set -euo pipefail
           guard="$RUNNER_TEMP/darwin_guard.py"

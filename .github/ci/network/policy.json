@@ -15,6 +15,7 @@
     ],
     "package": [
       "repo.maven.apache.org:443",
+      "maven-central.storage-download.googleapis.com:443",
       "repo1.maven.org:443",
       "plugins.gradle.org:443",
       "plugins-artifacts.gradle.org:443",

@@ -219,6 +219,13 @@ async function fetchPublic(key, destination, {maxBytes = Infinity} = {}) {
   if (route.pypiMetadata) headers.accept = 'application/vnd.pypi.simple.v1+json';
   for (const url of route.urls) {
     let response = await request(key, url, route.cdn, headers);
+    // Query the independently hosted Central mirror when Central throttles this shared runner IP.
+    // A mirror miss still falls through to the Gradle Plugin Portal for plugin-only artifacts.
+    if (url.hostname === 'repo.maven.apache.org' && [429, 502, 503, 504].includes(response.status)) {
+      await response.body?.cancel();
+      const mirror = new URL(url.pathname, 'https://maven-central.storage-download.googleapis.com');
+      response = await request(key, mirror, [], headers);
+    }
     if (response.status === 401 && route.registry) {
       const challenge = response.headers.get('www-authenticate');
       await response.body?.cancel();
