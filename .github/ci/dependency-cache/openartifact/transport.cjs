@@ -48,12 +48,12 @@ function readModel(entries) {
   return { snapshot: validateRows([...rows.values()]), blobs };
 }
 
-async function openPackageTransport({ mode, reader, coldAllowed = false, reportMiss = () => {} }) {
+async function openPackageTransport({ mode, reader, imageMode = mode, coldAllowed = false, reportMiss = () => {} }) {
   let stack, adapter, starting;
   const observed = new Map();
   const published = new Map((reader?.entries || []).map((e) => [e.key, e]));
   async function start() {
-    const imageIds = await require('./bootstrap.cjs').serviceImages(mode);
+    const imageIds = await require('./bootstrap.cjs').serviceImages(imageMode);
     if (reader?.entries) {
       const plan = readModel(reader.entries);
       adapter = await startAdapter({ entries: plan.blobs, resolve: (key) => reader.resolve(key) });

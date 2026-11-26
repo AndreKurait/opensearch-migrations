@@ -2,13 +2,14 @@
 const fs = require('node:fs/promises');
 const net = require('node:net');
 const path = require('node:path');
-const { openLocalRecorder, readReceipt } = require('./receipts.cjs');
+const { openLocalRecorder } = require('./receipts.cjs');
 const { openReader } = require('./github-store.cjs');
 const { serve } = require('./cli.cjs');
 const { openPackageTransport } = require('./openartifact/transport.cjs');
 const { openColdStore, openReadStore } = require('./openartifact/cold.cjs');
 
 async function service(mode, dir) {
+  process.env.CI_DEPENDENCY_ORIGIN_REPORT = path.join(dir, 'origin-requests.jsonl');
   let stop;
   const finished = new Promise((resolve) => {
     stop = resolve;
@@ -40,10 +41,12 @@ async function service(mode, dir) {
     }
     if (hosted && process.platform === 'linux') {
       packages = await openPackageTransport({
-        mode,
+        // Keep OpenArtifact's network internal. The broker owns and audits public HTTP on misses.
+        mode: 'read',
+        imageMode: mode,
         reader: mode === 'read' ? store : seed,
-        coldAllowed,
-        reportMiss,
+        coldAllowed: coldAllowed || mode === 'record',
+        reportMiss: mode === 'read' ? reportMiss : () => {},
       });
     }
     await serve(
@@ -78,18 +81,6 @@ async function service(mode, dir) {
       },
       packages?.handle,
     );
-    if (packages && mode === 'record') {
-      const merged = new Map();
-      for (const row of [
-        ...readReceipt(await fs.readFile(receiptFile)),
-        ...(await packages.observations()),
-      ]) {
-        if (!merged.has(row.key) || merged.get(row.key).accessed <= row.accessed) merged.set(row.key, row);
-      }
-      const text = JSON.stringify([...merged.values()]);
-      readReceipt(text);
-      await fs.writeFile(receiptFile, text, { mode: 0o600 });
-    }
     if (packages?.metrics)
       await fs.writeFile(path.join(dir, 'openartifact-metrics.json'), JSON.stringify(packages.metrics));
     if (mode === 'read')

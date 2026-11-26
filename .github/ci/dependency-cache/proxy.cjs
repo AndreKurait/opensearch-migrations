@@ -2,7 +2,7 @@
 
 const http = require('node:http');
 const {createHash} = require('node:crypto');
-const {open, rm, readFile} = require('node:fs/promises');
+const {open, rm, readFile, appendFile} = require('node:fs/promises');
 const {isAbsolute} = require('node:path');
 const {Readable, Transform} = require('node:stream');
 const {pipeline} = require('node:stream/promises');
@@ -125,14 +125,23 @@ function allowed(url, hosts) {
     hosts.some(host => typeof host === 'string' ? host === url.hostname : host.test(url.hostname));
 }
 
-async function request(url, cdn, headers = {}) {
+async function request(key, url, cdn, headers = {}) {
   const hosts = [url.hostname, ...cdn];
   let current = url;
   for (let count = 0; count <= 5; count++) {
     if (!allowed(current, hosts)) throw new Error('Unapproved upstream redirect');
     const outgoing = {...headers, 'accept-encoding': 'identity'};
     if (current.origin !== url.origin) delete outgoing.authorization;
-    const response = await fetch(current, {headers: outgoing, redirect: 'manual', signal: AbortSignal.timeout(600_000)});
+    let response;
+    try {
+      response = await fetch(current, {headers: outgoing, redirect: 'manual', signal: AbortSignal.timeout(600_000)});
+    } finally {
+      const report = process.env.CI_DEPENDENCY_ORIGIN_REPORT;
+      if (report) {
+        const event = {key, host: current.hostname, status: response?.status ?? 'error'};
+        await appendFile(report, JSON.stringify(event) + '\n', {mode: 0o600});
+      }
+    }
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
     const location = response.headers.get('location');
     await response.body?.cancel();
@@ -142,7 +151,7 @@ async function request(url, cdn, headers = {}) {
   throw new Error('Too many upstream redirects');
 }
 
-async function anonymousToken(route, challenge) {
+async function anonymousToken(key, route, challenge) {
   if (!/^Bearer /i.test(challenge || '')) throw new Error('Unsupported registry authentication');
   const fields = Object.fromEntries([...challenge.matchAll(/([A-Za-z]+)="([^"]*)"/g)].map(match => match.slice(1)));
   const {registry, repo} = route;
@@ -154,7 +163,7 @@ async function anonymousToken(route, challenge) {
   const url = new URL(registry.realm);
   url.searchParams.set('service', registry.service);
   url.searchParams.set('scope', scope);
-  const response = await request(url, []);
+  const response = await request(key, url, []);
   if (!response.ok) {
     await response.body?.cancel();
     throw new Error(`Public registry token request returned ${response.status}`);
@@ -206,12 +215,12 @@ async function fetchPublic(key, destination, {maxBytes = Infinity} = {}) {
   if (route.npmMetadata) headers.accept = 'application/vnd.npm.install-v1+json';
   if (route.pypiMetadata) headers.accept = 'application/vnd.pypi.simple.v1+json';
   for (const url of route.urls) {
-    let response = await request(url, route.cdn, headers);
+    let response = await request(key, url, route.cdn, headers);
     if (response.status === 401 && route.registry) {
       const challenge = response.headers.get('www-authenticate');
       await response.body?.cancel();
-      const token = await anonymousToken(route, challenge);
-      response = await request(url, route.cdn, {...headers, authorization: `Bearer ${token}`});
+      const token = await anonymousToken(key, route, challenge);
+      response = await request(key, url, route.cdn, {...headers, authorization: `Bearer ${token}`});
     }
     if (response.status === 404) {
       await response.body?.cancel();

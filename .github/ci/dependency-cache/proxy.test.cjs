@@ -194,3 +194,22 @@ test('a Gradle metadata probe reads only the published catalog', async t => {
   assert.equal(head.headers.etag, `"${digest}"`);
   assert.equal((await get(proxy.url, key, 'GET', {'if-none-match': head.headers.etag})).status, 304);
 });
+
+test('origin report records upstream fallback without headers or query strings', async t => {
+  const dir = await scratch(t);
+  const report = path.join(dir, 'requests.jsonl');
+  const previous = process.env.CI_DEPENDENCY_ORIGIN_REPORT;
+  process.env.CI_DEPENDENCY_ORIGIN_REPORT = report;
+  t.after(() => {
+    if (previous === undefined) delete process.env.CI_DEPENDENCY_ORIGIN_REPORT;
+    else process.env.CI_DEPENDENCY_ORIGIN_REPORT = previous;
+  });
+  const key = '/maven/example/plugin.pom';
+  mockFetch(t, [new Response(null, {status: 404}), new Response('plugin')]);
+  await fetchPublic(key, path.join(dir, 'plugin.pom'));
+  const rows = (await readFile(report, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.deepEqual(rows, [
+    {key, host: 'repo.maven.apache.org', status: 404},
+    {key, host: 'plugins.gradle.org', status: 200},
+  ]);
+});

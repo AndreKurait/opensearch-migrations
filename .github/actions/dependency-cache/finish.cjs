@@ -63,6 +63,24 @@ async function finish() {
       console.log(`Saved ${observations.length} main worker observations.`);
     } finally { await fs.rm(receiptPath, {force: true}); }
   } finally {
+    const origins = await fs.readFile(path.join(dir, 'origin-requests.jsonl'), 'utf8').catch(error => {
+      if (error.code !== 'ENOENT') throw error;
+      return '';
+    });
+    const rows = origins.trim().split('\n').filter(Boolean);
+    for (const row of rows) console.log('Dependency broker upstream HTTP request ' + row);
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      const lines = ['', '### Dependency broker upstream HTTP requests', '',
+        `${rows.length} requests. The job log lists every request, including redirects, retries and registry authentication.`, ''];
+      if (rows.length) {
+        lines.push('| Host | Dependency | HTTP status |', '| --- | --- | --- |');
+        for (const row of rows.slice(0, 100)) {
+          const {host, key, status} = JSON.parse(row);
+          lines.push(`| ${host} | \`${key}\` | ${status} |`);
+        }
+      }
+      await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
+    }
     const log = await fs.readFile(path.join(dir, 'service.log'), 'utf8').catch(() => '');
     const failures = log.match(/^Cache (?:archive|metadata) at [a-z0-9.-]+ failed \([a-z0-9_, ]{1,120}\)\.$/gim) || [];
     for (const reason of new Set(failures.slice(-10))) console.warn(reason);
