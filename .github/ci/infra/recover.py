@@ -21,7 +21,7 @@ def recent_builds(client, project):
     cutoff = datetime.now(timezone.utc) - timedelta(days=2)
     token = {}
     while True:
-        page = client.list_builds_for_project(projectName=project, sortOrder='DESCENDING', **token)
+        page = client.list_builds_for_project(projectName=project, **token)
         if page['ids']:
             builds = client.batch_get_builds(ids=page['ids'])['builds']
             yield from (build for build in builds if build['startTime'] >= cutoff)

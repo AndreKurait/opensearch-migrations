@@ -18,6 +18,13 @@ def build(name, attempt='1', mode='', status='IN_PROGRESS', project=PROJECT):
 
 
 class CancelledAttemptTests(unittest.TestCase):
+    def test_history_continuation_uses_only_project_and_token(self):
+        client = Mock()
+        client.list_builds_for_project.side_effect = [{'ids': [], 'nextToken': 'next'}, {'ids': []}]
+        self.assertEqual(list(recover.recent_builds(client, PROJECT)), [])
+        self.assertEqual(client.list_builds_for_project.call_args_list,
+                         [call(projectName=PROJECT), call(projectName=PROJECT, nextToken='next')])
+
     def response(self, changes):
         body = {'id': 101, 'run_attempt': 1, 'repository': {'id': 744243892,
                 'full_name': 'AndreKurait/opensearch-migrations'}, 'path': '.github/workflows/aws-integration.yml',
