@@ -206,10 +206,10 @@ def seatbelt(temp, java, port, ipc):
             '(deny network*)',
             f'(allow network-outbound (remote tcp "localhost:{port}"))',
             # Darwin checks bind before it has assigned the ephemeral port. Inbound/listen and
-            # outbound are restricted to IPv4 loopback, with receiver ownership enforced by PF.
+            # outbound are restricted to loopback, with receiver ownership enforced by PF.
             '(allow network-bind (local tcp "localhost:*"))',
-            '(allow network-inbound (local tcp "127.0.0.1:*"))',
-            '(allow network-outbound (remote tcp "127.0.0.1:*"))',
+            '(allow network-inbound (local tcp "localhost:*"))',
+            '(allow network-outbound (remote tcp "localhost:*"))',
             # Gradle 8 requests an ephemeral UDP port for its file-lock service. Seatbelt expresses
             # the resulting unknown port as '*'. Sending and receiving remain separate operations.
             '(allow network-bind (local udp "*:*"))',
