@@ -72,7 +72,11 @@ test('bridge accepts only canonical public OCI reads and never forwards registry
   for (const route of ['/raw/al2023/core/mirrors/2023.12/x86_64/mirror.list', '/raw/alpine/v3.22/main/x86_64/APKINDEX.tar.gz', '/raw/elastic/downloads/elasticsearch/es.tar.gz']) {
     assert.equal((await get({...options,path:route}))[0],200);
   }
-  assert.equal(seen.length,4);
+  const repomd = '/raw/al2023/core/guids/abc/x86_64/repodata/repomd.xml';
+  assert.equal((await get({...options,path:repomd+'?instance_id=none'}))[0],200);
+  assert.equal(seen.at(-1)[0],repomd);
+  assert.equal((await get({...options,path:repomd+'?instance_id=unexpected'}))[0],400);
+  assert.equal(seen.length,5);
 });
 
 test('a real Docker CLI talks solely to an isolated Unix-socket fixture and preserves non-Hub tag and digest pulls', async t => {

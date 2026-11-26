@@ -92,7 +92,8 @@ async function bridgeRelay(upstream, address) {
       if (!['GET', 'HEAD'].includes(request.method) || !(request.url.startsWith('/v2/') || request.url.startsWith('/benchmark/') || request.url.startsWith('/helm/') || /^\/raw\/(?:al2023|alpine|elastic|elastic-legacy)\//.test(request.url))) throw new Error();
       const target = new URL(request.url, 'http://localhost');
       if (target.origin !== 'http://localhost' || target.hash ||
-          [...target.searchParams.keys()].some(k => k !== 'ns')) throw new Error();
+          ([...target.searchParams.keys()].some(k => k !== 'ns') &&
+            !(target.pathname.startsWith('/raw/al2023/') && target.pathname.endsWith('/repodata/repomd.xml') && target.search === '?instance_id=none'))) throw new Error();
       resource = target.pathname;
       if (resource !== '/v2/' && !buildkitRoute.test(resource)) validateKey(resource);
     } catch { response.writeHead(400).end(); return; }
