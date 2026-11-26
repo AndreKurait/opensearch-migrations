@@ -36,13 +36,29 @@ runs:
         fi
         CI_DEPENDENCY_STRICT_READ=1 bash "$GITHUB_ACTION_PATH/test-shell.sh" -c 'curl -fsS --max-time 5 "${CI_DEPENDENCY_PROXY_URL%/}/v2/" >/dev/null'
 
-        # Reuse the verified local image. Probe the Docker bridge with the host's Python.
-        image=$(jq -er .postgres <<< "$CI_BOOTSTRAP_IMAGE_IDS")
-        probe=$(docker run --pull=never -d --network bridge --entrypoint sleep "$image" 30)
-        trap 'docker rm -f "$probe" >/dev/null' EXIT
-        pid=$(docker inspect --format '{{.State.Pid}}' "$probe")
-        sudo nsenter --net --target "$pid" /usr/bin/curl -fsS --max-time 5 "http://$CI_DEPENDENCY_REGISTRY_ENDPOINT/v2/" >/dev/null
-        if sudo nsenter --net --target "$pid" /usr/bin/python3 -c "$tcp_probe" "$ip"; then
+        # Give an image-free namespace a dedicated Docker bridge, gateway and NAT rules.
+        # Docker owns the address pool and forwarding rules just as for a test container.
+        net="migrations-egress-probe"
+        ns="migrations-egress-probe"
+        bridge="br-mig-probe"
+        iface="mig-probe-host"
+        peer="mig-probe-ns"
+        docker network create --opt "com.docker.network.bridge.name=$bridge" "$net" >/dev/null
+        trap 'sudo ip netns del "$ns" 2>/dev/null || true; sudo ip link del "$iface" 2>/dev/null || true; docker network rm "$net" >/dev/null' EXIT
+        subnet=$(docker network inspect --format '{{(index .IPAM.Config 0).Subnet}}' "$net")
+        gateway=$(docker network inspect --format '{{(index .IPAM.Config 0).Gateway}}' "$net")
+        address=$(python3 -c 'import ipaddress,sys; net=ipaddress.ip_network(sys.argv[1]); print(f"{net[2]}/{net.prefixlen}")' "$subnet")
+        sudo ip netns add "$ns"
+        sudo ip link add "$iface" type veth peer name "$peer"
+        sudo ip link set "$iface" master "$bridge"
+        sudo ip link set "$iface" up
+        sudo ip link set "$peer" netns "$ns"
+        sudo ip -n "$ns" link set lo up
+        sudo ip -n "$ns" addr add "$address" dev "$peer"
+        sudo ip -n "$ns" link set "$peer" up
+        sudo ip -n "$ns" route add default via "$gateway"
+        sudo ip netns exec "$ns" /usr/bin/curl -fsS --max-time 5 "http://$CI_DEPENDENCY_REGISTRY_ENDPOINT/v2/" >/dev/null
+        if sudo ip netns exec "$ns" /usr/bin/python3 -c "$tcp_probe" "$ip"; then
           echo "::error::An external TCP connection succeeded from a cache-only container"
           exit 1
         fi
