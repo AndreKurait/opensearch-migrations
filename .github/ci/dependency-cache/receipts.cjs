@@ -66,7 +66,8 @@ function reusableRecordingEntry(entry, now = Date.now(), catalog) {
   if (!entry || now - (entry.verifiedAt ?? entry.accessed) >= 24 * 60 * 60 * 1000) return false;
   if (!entry.missing) {
     // The publisher refreshes version tags, which registries can repoint to another digest.
-    return isPackageIndex(entry.key) || /^\/v2\/.+\/manifests\/v?\d+\.\d+\.\d+$/.test(entry.key);
+    return isPackageIndex(entry.key) || /^\/v2\/.+\/manifests\/v?\d+\.\d+\.\d+$/.test(entry.key) ||
+      /^\/raw\/alpine\/v\d+\.\d+\/(?:main|community)\/[^/]+\/[^/]+-r\d+\.apk$/.test(entry.key);
   }
   // Gradle probes for a JAR even when a released plugin marker contains only a POM.
   if (!entry.key.startsWith('/maven/') || !immutablePublicKey(entry.key)) return false;

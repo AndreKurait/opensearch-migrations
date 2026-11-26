@@ -198,3 +198,13 @@ test('AL2023 RPMs remain fresh only when the content matches the blobstore diges
   assert.equal(isFreshEntry({...entry, digest: 'b'.repeat(64)}, 86_400_000), false);
   assert.equal(isFreshEntry({...entry, missing: true}, 86_400_000), false);
 });
+
+test('recorders reuse verified Alpine release packages within the publisher refresh window', () => {
+  const key = '/raw/alpine/v3.24/community/x86_64/shadow-4.20.4-r0.apk';
+  const entry = {key, verifiedAt: 0};
+  assert.equal(reusableRecordingEntry(entry, 600_000), true);
+  assert.equal(isFreshEntry(entry, 600_000), false);
+  assert.equal(reusableRecordingEntry(entry, 86_400_000), false);
+  assert.equal(reusableRecordingEntry({...entry, missing: true}, 600_000), false);
+  assert.equal(reusableRecordingEntry({...entry, key: key.replace('/v3.24/', '/edge/')}, 600_000), false);
+});
