@@ -310,13 +310,13 @@ start_eks_package_relay() {
     {app:$name} as $labels | {name:$name} as $meta | {kind:"List",apiVersion:"v1",items:[
       {apiVersion:"networking.k8s.io/v1",kind:"NetworkPolicy",metadata:$meta,spec:{podSelector:{matchLabels:$labels},policyTypes:["Ingress","Egress"],egress:[],ingress:[{from:$from,ports:[{port:8080,protocol:"TCP"}]}]}},
       {apiVersion:"v1",kind:"Service",metadata:$meta,spec:{selector:$labels,clusterIP:$ip,ports:[{port:8080}]}},
-      {apiVersion:"v1",kind:"Pod",metadata:($meta+{labels:$labels}),spec:{automountServiceAccountToken:false,volumes:[{name:"code",configMap:{name:$name}}],containers:[{name:"relay",image:$image,command:["/usr/bin/python3","/app/relay.py","pod","8080","8081"],readinessProbe:{tcpSocket:{port:8080},periodSeconds:1},volumeMounts:[{name:"code",mountPath:"/app",readOnly:true}],securityContext:{runAsUser:65534,allowPrivilegeEscalation:false,readOnlyRootFilesystem:true,capabilities:{drop:["ALL"]}}}]}}]}' | "${kube[@]}" apply -f - || return 1
-  "${kube[@]}" wait --for=condition=Ready pod/"$name" --timeout=5m || return 1
+      {apiVersion:"apps/v1",kind:"Deployment",metadata:$meta,spec:{replicas:1,selector:{matchLabels:$labels},template:{metadata:{labels:$labels},spec:{automountServiceAccountToken:false,volumes:[{name:"code",configMap:{name:$name}}],containers:[{name:"relay",image:$image,command:["/usr/bin/python3","/app/relay.py","pod","8080","8081"],readinessProbe:{tcpSocket:{port:8080},periodSeconds:1},volumeMounts:[{name:"code",mountPath:"/app",readOnly:true}],securityContext:{runAsUser:65534,allowPrivilegeEscalation:false,readOnlyRootFilesystem:true,capabilities:{drop:["ALL"]}}}]}}}}]}' | "${kube[@]}" apply -f - || return 1
+  "${kube[@]}" rollout status deployment/"$name" --timeout=5m || return 1
   CI_PACKAGE_FORWARD_LOG=$(mktemp)
   # A new EKS node can report its pod ready before the API server can open a kubelet tunnel.
   local deadline=$((SECONDS + 180))
   while ((SECONDS < deadline)); do
-    "${kube[@]}" port-forward "pod/$name" :8081 --address 127.0.0.1 >"$CI_PACKAGE_FORWARD_LOG" 2>&1 &
+    "${kube[@]}" port-forward "deployment/$name" :8081 --address 127.0.0.1 >"$CI_PACKAGE_FORWARD_LOG" 2>&1 &
     CI_PACKAGE_FORWARD_PID=$!
     for ((i=0; i<100; i++)); do
       port=$(sed -nE 's/^Forwarding from 127\.0\.0\.1:([0-9]+) -> .*/\1/p' "$CI_PACKAGE_FORWARD_LOG")
@@ -339,7 +339,7 @@ start_eks_package_relay() {
     while kill -0 "$CI_PACKAGE_FORWARD_PID" 2>/dev/null; do sleep 1; done
     while true; do
       echo "Reconnecting EKS package relay on port $port" >&2
-      "${kube[@]}" port-forward "pod/$name" "$port:8081" --address 127.0.0.1 >"$CI_PACKAGE_FORWARD_LOG" 2>&1 &
+      "${kube[@]}" port-forward "deployment/$name" "$port:8081" --address 127.0.0.1 >"$CI_PACKAGE_FORWARD_LOG" 2>&1 &
       forward_pid=$!
       wait "$forward_pid" || true
       forward_pid=
