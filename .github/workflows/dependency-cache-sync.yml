@@ -32,7 +32,7 @@ jobs:
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     concurrency:
       group: migrations-main-dependency-cache-publish
-      cancel-in-progress: false
+      queue: max
     uses: ./.github/workflows/dependency-cache-publish.yml
     permissions: {actions: read, contents: read, id-token: write}
     secrets: {AWS_CI_CONFIG: '${{ secrets.AWS_CI_CONFIG }}'}
