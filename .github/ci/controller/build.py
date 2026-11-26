@@ -65,12 +65,19 @@ def start(suite, sha, ref, release, options):
     if ref == 'refs/heads/main' and values.get('CI_DEPENDENCY_MODE') != 'replay':
         account = config()['account']
         role = ['--service-role-override', f'arn:aws:iam::{account}:role/MigrationsGitHubMainWorker-us-west-2']
+    requested_timeout = worker_timeout_minutes(ALIASES.get(suite, suite))
     build = aws('codebuild', 'start-build', '--project-name', PROJECT, '--idempotency-token', digest, *role,
-                '--timeout-in-minutes-override', str(worker_timeout_minutes(ALIASES.get(suite, suite))),
+                '--timeout-in-minutes-override', str(requested_timeout),
                 '--environment-variables-override', json.dumps(variables))['build']
     if not re.fullmatch(BUILD_ID, build['id']):
         raise ValueError('CodeBuild returned an unexpected build ID')
     output(build_id=build['id'])
+    effective_timeout = build.get('timeoutInMinutes')
+    if isinstance(effective_timeout, int) and effective_timeout < requested_timeout:
+        warning = f'CodeBuild granted {effective_timeout} minutes for {suite}. The workflow requested {requested_timeout} minutes.'
+        print(f'::warning::{warning}', flush=True)
+        summary(warning)
+
     summary(f"**{suite}** · `{sha}` · `{stage}` · CodeBuild `{build['id']}`")
     print(f"Started {build['id']} for {sha} ({stage})", flush=True)
 
