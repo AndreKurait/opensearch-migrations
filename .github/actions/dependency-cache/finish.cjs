@@ -78,13 +78,17 @@ async function finish() {
   } finally {
     const origins = await fs.readFile(path.join(dir, 'origin-requests.jsonl'), 'utf8').catch(error => {
       if (error.code !== 'ENOENT') throw error;
-      return '';
+      return null;
     });
-    const rows = origins.trim().split('\n').filter(Boolean);
+    const rows = origins?.trim().split('\n').filter(Boolean) ?? [];
+    const originSummary = origins === null
+      ? 'Upstream request log unavailable. The upstream request count is unknown.'
+      : `${rows.length} requests. The job log lists every request, including redirects, retries and registry authentication.`;
+    if (origins === null) console.warn(originSummary);
     for (const row of rows) console.log('Dependency broker upstream HTTP request ' + row);
     if (process.env.GITHUB_STEP_SUMMARY) {
       const lines = ['', '### Dependency broker upstream HTTP requests', '',
-        `${rows.length} requests. The job log lists every request, including redirects, retries and registry authentication.`, ''];
+        originSummary, ''];
       if (rows.length) {
         lines.push('| Host | Dependency | HTTP status |', '| --- | --- | --- |');
         for (const row of rows.slice(0, 100)) {
@@ -96,8 +100,12 @@ async function finish() {
     }
     if (process.env.GITHUB_ACTIONS === 'true') {
       const originFile = path.join(dir, 'origin-requests.jsonl');
-      await fs.writeFile(originFile, origins);
-      const files = [originFile];
+      const files = origins === null ? [] : [originFile];
+      if (origins === null) {
+        const statusFile = path.join(dir, 'origin-report-status.txt');
+        await fs.writeFile(statusFile, originSummary + '\n');
+        files.push(statusFile);
+      }
       for (const name of ['transfer-metrics.json', 'openartifact-metrics.json', 'misses.json']) {
         const file = path.join(dir, name);
         try { await fs.access(file); files.push(file); }
