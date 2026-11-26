@@ -9,7 +9,7 @@ const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 const { setTimeout: sleep } = require('node:timers/promises');
 
-const DEFAULT_BYTES = 30_000_000_000;
+const DEFAULT_BYTES = 65_000_000_000;
 const PREFIX = 'migrations-public-deps-v1-';
 const INDEX = `${PREFIX}index-`;
 const STAGING = '.migrations-public-dependency-cache-v1';
