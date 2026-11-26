@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     environment: aws-ci
-    permissions: {contents: read, id-token: write}
+    permissions: {actions: read, contents: read, id-token: write}
     steps:
       # BEGIN generated network guard
       - name: Restrict runner and container egress
@@ -55,6 +55,7 @@ jobs:
         uses: ./.github/actions/dependency-cache
         with: {mode: launch}
         env:
+          CI_CACHE_INVENTORY_TOKEN: ${{ github.token }}
           CI_CACHE_MAIN_SHA: ${{ github.workflow_sha }}
           CI_CACHE_RECEIPT_SHA: ${{ inputs.sha }}
           CI_CACHE_RECEIPT_KEY: ${{ inputs.receipt }}

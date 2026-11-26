@@ -75,7 +75,7 @@ async function extractOne(source, member, destination, maxBytes) {
 }
 
 let toolkitInternals;
-async function cacheDownload(paths, key, restoreKeys) {
+async function internals() {
   // v6.3.0 exposes save/restore but no safe download-only API. Use its version calculation and authenticated v2 metadata client, pinned by package-lock.
   const lib = path.join(__dirname, 'node_modules', '@actions', 'cache');
   toolkitInternals ||= Promise.all(
@@ -83,12 +83,21 @@ async function cacheDownload(paths, key, restoreKeys) {
       (file) => import(pathToFileURL(path.join(lib, 'lib/internal', file)).href),
     ),
   );
-  const [utils, twirp, config, generated] = await toolkitInternals;
+  return toolkitInternals;
+}
+
+async function cacheVersionCalculator() {
+  const [utils] = await internals();
+  const compression = await utils.getCompressionMethod();
+  if (!['zstd', 'zstd-without-long'].includes(compression)) throw new Error('GitHub dependency caches require zstd');
+  return paths => utils.getCacheVersion(paths, compression, false);
+}
+
+async function cacheDownload(paths, key, restoreKeys) {
+  const [utils, twirp, config, generated] = await internals();
   if (!config.isCacheReadable(config.getCacheMode())) return {ok: false};
   if (config.getCacheServiceVersion() !== 'v2') throw new Error('GitHub dependency caches require cache service v2');
-  const compression = await utils.getCompressionMethod();
-  if (!['zstd', 'zstd-without-long'].includes(compression))
-    throw new Error('GitHub dependency caches require zstd');
+  const version = (await cacheVersionCalculator())(paths);
   const serviceURL = new URL(config.getCacheServiceURL());
   try {
     let client = twirp.internalCacheTwirpClient();
@@ -105,7 +114,7 @@ async function cacheDownload(paths, key, restoreKeys) {
         },
       });
     }
-    return await client.GetCacheEntryDownloadURL({key, restoreKeys, version: utils.getCacheVersion(paths, compression, false)});
+    return await client.GetCacheEntryDownloadURL({key, restoreKeys, version});
   } catch (error) {
     throw safeFailure(serviceURL.hostname, 'metadata', error);
   }
@@ -147,4 +156,4 @@ async function safeRestore(
   }
   return response.matchedKey;
 }
-module.exports = {safeRestore, extractOne, INDEX_BYTES};
+module.exports = {safeRestore, extractOne, INDEX_BYTES, cacheVersionCalculator};

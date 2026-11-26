@@ -14,7 +14,7 @@ concurrency:
 jobs:
   sync:
     uses: ./.github/workflows/dependency-cache-publish.yml
-    permissions: {contents: read, id-token: write}
+    permissions: {actions: read, contents: read, id-token: write}
     secrets: {AWS_CI_CONFIG: '${{ secrets.AWS_CI_CONFIG }}'}
     with:
       receipt: ${{ inputs.receipt }}

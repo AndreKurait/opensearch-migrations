@@ -246,7 +246,10 @@ async function cloudWorker() {
   if (process.env.CI_CACHE_BUILD_ID) await importMain(await nativeReceipt(process.env.CI_CACHE_BUILD_ID));
   const catalog = await require('./aws-store.cjs').openPublisher();
   try {
-    const result = await require('./github-store.cjs').publish({entries: catalog.entries, materialize: catalog.materialize, generation: grant.generation});
+    const github = require('./github-store.cjs');
+    const versionFor = await require('./github-restore.cjs').cacheVersionCalculator();
+    const inventory = await github.inventoryBlobs(grant.catalogToken, versionFor);
+    const result = await github.publish({inventory, entries: catalog.entries, materialize: catalog.materialize, generation: grant.generation});
     console.log(`Published ${result.entries} paths across ${result.blobs} entries (${result.bytes} bytes).`);
   } finally { await catalog.close(); }
 }
@@ -281,7 +284,7 @@ async function launchPublisher() {
   try {
     // Pass the secret by a 0600 file. It must never appear in process arguments or CodeBuild metadata.
     const file = path.join(dir, 'grant.json');
-    const payload = JSON.stringify({...grant, generation});
+    const payload = JSON.stringify({...grant, generation, catalogToken: env.CI_CACHE_INVENTORY_TOKEN});
     if (Buffer.byteLength(payload) > 8192) throw new Error('Publication grant exceeds Parameter Store capacity');
     await fs.writeFile(file, payload, {mode: 0o600});
     await aws('ssm', 'put-parameter', '--name', parameter, '--type', 'SecureString', '--tier',

@@ -170,3 +170,23 @@ test('Docker can request a published manifest by tag or digest from the same rep
   assert.equal(events.filter(e => e.op === 'restore' && e.key.includes('blob-')).length, 1);
   await assert.rejects(reader.resolve(alias.replace('/registry/', '/other/')), {code:'CACHE_MISS'});
 });
+
+test('publisher inventory skips only exact default-branch archive versions and repairs missing objects', async t => {
+  const {store, events, backend} = await fixture(t);
+  const entries = ['present', 'wrong-version', 'other-ref', 'evicted'].map((key, i) => make(key, key, i));
+  const materialize = (entry, file) => fs.writeFile(file, entry.key);
+  await store.publish({entries, generation, materialize});
+  const keys = entries.map(entry => `migrations-public-deps-v1-blob-object-${entry.digest}`);
+  const versionFor = ([member]) => digest(member);
+  const rows = keys.slice(0, 3).map(key => ({key, ref:'refs/heads/main', version:versionFor([backend.get(key).file])}));
+  rows[1].version = 'different-archive-version';
+  rows[2].ref = 'refs/pull/1/merge';
+  const inventory = await require('./github-store.cjs').inventoryBlobs(undefined, versionFor, async () => rows);
+  assert.deepEqual([...inventory], [keys[0]]);
+  backend.delete(keys[3]);
+  events.length = 0;
+  await store.publish({entries, generation, inventory, materialize});
+  assert.equal(events.some(event => event.key === keys[0]), false);
+  assert.deepEqual(events.filter(event => event.op === 'lookup' && keys.includes(event.key)).map(e => e.key).sort(), keys.slice(1).sort());
+  assert.deepEqual(events.filter(event => event.op === 'save').map(e => e.key), [keys[3]]);
+});

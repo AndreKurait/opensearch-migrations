@@ -211,9 +211,33 @@ async function discoverPublicIndex({ repository, branch, token, request = fetch 
   return index.key;
 }
 
+async function inventoryBlobs(token, versionFor, list = require('./cache-metadata.cjs').listMainCaches) {
+  const branch = 'refs/heads/main';
+  const prefix = `${PREFIX}blob-`;
+  const found = new Set();
+  let pages = 0;
+  try {
+    for (let page = 1; page <= 100; page++) {
+      const rows = await list({repository: 'AndreKurait/opensearch-migrations', prefix, branch, token, page});
+      pages++;
+      for (const row of rows) {
+        if (row.ref !== branch || typeof row.key !== 'string' || !row.key.startsWith(prefix)) continue;
+        const id = row.key.slice(prefix.length);
+        if (!/^(object|pack)-[a-f0-9]{64}$/.test(id)) continue;
+        if (row.version === versionFor([relativeBlobPath(id)])) found.add(row.key);
+      }
+      if (rows.length < 100) break;
+    }
+  } catch {
+    console.log('Cache inventory incomplete. Checking remaining objects by exact key and version.');
+  }
+  console.log(`Verified ${found.size} base-branch cache object versions across ${pages} inventory pages.`);
+  return found;
+}
+
 function createStore(toolkit, options = {}) {
   const store = toolkitStore(toolkit, options);
-  async function publish({ entries, materialize, generation, maxBytes = DEFAULT_BYTES }) {
+  async function publish({ entries, materialize, generation, inventory, maxBytes = DEFAULT_BYTES }) {
     if (typeof generation !== 'string' || !/^[0-9]{1,40}$/.test(generation)) throw new Error('Invalid cache generation');
     const chosen = selectRecent(entries, maxBytes);
     const { blobs } = layout(chosen, true);
@@ -235,7 +259,7 @@ function createStore(toolkit, options = {}) {
           const blob = blobs[next++];
           const file = relativeBlobPath(blob.id);
           try {
-            if (await store.exists(file, blobKey(blob.id))) continue;
+            if (inventory?.has(blobKey(blob.id)) || await store.exists(file, blobKey(blob.id))) continue;
             await fs.rm(file, { force: true });
             await makeBlob(blob, file, materialize, temp);
             await store.save(file, blobKey(blob.id));
@@ -374,7 +398,7 @@ async function storeForRunner() {
   return defaultStore;
 }
 module.exports = {
-  createStore, selectRecent, loadToolkit, discoverPublicIndex, manifestLookup,
+  createStore, selectRecent, loadToolkit, discoverPublicIndex, manifestLookup, inventoryBlobs,
   publish: async options => (await storeForRunner()).publish(options),
   openReader: async ({ indexKey } = {}) => {
     if (!indexKey && process.env.GITHUB_ACTIONS === 'true') {
