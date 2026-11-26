@@ -6,6 +6,7 @@ const { promises: fs } = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { reader, publish } = require('./buildkit-cache.cjs');
+const { bridgeRelay } = require('./client-routing.cjs');
 const { startProxy } = require('./proxy.cjs');
 
 test('registry reads the selected manifest and layer and never transfers a probed sibling', async (t) => {
@@ -52,7 +53,9 @@ test('registry reads the selected manifest and layer and never transfers a probe
   });
   const proxy = await startProxy({ resolve: () => assert.fail('origin accessed'), buildkitCache });
   t.after(proxy.close);
-  const url = `${proxy.url}/v2/buildkit-cache/migrations/app`;
+  const relay = await bridgeRelay(new URL(proxy.url), '127.0.0.1');
+  t.after(relay.close);
+  const url = `http://127.0.0.1:${relay.port}/v2/buildkit-cache/migrations/app`;
   assert.equal(
     (await fetch(`${url}/manifests/cache_amd64`, { method: 'HEAD' })).headers.get('docker-content-digest'),
     rootManifest.digest,

@@ -6,6 +6,7 @@ const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 const { listMainCaches } = require('./cache-metadata.cjs');
 
+const buildkitRoute = /^\/v2\/buildkit-cache\/([a-z0-9]+(?:[._-]+[a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-]+[a-z0-9]+)*)*)\/(manifests|blobs)\/(cache(?:_amd64|_arm64)?|sha256:[0-9a-f]{64})$/;
 const prefix = 'migrations-buildkit-oci-v1-';
 const hash = (text) => createHash('sha256').update(text).digest('hex');
 const digestPattern = /^sha256:([0-9a-f]{64})$/;
@@ -44,10 +45,7 @@ function reader({
   const descriptors = new Map(),
     files = new Map();
   return async (req, res) => {
-    const match =
-      /^\/v2\/buildkit-cache\/([a-z0-9._/-]+)\/(manifests|blobs)\/(cache(?:_amd64|_arm64)?|sha256:[0-9a-f]{64})(?:\?[^#]*)?$/.exec(
-        req.url,
-      );
+    const match = buildkitRoute.exec(req.url);
     if (!match) return false;
     if (!['GET', 'HEAD'].includes(req.method)) {
       res.writeHead(405).end();
@@ -178,4 +176,4 @@ async function publish(root, toolkit) {
   if (!seen.size) throw new Error('Build did not export any BuildKit cache manifests');
   console.log(`Published ${seen.size} content-addressed BuildKit objects`);
 }
-module.exports = { reader, publish, tagPrefix, objectPrefix };
+module.exports = { reader, publish, tagPrefix, objectPrefix, buildkitRoute };

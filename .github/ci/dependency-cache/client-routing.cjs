@@ -8,6 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 const { promisify } = require('node:util');
+const { buildkitRoute } = require('./buildkit-cache.cjs');
 const { validateKey } = require('./proxy.cjs');
 const { brokerProperties } = require('./gradle-wrapper.cjs');
 
@@ -93,7 +94,7 @@ async function bridgeRelay(upstream, address) {
       if (target.origin !== 'http://localhost' || target.hash ||
           [...target.searchParams.keys()].some(k => k !== 'ns')) throw new Error();
       resource = target.pathname;
-      if (resource !== '/v2/') validateKey(resource);
+      if (resource !== '/v2/' && !buildkitRoute.test(resource)) validateKey(resource);
     } catch { response.writeHead(400).end(); return; }
     const headers = {};
     for (const h of ['accept','range','if-range','if-none-match']) if (request.headers[h]) headers[h] = request.headers[h];
