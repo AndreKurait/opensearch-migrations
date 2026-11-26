@@ -29,7 +29,7 @@ jobs:
       queue: max
     if: >-
       github.workflow_ref == 'AndreKurait/opensearch-migrations/.github/workflows/aws-integration.yml@refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'issue_comment' ||
+      (github.event_name == 'push' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_target' ||
       github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
     environment: aws-ci
     runs-on: ubuntu-24.04
@@ -133,7 +133,7 @@ jobs:
     if: >-
       always() &&
       github.workflow_ref == 'AndreKurait/opensearch-migrations/.github/workflows/aws-integration.yml@refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'issue_comment' ||
+      (github.event_name == 'push' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_target' ||
       github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
     runs-on: ubuntu-24.04
     timeout-minutes: 5

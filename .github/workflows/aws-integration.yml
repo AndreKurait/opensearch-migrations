@@ -1,8 +1,11 @@
 name: AWS integration tests
-run-name: AWS tests · ${{ github.event_name == 'issue_comment' && format('PR {0}', github.event.issue.number) || github.event.schedule || inputs.suite || github.ref_name }}
+run-name: AWS tests · ${{ (github.event.issue.number || github.event.pull_request.number) && format('PR {0}', github.event.issue.number || github.event.pull_request.number) || github.event.schedule || inputs.suite || github.ref_name }}
 on:
   push:
     branches: [main]
+  pull_request_target:
+    branches: [main]
+    types: [labeled]
   issue_comment:
     types: [created]
   schedule:
@@ -41,12 +44,14 @@ permissions: {}
 jobs:
   select:
     concurrency:
-      group: ${{ (github.event.issue.number || inputs.pr) && format('aws-pr-{0}-status', github.event.issue.number || inputs.pr) || format('aws-select-{0}', github.run_id) }}
+      group: ${{ (github.event.issue.number || github.event.pull_request.number || inputs.pr) && format('aws-pr-{0}-status', github.event.issue.number || github.event.pull_request.number || inputs.pr) || format('aws-select-{0}', github.run_id) }}
       queue: max
     if: >-
       github.ref == 'refs/heads/main' &&
       (vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' ||
       (github.event_name != 'push' && github.event_name != 'schedule')) &&
+      (github.event_name != 'pull_request_target' ||
+      contains(fromJSON('["run-eks-tests","run-eks-byos-tests","run-eks-isolated-tests","run-cfn-tests","cdc-tests"]'), github.event.label.name)) &&
       (github.event_name != 'issue_comment' ||
       (github.event.issue.pull_request && startsWith(github.event.comment.body, '/aws-test ')))
     environment:

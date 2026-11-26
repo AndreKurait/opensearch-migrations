@@ -99,7 +99,8 @@ def main():
         run = event['workflow_run']
         if (event['action'] != 'completed' or run['status'] != 'completed' or run['conclusion'] != 'cancelled' or
                 run['path'] != WORKFLOW or run['head_repository']['full_name'] != REPO or
-                run['head_branch'] != 'main' or run['event'] not in ('issue_comment', 'workflow_dispatch') or
+                run['head_branch'] != 'main' or
+                run['event'] not in ('issue_comment', 'workflow_dispatch', 'pull_request_target') or
                 not positive(run['id']) or not positive(run['run_attempt'])):
             raise ValueError('Unexpected cancelled workflow')
         plan = read_artifact(run['id'], run['run_attempt'])

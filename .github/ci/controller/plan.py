@@ -72,6 +72,13 @@ def plan(event_name, event, repository, sha, ref, authenticate=api):
         sha, group = command.groups()
         pull = event['issue']['number']
         actor = event['comment']['user']['login']
+    elif event_name == 'pull_request_target':
+        group = event['label']['name']
+        if event['action'] != 'labeled' or group not in GROUPS or group == 'all':
+            raise ValueError('Expected an AWS suite label')
+        pull = event['pull_request']['number']
+        sha = event['pull_request']['head']['sha']
+        actor = event['sender']['login']
     elif event_name == 'schedule':
         suites = tuple(s for s in SCHEDULES[event['schedule']] if s not in DISABLED_SUITES)
         if event['schedule'] == CANARY:

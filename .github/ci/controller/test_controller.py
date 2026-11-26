@@ -36,6 +36,18 @@ class ApprovalTests(unittest.TestCase):
     def select(self, event='issue_comment', ref=REF):
         return plan.plan(event, self.event, REPO, 'a' * 40, ref, self.api)
 
+    def test_label_application_approves_only_event_head_and_selected_group(self):
+        self.event.update(action='labeled', label={'name': 'run-cfn-tests'}, sender={'login': 'reviewer'},
+                          pull_request={'number': 12, 'head': {'sha': SHA}})
+        self.assertEqual(['cfn-create', 'cfn-import'], json.loads(self.select('pull_request_target')['matrix']))
+        self.permission = 'read'
+        with self.assertRaises(PermissionError):
+            self.select('pull_request_target')
+        self.permission = 'maintain'
+        self.pr['head']['sha'] = 'd' * 40
+        with self.assertRaises(ValueError):
+            self.select('pull_request_target')
+
     def test_reviewed_fork_sha_and_labels(self):
         self.pr['labels'] = [{'name': 'run-cfn-tests'}, {'name': 'unrelated'}]
         result = self.select()

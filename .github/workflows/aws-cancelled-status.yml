@@ -12,7 +12,7 @@ jobs:
       github.event.workflow_run.conclusion == 'cancelled' &&
       github.event.workflow_run.path == '.github/workflows/aws-integration.yml' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      (github.event.workflow_run.event == 'issue_comment' || github.event.workflow_run.event == 'workflow_dispatch')
+      (github.event.workflow_run.event == 'issue_comment' || github.event.workflow_run.event == 'pull_request_target' || github.event.workflow_run.event == 'workflow_dispatch')
     outputs:
       pr: ${{ steps.find.outputs.pr }}
     runs-on: ubuntu-24.04
