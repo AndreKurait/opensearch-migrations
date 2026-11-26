@@ -162,10 +162,16 @@ test('receipt import independently refreshes a changed package index and still v
   const observation = {digest: 'a'.repeat(64), accessed: 90};
   await recorder.importObservation({...observation, key: '/npm/typescript'});
   await assert.rejects(recorder.importObservation({...observation, key: '/npm/typescript/-/typescript-5.8.0.tgz'}), /no longer matches/);
-  const [entry] = await recorder.close();
-  assert.equal(entry.digest, createHash('sha256').update('new registry bytes').digest('hex'));
-  assert.equal(entry.verifiedAt, 100);
-  assert.equal(entry.accessed, 90);
+  const alpine = '/raw/alpine/v3.24/main/x86_64/';
+  await recorder.importObservation({...observation, key: alpine + 'APKINDEX.tar.gz'});
+  await assert.rejects(recorder.importObservation({...observation, key: alpine + 'busybox-1.37.0-r0.apk'}), /no longer matches/);
+  const entries = await recorder.close();
+  assert.equal(entries.length, 2);
+  for (const entry of entries) {
+    assert.equal(entry.digest, createHash('sha256').update('new registry bytes').digest('hex'));
+    assert.equal(entry.verifiedAt, 100);
+    assert.equal(entry.accessed, 90);
+  }
 });
 
 

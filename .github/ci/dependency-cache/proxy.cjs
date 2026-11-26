@@ -493,7 +493,8 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, obser
 
 function isPackageIndex(key) {
   const route = parseKey(key);
-  return Boolean(route.npmMetadata || route.pypiMetadata);
+  return Boolean(route.npmMetadata || route.pypiMetadata) ||
+    /^\/raw\/alpine\/(?:v[0-9]+\.[0-9]+|edge)\/(?:main|community|testing)\/[a-z0-9_]+\/APKINDEX\.tar\.gz$/.test(key);
 }
 
 module.exports = {isPackageIndex, startProxy, fetchPublic, validateKey, canonicalKey, pinnedElasticDigest: key => elasticReleases[key]};
