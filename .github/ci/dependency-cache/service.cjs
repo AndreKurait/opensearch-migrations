@@ -64,11 +64,16 @@ async function service(mode, dir) {
       async (env) => {
         const upstream = new URL(env.CI_DEPENDENCY_PROXY_URL);
         const socket = path.join(dir, 'proxy.sock');
+        const clients = new Set();
         const relay = net.createServer((local) => {
+          clients.add(local);
           const remote = net.createConnection(Number(upstream.port), upstream.hostname);
           local.on('error', () => remote.destroy());
           remote.on('error', () => local.destroy());
-          local.once('close', () => remote.destroy());
+          local.once('close', () => {
+            clients.delete(local);
+            remote.destroy();
+          });
           remote.once('close', () => local.destroy());
           local.pipe(remote).pipe(local);
         });
@@ -85,7 +90,9 @@ async function service(mode, dir) {
           await fs.rename(path.join(dir, 'ready.tmp'), path.join(dir, 'ready.json'));
           await finished;
         } finally {
-          await new Promise((resolve) => relay.close(resolve));
+          const closed = new Promise((resolve) => relay.close(resolve));
+          for (const client of clients) client.destroy();
+          await closed;
         }
       },
       packages?.handle,
