@@ -297,6 +297,7 @@ restrict_eks_buildkit_egress() {
 
 start_eks_package_relay() {
   [[ -n ${CI_DEPENDENCY_PROXY_URL:-} && -n ${CODEBUILD_BUILD_ID:-} ]] || return 0
+  export CI_EKS_PACKAGE_BRIDGE="${CI_EKS_PACKAGE_BRIDGE:-${CI_DEPENDENCY_REGISTRY_ENDPOINT:?Missing worker package bridge}}"
   local namespace=${BUILDKIT_NAMESPACE:-buildkit} name=ci-package-relay
   local -a kube=(kubectl "${CONTEXT_ARGS[@]}" -n "$namespace")
   local source="$base_dir/buildImages/backends/eksPackageRelay.py" image service_ip selectors port i
