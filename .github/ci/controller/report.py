@@ -13,8 +13,36 @@ def public_text(value):
     return re.sub(r'(?<!\d)\d{12}(?!\d)', '[account]', value)
 
 
+def dependency_report(archive):
+    names = archive.namelist()
+    if 'dependency-origin.jsonl' not in names:
+        return None
+    limits = {'dependency-origin.jsonl': 32 * 1024**2, 'dependency-cache-stats.json': 2048}
+    for name, limit in limits.items():
+        if names.count(name) != 1 or archive.getinfo(name).file_size > limit:
+            raise ValueError('Missing, duplicate or oversized dependency report')
+    stats = json.loads(archive.read('dependency-cache-stats.json'))
+    if set(stats) != {'restored', 'bytes', 'originRequests', 'misses'} or not all(
+        type(value) is int and 0 <= value < 2**53 for value in stats.values()
+    ):
+        raise ValueError('Invalid native cache counters')
+    rows = []
+    for line in archive.read('dependency-origin.jsonl').splitlines():
+        row = json.loads(line)
+        if (not isinstance(row, dict) or set(row) != {'key', 'host', 'status'} or
+                not isinstance(row['key'], str) or len(row['key']) > 2048 or
+                not re.fullmatch(r'/[A-Za-z0-9._+@:/%-]+', row['key']) or
+                not isinstance(row['host'], str) or len(row['host']) > 253 or
+                not re.fullmatch(r'[a-z0-9.-]+', row['host']) or
+                not (row['status'] == 'error' or type(row['status']) is int and 100 <= row['status'] <= 599)):
+            raise ValueError('Invalid native origin request record')
+        rows.append(row)
+    return stats, rows
+
+
 def render(path, output_dir=None):
     with ZipFile(path) as archive:
+        dependencies = dependency_report(archive)
         entries = [entry for entry in archive.infolist() if entry.filename == 'junit.xml']
         if len(entries) != 1 or entries[0].file_size > 8 * 1024**2:
             raise ValueError('Expected one root junit.xml under 8 MiB')
@@ -38,10 +66,18 @@ def render(path, output_dir=None):
             lines.append(f'| `{name}` | {state} |')
     counts = ' · '.join(f'**{count} {label}**' for label, count in outcomes.items())
     if output_dir:
-        # Only these two files go to GitHub. The source archive is PR-controlled.
+        # Publish only validated fields from the candidate archive.
         summary = dict(suite=public_text(root.get('name', '')), tests=len(cases), failures=outcomes['failed'],
                        errors=outcomes['error'], skipped=outcomes['skipped'])
         output_dir.mkdir()
         (output_dir / 'junit.xml').write_text(public_text(ET.tostring(root, encoding='unicode')), encoding='utf-8')
         (output_dir / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
+    if dependencies is not None:
+        stats, rows = dependencies
+        counts += (f"\n\nDependency cache restored {stats['restored']} objects ({stats['bytes']} bytes). "
+                   f"The proxy recorded {len(rows)} public HTTP request attempts across "
+                   f"{stats['originRequests']} upstream artifact resolutions; {stats['misses']} cache keys were missing.")
+        if output_dir:
+            (output_dir / 'dependency-origin.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
+            (output_dir / 'dependency-cache-stats.json').write_text(json.dumps(stats) + '\n')
     return '\n'.join([counts, '', '| Test case | Result |', '| --- | --- |', *lines]), outcomes

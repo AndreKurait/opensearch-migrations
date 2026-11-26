@@ -29,8 +29,8 @@ jobs:
   publish-main-dependencies:
     needs: worker
     if: >-
-      !cancelled() && vars.DEPENDENCY_PROXY_ENABLED == 'true' && inputs.pr == '' &&
-      inputs.ref == 'refs/heads/main' && github.ref == 'refs/heads/main' && needs.worker.outputs.build-id != ''
+      !cancelled() && vars.DEPENDENCY_PROXY_ENABLED == 'true' &&
+      github.ref == 'refs/heads/main' && needs.worker.outputs.build-id != ''
     runs-on: ubuntu-24.04
     permissions: {actions: write}
     steps:

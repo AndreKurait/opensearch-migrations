@@ -189,6 +189,19 @@ class ObservationTests(unittest.TestCase):
             build.collect(dict(id=BUILD, artifacts={'location': 'arn:aws:s3:::other/other'}))
         self.assertEqual(1, api.call_count)
 
+    def test_native_origin_report_survives_sanitized_artifact_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            with ZipFile(base / 'result.zip', 'w') as archive:
+                archive.writestr('junit.xml', '<testsuite name="ci"><testcase name="test"/></testsuite>')
+                archive.writestr('dependency-cache-stats.json', json.dumps(dict(restored=2, bytes=4, originRequests=1, misses=1)))
+                rows = [{'key':'/raw/helm/package.tgz','host':'get.helm.sh','status':302},
+                        {'key':'/raw/helm/package.tgz','host':'get.helm.sh','status':200}]
+                archive.writestr('dependency-origin.jsonl', '\n'.join(json.dumps(row) for row in rows))
+            text, _ = build.render(base / 'result.zip', base / 'output')
+            self.assertIn('2 public HTTP request attempts', text)
+            self.assertEqual(rows, [json.loads(row) for row in (base / 'output/dependency-origin.jsonl').read_text().splitlines()])
+
     def test_bounded_report_and_safe_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'report.zip'

@@ -88,7 +88,8 @@ async function nativeWorker(command, args) {
   };
   const snapshot = await require('./aws-store.cjs').openPublisher({storage});
   const entries = require('./github-store.cjs').manifestLookup(snapshot.entries);
-  const strict = process.env.CI_DEPENDENCY_MODE === 'replay' || process.env.CI_GIT_REF !== 'refs/heads/main';
+  const strict = process.env.CI_DEPENDENCY_MODE === 'replay';
+  if (process.env.CI_DEPENDENCY_ORIGIN_REPORT) await fs.writeFile(process.env.CI_DEPENDENCY_ORIGIN_REPORT, '', {mode: 0o600});
   const stats = {restored: 0, bytes: 0, originRequests: 0, misses: 0};
   const store = await openLocalRecorder({
     receiptFile: process.env.CI_DEPENDENCY_RECEIPT,
@@ -112,13 +113,13 @@ async function nativeWorker(command, args) {
     if (strict && (!stats.restored || stats.misses)) throw new Error('Incomplete native dependency cache replay');
   } finally {
     await snapshot.close();
+    if (process.env.CI_DEPENDENCY_CACHE_STATS) await fs.writeFile(process.env.CI_DEPENDENCY_CACHE_STATS, JSON.stringify(stats));
     console.log(`Native dependency cache ${JSON.stringify(stats)}`);
   }
 }
 
 async function nativeReceipt(buildId, expectedSha = process.env.CI_CACHE_RECEIPT_SHA || process.env.CI_CACHE_MAIN_SHA) {
   if (!/^[a-f0-9]{40}$/.test(expectedSha)) throw new Error('Invalid native receipt SHA');
-  await execute('git', ['merge-base', '--is-ancestor', expectedSha, 'HEAD']);
   const match = sourceBuild.exec(buildId);
   if (!match) throw new Error('Invalid main worker build ID');
   const {builds} = await aws('codebuild', 'batch-get-builds', '--ids', buildId);
@@ -127,8 +128,10 @@ async function nativeReceipt(buildId, expectedSha = process.env.CI_CACHE_RECEIPT
   const bucket = process.env.CI_DEPENDENCY_BUCKET;
   const key = `builds/${match[1]}/results.zip`;
   if (!build?.buildComplete || build.id !== buildId || build.projectName !== 'migrations-github-eks' ||
-      env.CI_GIT_REF !== 'refs/heads/main' || env.CI_GIT_SHA !== expectedSha ||
+      !/^(refs\/heads\/main|refs\/pull\/[1-9]\d*\/head)$/.test(env.CI_GIT_REF) || env.CI_GIT_SHA !== expectedSha ||
       build.artifacts?.location !== `arn:aws:s3:::${bucket}/${key}`) throw new Error('Build is not the selected, completed main worker');
+  const main = env.CI_GIT_REF === 'refs/heads/main';
+  if (main) await execute('git', ['merge-base', '--is-ancestor', expectedSha, 'HEAD']);
   const info = await aws('s3api', 'head-object', '--bucket', bucket, '--key', key);
   if (!(info.ContentLength > 0 && info.ContentLength <= 64 * 1024 ** 2)) throw new Error('Unexpected worker archive size');
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'main-receipt-'));
@@ -137,7 +140,10 @@ async function nativeReceipt(buildId, expectedSha = process.env.CI_CACHE_RECEIPT
     await aws('s3api', 'get-object', '--bucket', bucket, '--key', key, zip);
     const script = 'import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1]) as z:\n entries=[i for i in z.infolist() if i.filename=="dependency-requests.json"]\n if len(entries)!=1 or entries[0].file_size>int(sys.argv[2]): raise ValueError("missing or oversized receipt")\n sys.stdout.buffer.write(z.read(entries[0]))';
     const {stdout} = await execute('python3', ['-c', script, zip, String(MAX_RECEIPT_BYTES)], {maxBuffer: MAX_RECEIPT_BYTES + 1024});
-    return readReceipt(stdout);
+    const observations = readReceipt(stdout);
+    // A PR proposes only public URLs. The protected publisher resolves them independently
+    // and chooses its own time, digest and response. Candidate bytes never enter the store.
+    return main ? observations : observations.map(({key}) => ({key, accessed: Date.now()}));
   } finally { await fs.rm(dir, {recursive: true, force: true}); }
 }
 

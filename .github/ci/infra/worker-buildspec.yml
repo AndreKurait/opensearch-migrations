@@ -85,7 +85,7 @@ phases:
           export PATH="$tool_dir/record:$PATH"
         fi
         command -v jq && docker buildx version && docker info >/dev/null
-        if [[ "${CI_DEPENDENCY_MODE:-}" == replay || "${CI_GIT_REF:-}" == refs/pull/* ]]; then
+        if [[ "${CI_DEPENDENCY_MODE:-}" == replay ]]; then
           export CI_AWS_DOCKERFILE_NETWORK=none
         fi
         command="$CI_SUITE"
@@ -116,6 +116,8 @@ phases:
         if [[ -n "${CI_RELEASE_VERSION:-}" ]]; then cd "$CODEBUILD_SRC_DIR/release"; fi
         recorder="$CODEBUILD_SRC_DIR/harness/.github/ci/dependency-cache/cli.cjs"
         if [[ "${CI_MODE:-}" != cleanup && -f "$recorder" ]]; then
+          export CI_DEPENDENCY_ORIGIN_REPORT="$CODEBUILD_SRC_DIR/ci-results/dependency-origin.jsonl"
+          export CI_DEPENDENCY_CACHE_STATS="$CODEBUILD_SRC_DIR/ci-results/dependency-cache-stats.json"
           export CI_DEPENDENCY_RECEIPT="$CODEBUILD_SRC_DIR/ci-results/dependency-requests.json"
           export CI_CACHE_TRUSTED_DOCKER=1
           if grep -q "args\[0\] === 'native-worker'" "$recorder"; then
@@ -134,4 +136,6 @@ artifacts:
     - '**/*.xml'
     - '**/summary.json'
     - 'dependency-requests.json'
+    - 'dependency-origin.jsonl'
+    - 'dependency-cache-stats.json'
   enable-symlinks: no
