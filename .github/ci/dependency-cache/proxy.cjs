@@ -136,7 +136,9 @@ function parseKey(key) {
   }
   if (kind === 'raw' && Object.hasOwn(rawOrigins, originId) && parts.length >= 3) {
     const [origin, cdn] = rawOrigins[originId];
-    return {urls: [new URL('./' + parts.slice(2).join('/'), origin)], cdn, digest: elasticReleases[key]};
+    const asset = parts.slice(2).join('/');
+    const upstreamPath = originId === 'al2023' ? asset.replaceAll('+', '%2B') : asset;
+    return {urls: [new URL('./' + upstreamPath, origin)], cdn, digest: elasticReleases[key]};
   }
   if (kind !== 'v2' || !Object.hasOwn(registries, originId) || parts.length < 5) throw new Error('Unsupported artifact route');
   const operation = parts.at(-2);
