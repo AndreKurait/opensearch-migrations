@@ -302,7 +302,7 @@ async function launchPublisher() {
     await aws('ssm', 'put-parameter', '--name', parameter, '--type', 'SecureString', '--tier',
       Buffer.byteLength(payload) > 4096 ? 'Advanced' : 'Standard', '--value', `file://${file}`);
     await fs.rm(file);
-    const variables = {CI_CACHE_MAIN_SHA: env.CI_CACHE_MAIN_SHA, CI_CACHE_MODE: env.CI_CACHE_INGEST === 'true' ? 'ingest' : env.CI_CACHE_SEED === 'true' ? 'both' : 'publish', CI_CACHE_GRANT_PARAMETER: parameter};
+    const variables = {CI_CACHE_MAIN_SHA: env.CI_CACHE_MAIN_SHA, CI_CACHE_MODE: env.CI_CACHE_INGEST === 'true' ? 'ingest' : env.CI_CACHE_SEED === 'true' ? 'record' : 'publish', CI_CACHE_GRANT_PARAMETER: parameter};
     if (key) variables.CI_CACHE_RECEIPT_KEY = key;
     if (native) {
       variables.CI_CACHE_BUILD_ID = native;

@@ -19,21 +19,28 @@ jobs:
       receipt: ${{ inputs.receipt }}
       build: ${{ inputs.build }}
       sha: ${{ inputs.sha || github.sha }}
+  seed:
+    if: inputs.seed
+    uses: ./.github/workflows/dependency-cache-publish.yml
+    permissions: {actions: read, contents: read, id-token: write}
+    secrets: {AWS_CI_CONFIG: '${{ secrets.AWS_CI_CONFIG }}'}
+    with:
+      seed: true
+      sha: ${{ github.sha }}
   sync:
-    needs: ingest
-    if: ${{ !cancelled() && (needs.ingest.result == 'success' || needs.ingest.result == 'skipped') }}
+    needs: [ingest, seed]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     concurrency:
       group: migrations-main-dependency-cache-publish
-      queue: max
+      cancel-in-progress: false
     uses: ./.github/workflows/dependency-cache-publish.yml
     permissions: {actions: read, contents: read, id-token: write}
     secrets: {AWS_CI_CONFIG: '${{ secrets.AWS_CI_CONFIG }}'}
     with:
       sha: ${{ github.sha }}
-      seed: ${{ inputs.seed }}
   acknowledge:
-    needs: sync
-    if: github.ref == 'refs/heads/main' && inputs.receipt != ''
+    needs: ingest
+    if: needs.ingest.result == 'success' && github.ref == 'refs/heads/main' && inputs.receipt != ''
     runs-on: ubuntu-24.04
     permissions: {actions: write}
     steps:
@@ -62,7 +69,7 @@ jobs:
           if sudo -n true >/dev/null 2>&1 || docker info >/dev/null 2>&1; then exit 1; fi
       # END generated network guard
 
-      - name: Retire the published receipt
+      - name: Retire the receipt persisted in S3
         env: {GH_TOKEN: '${{ github.token }}', RECEIPT: '${{ inputs.receipt }}'}
         run: |
           set -euo pipefail
