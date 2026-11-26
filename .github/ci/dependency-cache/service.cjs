@@ -121,12 +121,17 @@ const [mode, dir] = process.argv.slice(2);
 // because raw exception messages can contain signed artifact URLs or credentials.
 const diagnosticFiles = new Set(['client-routing.cjs', 'proxy.cjs', 'service.cjs', 'github-store.cjs', 'adapter.cjs',
   'transport.cjs', 'gradle-build-cache.cjs', 'buildkit-cache.cjs', 'events', 'net', 'task_queues', 'readable',
-  'writable', 'destroy', '_http_client', '_http_outgoing', '_http_server']);
+  'writable', 'destroy', '_http_client', '_http_outgoing', '_http_server', 'undici', 'client-h1.js',
+  'client.js', 'socket_list', 'http2', 'errors', 'abort_controller', 'webstreams', 'readable_stream']);
 process.on('uncaughtExceptionMonitor', (error, origin) => {
-  const code = /^(?:E[A-Z0-9_]{1,64}|UND_ERR_[A-Z_]+)$/.test(error?.code) ? error.code : 'UNKNOWN';
+  const knownNames = new Map([['Error', 'ERROR'], ['AbortError', 'ABORT'], ['TimeoutError', 'TIMEOUT'],
+    ['TypeError', 'TYPE_ERROR'], ['RangeError', 'RANGE_ERROR'], ['AggregateError', 'AGGREGATE_ERROR']]);
+  const code = /^(?:E[A-Z0-9_]{1,64}|UND_ERR_[A-Z_]+|ABORT_ERR)$/.test(error?.code)
+    ? error.code : knownNames.get(error?.name) || 'UNKNOWN';
   const frames = String(error?.stack || '').split('\n').slice(1)
     .map(frame => /(?:^|[/:])([A-Za-z0-9_.-]+\.(?:cjs|js)|[a-z_]+):(\d+):(\d+)\)?$/.exec(frame))
-    .filter(frame => frame && diagnosticFiles.has(frame[1])).slice(0, 5).map(([, file, line]) => `${file}:${line}`);
+    // Preserve the position of library frames even when their basename is outside the allowlist.
+    .filter(Boolean).slice(0, 8).map(([, file, line]) => `${diagnosticFiles.has(file) ? file : 'library'}:${line}`);
   require('node:fs').writeSync(2, `Broker fatal ${origin} ${code} ${frames.join(' ')}\n`);
 });
 service(mode, dir).catch(async (error) => {
