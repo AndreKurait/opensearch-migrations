@@ -164,6 +164,15 @@ def watch(build_id, cursor, minutes):
                     raise
                 print(f'Failed build report unavailable: {error}', file=sys.stderr)
                 artifact = False
+            if state != 'SUCCEEDED' and not artifact:
+                # CodeBuild omits the worker archive on a hard timeout or provisioning failure.
+                directory = Path(os.environ['RUNNER_TEMP']) / 'aws-test-results'
+                directory.mkdir(exist_ok=True)
+                phases = [{key: phase.get(key) for key in ('phaseType', 'phaseStatus', 'durationInSeconds')}
+                          for phase in build.get('phases', [])]
+                evidence = dict(buildId=build_id, buildStatus=state, phases=phases, workerReportAvailable=False)
+                (directory / 'codebuild-status.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+                artifact = True
             output(state=state, cursor=cursor, artifact=str(artifact).lower())
             if state != 'SUCCEEDED':
                 sys.exit(1)

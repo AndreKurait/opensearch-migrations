@@ -164,9 +164,14 @@ class ObservationTests(unittest.TestCase):
                 patch.object(build, 'aws', return_value={'builds': [result]}):
             with self.assertRaises(RuntimeError):
                 build.watch(BUILD, '', 0)
-            result['buildStatus'] = 'TIMED_OUT'
-            with self.assertRaises(SystemExit):
-                build.watch(BUILD, '', 0)
+            result['buildStatus'] = 'FAILED'
+            result['phases'] = [dict(phaseType='BUILD', phaseStatus='TIMED_OUT')]
+            with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, RUNNER_TEMP=tmp):
+                with self.assertRaises(SystemExit):
+                    build.watch(BUILD, '', 0)
+                evidence = json.loads((Path(tmp) / 'aws-test-results/codebuild-status.json').read_text())
+                self.assertFalse(evidence['workerReportAvailable'])
+                self.assertEqual('TIMED_OUT', evidence['phases'][0]['phaseStatus'])
         outputs = {'Stacks': [{'Outputs': [{'OutputKey': 'ArtifactBucketName', 'OutputValue': 'expected'}]}]}
         with patch.object(build, 'aws', return_value=outputs) as api, self.assertRaises(ValueError):
             build.collect(dict(id=BUILD, artifacts={'location': 'arn:aws:s3:::other/other'}))
