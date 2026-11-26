@@ -223,6 +223,13 @@ def watch(build_id, cursor, minutes):
                 directory.mkdir(exist_ok=True)
                 phases = [{key: phase.get(key) for key in ('phaseType', 'phaseStatus', 'durationInSeconds')}
                           for phase in build.get('phases', [])]
+                for phase, section in zip(phases, build.get('phases', [])):
+                    codes = [context['statusCode'] for context in section.get('contexts', [])
+                             if re.fullmatch(r'[A-Z][A-Z0-9_]{0,79}', context.get('statusCode') or '')]
+                    if codes:
+                        phase['statusCodes'] = codes
+                        formatted = ", ".join(f"`{code}`" for code in codes)
+                        summary(f"CodeBuild `{phase['phaseType']}` reported {formatted}.")
                 evidence = dict(buildId=build_id, buildStatus=state, phases=phases, workerReportAvailable=False)
                 status_file = directory / 'codebuild-status.json'
                 status_file.write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
