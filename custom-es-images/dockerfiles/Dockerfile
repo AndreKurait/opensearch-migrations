@@ -186,13 +186,17 @@ RUN mkdir -p ${ES_HOME}/data ${ES_HOME}/logs
 # Run before the final chown so all plugin files are owned by the elasticsearch user.
 RUN MAJOR=$(echo "${ES_VERSION}" | cut -d. -f1) && \
     if [ "$MAJOR" -ge 5 ]; then \
-      ${ES_HOME}/bin/elasticsearch-plugin install --batch repository-gcs; \
+      plugin=repository-gcs; \
+      if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then plugin="http://$CI_PACKAGE_ENDPOINT/raw/elastic/downloads/elasticsearch-plugins/repository-gcs/repository-gcs-${ES_VERSION}.zip"; fi; \
+      ${ES_HOME}/bin/elasticsearch-plugin install --batch "$plugin"; \
     fi
 
 # Install repository-azure plugin (ES 7.0+)
 RUN MAJOR=$(echo "${ES_VERSION}" | cut -d. -f1) && \
     if [ "$MAJOR" -ge 7 ]; then \
-      ${ES_HOME}/bin/elasticsearch-plugin install --batch repository-azure; \
+      plugin=repository-azure; \
+      if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then plugin="http://$CI_PACKAGE_ENDPOINT/raw/elastic/downloads/elasticsearch-plugins/repository-azure/repository-azure-${ES_VERSION}.zip"; fi; \
+      ${ES_HOME}/bin/elasticsearch-plugin install --batch "$plugin"; \
     fi
 
 RUN chown -R 1000:1000 ${ES_HOME}

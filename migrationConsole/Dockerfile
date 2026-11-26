@@ -83,7 +83,9 @@ WORKDIR /root
 
 # Install Node.js for config processor and workflow template creation
 # NPM is to setup the schema checking that coc uses
-RUN dnf install -y  \
+ARG CI_PACKAGE_SETUP
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then printf %s "$CI_PACKAGE_SETUP" | base64 -d | sh; fi
+RUN dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y  \
       --setopt=install_weak_deps=False \
       --setopt=tsflags=nodocs \
       --setopt=keepcache=False \
@@ -104,7 +106,7 @@ RUN tool_base=https://mountpoint-s3-release.s3.amazonaws.com && \
     curl --retry 5 --retry-delay 5 --retry-connrefused -fSL \
         "${tool_base}/${MOUNT_S3_VERSION}/${ARCH}/mount-s3-${MOUNT_S3_VERSION}-${ARCH}.rpm" \
         -o /tmp/mount-s3.rpm && \
-    dnf install -y /tmp/mount-s3.rpm && \
+    dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y /tmp/mount-s3.rpm && \
     rm -f /tmp/mount-s3.rpm
 
 # Install gcsfuse for direct GCS bucket mounting (requires SYS_ADMIN capability at runtime)
@@ -112,14 +114,14 @@ RUN tool_base=https://github.com/GoogleCloudPlatform/gcsfuse/releases/download &
     if [ -n "$CI_PACKAGE_ENDPOINT" ]; then tool_base="http://$CI_PACKAGE_ENDPOINT/raw/gcsfuse"; fi && \
     GCSFUSE_VERSION="3.9.2" && \
     ARCH=$(uname -m) && \
-    dnf install -y \
+    dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y \
         --setopt=install_weak_deps=False \
         --setopt=tsflags=nodocs \
         fuse && \
     curl --retry 5 --retry-delay 5 --retry-connrefused -fSL \
         "${tool_base}/v${GCSFUSE_VERSION}/gcsfuse-${GCSFUSE_VERSION}-1.${ARCH}.rpm" \
         -o /tmp/gcsfuse.rpm && \
-    dnf install -y /tmp/gcsfuse.rpm && \
+    dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y /tmp/gcsfuse.rpm && \
     rm -f /tmp/gcsfuse.rpm
 
 COPY setupVimSchemaChecker.sh /tmp/setupVimSchemaChecker.sh
@@ -146,14 +148,14 @@ WORKDIR /root
 COPY lib /root/lib
 
 WORKDIR /root/lib/console_link
-RUN pipenv install --deploy
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then export PIP_TRUSTED_HOST="${CI_PACKAGE_ENDPOINT%:*}" PIP_INDEX_URL="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIPENV_PYPI_MIRROR="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIP_DISABLE_PIP_VERSION_CHECK=1; fi && pipenv install --deploy
 WORKDIR /root/lib/integ_test
-RUN pipenv install --deploy
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then export PIP_TRUSTED_HOST="${CI_PACKAGE_ENDPOINT%:*}" PIP_INDEX_URL="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIPENV_PYPI_MIRROR="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIP_DISABLE_PIP_VERSION_CHECK=1; fi && pipenv install --deploy
 
 COPY cluster_tools /root/cluster_tools
 RUN rm -rf /root/cluster_tools/.venv
 WORKDIR /root/cluster_tools
-RUN pipenv install
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then export PIP_TRUSTED_HOST="${CI_PACKAGE_ENDPOINT%:*}" PIP_INDEX_URL="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIPENV_PYPI_MIRROR="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIP_DISABLE_PIP_VERSION_CHECK=1; fi && pipenv install
 WORKDIR /root
 
 RUN mkdir -p /usr/share/bash-completion/completions && \

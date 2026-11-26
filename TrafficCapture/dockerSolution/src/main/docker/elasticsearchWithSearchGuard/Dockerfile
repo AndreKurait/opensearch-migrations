@@ -3,12 +3,17 @@ FROM ${BASE_IMAGE}
 
 # Custom image runs as user 1000 — need root for package install and file ops
 USER root
-RUN dnf install -y bash && dnf clean all
+ARG CI_PACKAGE_ENDPOINT
+ARG CI_PACKAGE_SETUP
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then printf %s "$CI_PACKAGE_SETUP" | base64 -d | sh; fi
+RUN dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y bash && dnf clean all
 
 # Switch to elasticsearch user for plugin installs
 USER 1000
 
-RUN echo y | /usr/share/elasticsearch/bin/elasticsearch-plugin install https://maven.search-guard.com/search-guard-suite-release/com/floragunn/search-guard-suite-plugin/7.10.2-53.5.0/search-guard-suite-plugin-7.10.2-53.5.0.zip
+RUN plugin="https://maven.search-guard.com/search-guard-suite-release/com/floragunn/search-guard-suite-plugin/7.10.2-53.5.0/search-guard-suite-plugin-7.10.2-53.5.0.zip" && \
+    if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then plugin="http://$CI_PACKAGE_ENDPOINT/maven/${plugin#https://maven.search-guard.com/search-guard-suite-release/}"; fi && \
+    echo y | /usr/share/elasticsearch/bin/elasticsearch-plugin install "$plugin"
 # add search-guard, which provides TLS, as well as other features that we don't need to consider
 RUN chmod ugo+x /usr/share/elasticsearch/plugins/search-guard-7/tools/install_demo_configuration.sh && \
     yes | /usr/share/elasticsearch/plugins/search-guard-7/tools/install_demo_configuration.sh
@@ -24,7 +29,9 @@ RUN awk -F: '/^[a-zA-Z]/ && NF>1 {if(seen[$1]++) next} 1' $ELASTIC_SEARCH_CONFIG
     mv /tmp/es.yml $ELASTIC_SEARCH_CONFIG_FILE && \
     sed -i '/^cluster\.initial_master_nodes/d' $ELASTIC_SEARCH_CONFIG_FILE
 
-RUN bin/elasticsearch-plugin install --batch repository-s3
+RUN plugin=repository-s3 && \
+    if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then plugin="http://$CI_PACKAGE_ENDPOINT/raw/elastic/downloads/elasticsearch-plugins/repository-s3/repository-s3-7.10.2.zip"; fi && \
+    bin/elasticsearch-plugin install --batch "$plugin"
 RUN  bin/elasticsearch-keystore create --silent && \
      echo "test" | bin/elasticsearch-keystore add --stdin s3.client.default.access_key && \
      echo "test" | bin/elasticsearch-keystore add --stdin s3.client.default.secret_key && \

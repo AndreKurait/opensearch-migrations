@@ -3,7 +3,10 @@ ARG BASE_IMAGE=docker.io/library/amazoncorretto:21-al2023-headless
 FROM ${BASE_IMAGE}
 
 # Install procps to use pgrep in entrypoint.sh
-RUN dnf install -y procps && \
+ARG CI_PACKAGE_ENDPOINT
+ARG CI_PACKAGE_SETUP
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then printf %s "$CI_PACKAGE_SETUP" | base64 -d | sh; fi
+RUN dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y procps && \
     dnf clean all && \
     rm -rf /var/cache/dnf
 

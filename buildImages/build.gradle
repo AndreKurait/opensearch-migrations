@@ -326,7 +326,13 @@ if (!rootProject.findProperty('skipTestImages')?.toString()?.toBoolean()) {
     ]
 }
 
+def rpmConsumers = ['elasticsearchTestConsole', 'reindexFromSnapshot', 'migrationConsoleBase', 'elasticsearchWithSearchGuard']
+def ciPackageSetup = rootProject.file('custom-es-images/dockerfiles/configure-ci-packages.sh').bytes.encodeBase64().toString()
 buildKitProjects.each { cfg ->
+    if (ciPackageEndpoint && cfg.serviceName in rpmConsumers) {
+        cfg.buildArgs.CI_PACKAGE_ENDPOINT = ciPackageEndpoint
+        cfg.buildArgs.CI_PACKAGE_SETUP = ciPackageSetup
+    }
     cfg.repoName = getRepoNameIfPublishing(cfg)
 }
 testBuildKitProjects.each { cfg ->

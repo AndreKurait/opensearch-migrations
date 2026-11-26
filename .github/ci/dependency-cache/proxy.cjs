@@ -96,6 +96,9 @@ function parseKey(key) {
   if (kind === 'pypi' && originId === 'packages' && parts.length >= 4) {
     return {urls: [new URL('./' + parts.slice(1).join('/'), 'https://files.pythonhosted.org/')], cdn: []};
   }
+  if (key === '/maven/com/floragunn/search-guard-suite-plugin/7.10.2-53.5.0/search-guard-suite-plugin-7.10.2-53.5.0.zip') {
+    return {urls: [new URL(key.slice('/maven/'.length), 'https://maven.search-guard.com/search-guard-suite-release/')], cdn: []};
+  }
   if (kind === 'maven' && parts.length >= 2) {
     return {urls: mavenOrigins.map(origin => new URL('./' + parts.slice(1).join('/'), origin)), cdn: mavenCdn};
   }

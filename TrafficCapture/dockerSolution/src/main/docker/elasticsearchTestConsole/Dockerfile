@@ -6,7 +6,10 @@ ARG RUNTIME_IMAGE=docker.io/library/amazonlinux:2023
 FROM ${BUILDER_IMAGE} AS builder
 
 # Build deps (toolchain + headers)
-RUN dnf install -y \
+ARG CI_PACKAGE_ENDPOINT
+ARG CI_PACKAGE_SETUP
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then printf %s "$CI_PACKAGE_SETUP" | base64 -d | sh; fi
+RUN dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y \
       --setopt=install_weak_deps=False \
       --setopt=tsflags=nodocs \
       --setopt=keepcache=False \
@@ -33,11 +36,11 @@ ENV PIPENV_DEFAULT_PYTHON_VERSION=3.11
 ENV PIPENV_MAX_DEPTH=1
 
 # Pipenv & project install into a project-local venv we can copy out
-RUN python3.11 -m pip install pipenv==2026.5.0
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then export PIP_TRUSTED_HOST="${CI_PACKAGE_ENDPOINT%:*}" PIP_INDEX_URL="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIPENV_PYPI_MIRROR="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIP_DISABLE_PIP_VERSION_CHECK=1; fi && python3.11 -m pip install pipenv==2026.5.0
 WORKDIR /
 RUN python3.11 -m venv .venv
 COPY Pipfile Pipfile.lock ./
-RUN pipenv install --deploy
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then export PIP_TRUSTED_HOST="${CI_PACKAGE_ENDPOINT%:*}" PIP_INDEX_URL="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIPENV_PYPI_MIRROR="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIP_DISABLE_PIP_VERSION_CHECK=1; fi && pipenv install --deploy
 
 # ---------- 2) Runtime ----------
 FROM ${RUNTIME_IMAGE}
@@ -46,7 +49,10 @@ ENV PIP_ROOT_USER_ACTION=ignore
 ENV LANG=C.UTF-8
 
 # Minimal runtime deps (no compilers, no *-devel)
-RUN dnf install -y \
+ARG CI_PACKAGE_ENDPOINT
+ARG CI_PACKAGE_SETUP
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then printf %s "$CI_PACKAGE_SETUP" | base64 -d | sh; fi
+RUN dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y \
       --setopt=install_weak_deps=False \
       --setopt=tsflags=nodocs \
       --setopt=keepcache=False \
@@ -82,7 +88,7 @@ ENV PIPENV_DEFAULT_PYTHON_VERSION=3.11
 ENV PIPENV_MAX_DEPTH=1
 ENV PATH="/.venv/bin:${PATH}"
 
-RUN python3.11 -m pip install pipenv==2026.5.0
+RUN if [ -n "${CI_PACKAGE_ENDPOINT:-}" ]; then export PIP_TRUSTED_HOST="${CI_PACKAGE_ENDPOINT%:*}" PIP_INDEX_URL="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIPENV_PYPI_MIRROR="http://$CI_PACKAGE_ENDPOINT/pypi/simple/" PIP_DISABLE_PIP_VERSION_CHECK=1; fi && python3.11 -m pip install pipenv==2026.5.0
 WORKDIR /
 COPY --from=builder /.venv /.venv
 
