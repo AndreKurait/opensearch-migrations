@@ -233,6 +233,14 @@ jobs:
             --kube-context="kind-${KIND_CLUSTER_NAME}" \
             --capture-proxy-service-type=ClusterIP
 
+      - name: Capture kind pod status after failure
+        if: failure()
+        working-directory: ${{ format('{0}/libraries/testAutomation', env.TEST_REPO_DIR) }}
+        run: |
+          mkdir -p logs
+          kubectl --context "kind-${KIND_CLUSTER_NAME}" --request-timeout=20s get pods --all-namespaces -o wide > logs/kind-pods.txt 2>&1 || true
+          kubectl --context "kind-${KIND_CLUSTER_NAME}" --request-timeout=20s get events --all-namespaces --sort-by=.metadata.creationTimestamp > logs/kind-events.txt 2>&1 || true
+
       - name: Sanitize artifact name
         if: always()
         run: |
