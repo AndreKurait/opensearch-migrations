@@ -41,7 +41,7 @@ def _bulk_insert_data():
 class Test0011RfsBackpressure(MATestBase):
     """Backfills into a target that can't keep up, and checks that RFS backs off instead of failing.
 
-    The target is one OpenSearch node with one CPU, one write thread and a write queue of 10
+    The target is one OpenSearch node with half a CPU, one write thread and a write queue of 10
     (opensearch-2-19-starved-single-node), so it rejects bulks beyond about 11 in flight. Three RFS workers with the
     default --max-connections (10) can send 30. They must be throttled back to what the target accepts and migrate
     every document, with no batch giving up and nothing in the failed document stream. Then, from Prometheus and the

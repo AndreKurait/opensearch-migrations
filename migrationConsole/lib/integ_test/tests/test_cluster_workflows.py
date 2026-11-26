@@ -38,7 +38,7 @@ def test_starved_opensearch_2_19_reuses_single_node_template():
         parameter["name"]: parameter["value"]
         for parameter in deploy["arguments"]["parameters"]
     }
-    assert arguments["cpu"] == "1"
+    assert arguments["cpu"] == "500m"
     assert arguments["memory"] == "2Gi"
     assert arguments["heap"] == "1g"
     assert arguments["opensearch-config-extra"].splitlines() == [

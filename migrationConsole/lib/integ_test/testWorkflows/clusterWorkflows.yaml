@@ -1432,7 +1432,7 @@ spec:
             valueFrom:
               path: /tmp/cluster-config.json
 
-    # OpenSearch 2.19 starved on purpose, so that bulk writers get pushed back (Test0011RfsBackpressure): one CPU,
+    # OpenSearch 2.19 starved on purpose, so that bulk writers get pushed back (Test0011RfsBackpressure): half a CPU,
     # one write thread and a write queue of 10, so more than about 11 concurrent bulks are rejected.
     - name: opensearch-2-19-starved-single-node
       inputs:
@@ -1453,7 +1453,7 @@ spec:
                     thread_pool.write.size: 1
                     thread_pool.write.queue_size: 10
                 - name: cpu
-                  value: "1"
+                  value: "500m"
                 - name: memory
                   value: "2Gi"
                 - name: heap
