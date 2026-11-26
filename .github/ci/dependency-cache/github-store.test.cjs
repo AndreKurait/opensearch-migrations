@@ -156,3 +156,17 @@ test('reader pins a default-branch generation and rejects a PR-shadowed index', 
   backend.set(shadow,real);
   await assert.rejects(store.openReader({indexKey:selected}), {code:'CACHE_MISS'});
 });
+
+
+test('Docker can request a published manifest by tag or digest from the same repository', async t => {
+  const {store, events} = await fixture(t);
+  const entry = make('/v2/dockerhub/library/registry/manifests/2', 'manifest', 2);
+  await store.publish({entries:[entry], generation, materialize: (_, file) => fs.writeFile(file, 'manifest')});
+  const reader = await store.openReader();
+  t.after(reader.close);
+  const alias = entry.key.replace(/2$/, `sha256:${entry.digest}`);
+  assert.ok(reader.entries.some(row => row.key === alias));
+  assert.deepEqual(await reader.resolve(alias), await reader.resolve(entry.key));
+  assert.equal(events.filter(e => e.op === 'restore' && e.key.includes('blob-')).length, 1);
+  await assert.rejects(reader.resolve(alias.replace('/registry/', '/other/')), {code:'CACHE_MISS'});
+});

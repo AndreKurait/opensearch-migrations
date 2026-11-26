@@ -270,7 +270,7 @@ function createStore(toolkit, options = {}) {
       await fs.rm(temp, { recursive: true, force: true });
       throw error;
     }
-    const entries = new Map(index.entries.map(e => [e.key, e]));
+    const entries = manifestLookup(index.entries);
     const { blobs, locations } = layout(index.entries, index.version === 2);
     const blobMap = new Map(blobs.map(blob => [blob.id, blob]));
     const metrics = { archiveTransfers: 0, archivePayloadBytes: 0, catalogObjects: locations.size, restoredObjects: 0 };
@@ -314,7 +314,7 @@ function createStore(toolkit, options = {}) {
     return {
       generation: index.generation,
       metrics,
-      entries: [...entries.values()].map(entry => ({...entry})),
+      entries: [...entries].map(([key, entry]) => ({...entry, key})),
       async resolve(key) {
         if (closed) throw new Error('Dependency cache reader is closed');
         const entry = entries.get(key);
@@ -339,6 +339,20 @@ function createStore(toolkit, options = {}) {
 }
 
 let toolkitPromise;
+// Docker resolves a mutable tag and then requests those same bytes by digest.
+// Keep the original published row so each storage backend verifies its own key.
+function manifestLookup(rows) {
+  const entries = new Map(rows.map(row => [row.key, row]));
+  for (const row of rows) {
+    if (row.missing || !row.key.startsWith('/v2/')) continue;
+    const tag = /^(\/v2\/.+\/manifests\/)[\w][\w.-]{0,127}$/.exec(row.key);
+    if (!tag) continue;
+    const alias = `${tag[1]}sha256:${row.digest}`;
+    if (!entries.has(alias)) entries.set(alias, row);
+  }
+  return entries;
+}
+
 async function loadToolkit() {
   // The toolkit includes the compressor in its cache version. Force both Linux runners to
   // use zstd so a publisher falling back to gzip cannot apparently succeed with an unreadable index.
@@ -357,7 +371,7 @@ async function storeForRunner() {
   return defaultStore;
 }
 module.exports = {
-  createStore, selectRecent, loadToolkit, discoverPublicIndex,
+  createStore, selectRecent, loadToolkit, discoverPublicIndex, manifestLookup,
   publish: async options => (await storeForRunner()).publish(options),
   openReader: async ({ indexKey } = {}) => {
     if (!indexKey && process.env.GITHUB_ACTIONS === 'true') {

@@ -87,7 +87,7 @@ async function nativeWorker(command, args) {
     get: (key, file) => aws('s3api', 'get-object', '--bucket', bucket, '--key', key, file),
   };
   const snapshot = await require('./aws-store.cjs').openPublisher({storage});
-  const entries = new Map(snapshot.entries.map(item => [item.key, item]));
+  const entries = require('./github-store.cjs').manifestLookup(snapshot.entries);
   const strict = process.env.CI_DEPENDENCY_MODE === 'replay' || process.env.CI_GIT_REF !== 'refs/heads/main';
   const stats = {restored: 0, bytes: 0, originRequests: 0, misses: 0};
   const store = await openLocalRecorder({
