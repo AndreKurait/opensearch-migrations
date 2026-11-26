@@ -92,11 +92,11 @@ def qemu_command(network):
 def seed(directory):
     key = directory / "ssh"
     run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key])
+    public_key = key.with_suffix(".pub").read_text().strip()
     (directory / "user-data").write_text(
         "#cloud-config\nusers:\n  - name: runner\n    groups: [sudo]\n"
         "    sudo: ALL=(ALL) NOPASSWD:ALL\n    shell: /bin/bash\n    ssh_authorized_keys:\n      - "
-        + key.with_suffix(".pub").read_text().strip()
-        + "\nssh_pwauth: false\ndisable_root: true\n"
+        f"{public_key}\nssh_pwauth: false\ndisable_root: true\n"
     )
     (directory / "meta-data").write_text(
         f"instance-id: {secrets.token_hex(16)}\nlocal-hostname: container-worker\n"
@@ -140,7 +140,7 @@ def boot(directory, cache_socket):
     network = guest_network(port, cache_socket)
     if cache_socket is not None:
         (directory / "cache.sock").symlink_to(cache_socket)
-    # QEMU and each spawned cache relay receive a fresh environment. No host mounts, agent forwarding or host daemon transport.
+    # QEMU and each spawned cache relay receive a fresh environment without host mounts or agent forwarding.
     child = subprocess.Popen(
         qemu_command(network),
         cwd=directory,
@@ -154,10 +154,8 @@ def boot(directory, cache_socket):
         for _ in range(120):
             if child.poll() is not None:
                 raise RuntimeError("KVM guest exited before readiness")
-            if (
-                subprocess.run(ssh + ["true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
-                == 0
-            ):
+            probe = subprocess.run(ssh + ["true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if probe.returncode == 0:
                 break
             time.sleep(1)
         else:
@@ -211,7 +209,7 @@ def run_candidate(image, digest, source, socket_path, command):
         with boot(directory, Path(socket_path).resolve()) as (ssh, _):
             with (HERE / "preflight.sh").open("rb") as script:
                 run(ssh + ["bash -se"], stdin=script)
-            # The immutable Git tree carries symlinks safely inside the VM and excludes .git, local keys and checkout credentials.
+            # Archive the Git tree with its symlinks and exclude local keys and checkout credentials.
             with subprocess.Popen(
                 ["git", "-C", source, "archive", "--format=tar", "HEAD"], stdout=subprocess.PIPE
             ) as archive:
@@ -238,13 +236,8 @@ def run_candidate(image, digest, source, socket_path, command):
                     return subprocess.run(
                         ssh + ["env CI_CONTAINER_PROBE_DIGEST=" + fixture + " bash -se"], stdin=script
                     ).returncode
-            result = subprocess.run(
-                ssh
-                + [
-                    "cd /home/runner/source && exec "
-                    + shlex.join(["env", *(f"{key}={value}" for key, value in env.items()), *command])
-                ]
-            )
+            argv = ["env", *(f"{key}={value}" for key, value in env.items()), *command]
+            result = subprocess.run(ssh + ["cd /home/runner/source && exec " + shlex.join(argv)])
             return result.returncode
 
 
