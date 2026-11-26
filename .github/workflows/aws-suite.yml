@@ -2,6 +2,9 @@ name: Run an AWS integration suite
 on:
   workflow_call:
     outputs:
+      receipt:
+        description: Whether the worker archive contains a dependency receipt
+        value: ${{ jobs.watch.outputs.receipt || jobs.watch-2.outputs.receipt || jobs.watch-3.outputs.receipt || jobs.watch-4.outputs.receipt }}
       build-id:
         description: AWS CodeBuild ID for dependency receipt publication
         value: ${{ jobs.start.outputs.build-id }}

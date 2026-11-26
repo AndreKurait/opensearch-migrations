@@ -30,7 +30,7 @@ jobs:
     needs: worker
     if: >-
       !cancelled() && vars.DEPENDENCY_PROXY_ENABLED == 'true' &&
-      github.ref == 'refs/heads/main' && needs.worker.outputs.build-id != ''
+      github.ref == 'refs/heads/main' && needs.worker.outputs.receipt == 'true' && needs.worker.outputs.build-id != ''
     runs-on: ubuntu-24.04
     permissions: {actions: write}
     steps:

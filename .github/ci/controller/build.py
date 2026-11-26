@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import time
+import zipfile
 
 from capacity import PROJECT, admit, client, config
 from parameters import ALIASES, parameters
@@ -132,6 +133,9 @@ def collect(build):
     private = temp / 'worker-results.private.zip'
     try:
         aws('s3api', 'get-object', '--bucket', bucket, '--key', key, str(private))
+        with zipfile.ZipFile(private) as archive:
+            if 'dependency-requests.json' in archive.namelist():
+                output(receipt='true')
         report, counts = render(private, output_dir=temp / 'aws-test-results')
     finally:
         private.unlink(missing_ok=True)

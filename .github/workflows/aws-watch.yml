@@ -8,6 +8,8 @@ on:
       suite: {type: string, required: true}
       cursor: {type: string, default: ''}
     outputs:
+      receipt:
+        value: ${{ jobs.watch.outputs.receipt }}
       state:
         value: ${{ jobs.watch.outputs.state }}
       cursor:
@@ -26,6 +28,7 @@ jobs:
       contents: read
       id-token: write
     outputs:
+      receipt: ${{ steps.watch.outputs.receipt }}
       state: ${{ steps.watch.outputs.state }}
       cursor: ${{ steps.watch.outputs.cursor }}
     steps:
