@@ -352,13 +352,15 @@ start_eks_package_relay() {
   CI_PACKAGE_WORKER_PID=$!
   local builder
   for builder in builder-amd64 builder-arm64; do
-    "${kube[@]}" exec "deployment/$builder" -- sh -ec '
-      for attempt in $(seq 1 30); do
-        wget -T 3 -O /dev/null "http://$1:8080/healthz" 2>/dev/null && exit 0
-        sleep 1
-      done
-      echo "BuildKit cannot reach the package relay at $1:8080" >&2
-      exit 1' sh "$service_ip" || return 1
+    deadline=$((SECONDS + 120))
+    until "${kube[@]}" --request-timeout=8s exec "deployment/$builder" -- \
+      wget -T 3 -O /dev/null "http://$service_ip:8080/healthz"; do
+      if ((SECONDS >= deadline)); then
+        echo "$builder cannot reach the package relay at $service_ip:8080" >&2
+        return 1
+      fi
+      sleep 2
+    done
   done
   export CI_BUILDKIT_PACKAGE_ENDPOINT="$service_ip:8080"
 }
