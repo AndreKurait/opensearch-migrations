@@ -820,7 +820,24 @@ class RegistryImageBuildUtils {
                             "--push",
                             phaseName
                     ]
-                    args.join(" ")
+                    def publish = args.join(" ")
+                    // Each native BuildKit node exports only its platform's cache. Preserve both
+                    // manifests after the full image and its multi-platform metadata have been pushed.
+                    if (architecture == "multi" && System.getenv('CI_AWS_BUILDKIT_WRITE') == 'true') {
+                        def exports = ['amd64', 'arm64'].collect { arch ->
+                            def overrides = bakeDefinition.group[phaseName].targets.collectMany { name ->
+                                def ref = bakeDefinition.target[name]['cache-from'][0].substring('type=registry,ref='.length())
+                                def caches = awsLayerCache("${ref}_${arch}", true)
+                                caches.collect { "--set '${name}.cache-to=${it}'" }
+                            }
+                            if (!overrides) return ''
+                            return "docker buildx bake --progress=plain -f \"${outputFile.absolutePath}\" --builder ${builder} " +
+                                    "--set '*.platform=linux/${arch}' --set '*.output=type=cacheonly' " +
+                                    overrides.join(' ') + " ${phaseName}"
+                        }.findAll { it }
+                        return ([publish] + exports).join(' && ')
+                    }
+                    publish
                 }
                 commandLine 'sh', '-c', commands.join(" && ")
             }
