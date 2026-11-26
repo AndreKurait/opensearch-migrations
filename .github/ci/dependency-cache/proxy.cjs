@@ -60,6 +60,7 @@ const rawOrigins = {
   helm: ['https://get.helm.sh/', []],
   gradle: ['https://services.gradle.org/distributions/', ['downloads.gradle.org', 'github.com', ...githubAssets]],
   temurin: ['https://github.com/adoptium/temurin21-binaries/releases/download/', githubAssets],
+  opensearch: ['https://artifacts.opensearch.org/', []],
   elastic: ['https://artifacts.elastic.co/', []],
 };
 const mavenOrigins = ['https://repo.maven.apache.org/maven2/', 'https://plugins.gradle.org/m2/'];
