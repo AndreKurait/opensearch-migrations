@@ -361,6 +361,8 @@ def fixture(ipc):
             host_after.bind(('127.0.0.1', 0))
             host_after.listen()
             if execute(['/usr/bin/nc', '-z', '-G', '2', '127.0.0.1', str(host_after.getsockname()[1])]).returncode == 0:
+                for anchor in (ANCHOR, ANCHOR + '/gradle-ipc'):
+                    command(['/usr/bin/sudo', '-n', PF, '-a', anchor, '-vvs', 'rules'])
                 raise RuntimeError('Candidate connected to a later host-owned listener inside its IPC range')
         response = execute(['/usr/bin/curl', '-fsS', '--max-time', '5', f'http://127.0.0.1:{port}/fixture'])
         if response.returncode or response.stdout != 'local broker':
