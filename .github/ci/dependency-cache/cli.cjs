@@ -187,13 +187,18 @@ async function cloudWorker() {
   if (mode !== 'publish') {
     const recorder = await require('./aws-store.cjs').openRecorder();
     await serve(recorder, 'record', async env => {
-      const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'kind-node-seed-'));
-      try {
-        const proxy = new URL(env.CI_DEPENDENCY_PROXY_URL);
-        const kindNode = 'dockerhub/kindest/node@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5';
-        await run('skopeo', ['--override-os', 'linux', '--override-arch', 'amd64', 'copy', '--src-tls-verify=false',
-          `docker://${proxy.host}/${kindNode}`, `dir:${temp}`], {...process.env, ...env});
-      } finally { await fs.rm(temp, {recursive: true, force: true}); }
+      const proxy = new URL(env.CI_DEPENDENCY_PROXY_URL);
+      const images = [
+        'dockerhub/kindest/node@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5',
+        'dockerhub/library/sonarqube@sha256:ef0290a2deabad86a2623552712033a7107a9f5b310af00519b4ddd5b348ef4e',
+      ];
+      for (const image of images) {
+        const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'ci-image-seed-'));
+        try {
+          await run('skopeo', ['--override-os', 'linux', '--override-arch', 'amd64', 'copy', '--src-tls-verify=false',
+            `docker://${proxy.host}/${image}`, `dir:${temp}`], {...process.env, ...env});
+        } finally { await fs.rm(temp, {recursive: true, force: true}); }
+      }
       const pipenv = await fs.mkdtemp(path.join(os.tmpdir(), 'cluster-tools-pipenv-'));
       try {
         const bin = path.join(pipenv, 'bin');
