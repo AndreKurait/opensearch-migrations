@@ -55,7 +55,8 @@ jobs:
         uses: ./.github/actions/dependency-cache
         with: {mode: launch}
         env:
-          CI_CACHE_MAIN_SHA: ${{ inputs.sha }}
+          CI_CACHE_MAIN_SHA: ${{ github.workflow_sha }}
+          CI_CACHE_RECEIPT_SHA: ${{ inputs.sha }}
           CI_CACHE_RECEIPT_KEY: ${{ inputs.receipt }}
           CI_CACHE_BUILD_ID: ${{ inputs.build }}
           CI_CACHE_SEED: ${{ inputs.seed }}

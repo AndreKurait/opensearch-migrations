@@ -116,7 +116,9 @@ async function nativeWorker(command, args) {
   }
 }
 
-async function nativeReceipt(buildId, expectedSha = process.env.CI_CACHE_MAIN_SHA) {
+async function nativeReceipt(buildId, expectedSha = process.env.CI_CACHE_RECEIPT_SHA || process.env.CI_CACHE_MAIN_SHA) {
+  if (!/^[a-f0-9]{40}$/.test(expectedSha)) throw new Error('Invalid native receipt SHA');
+  await execute('git', ['merge-base', '--is-ancestor', expectedSha, 'HEAD']);
   const match = sourceBuild.exec(buildId);
   if (!match) throw new Error('Invalid main worker build ID');
   const {builds} = await aws('codebuild', 'batch-get-builds', '--ids', buildId);
@@ -174,10 +176,7 @@ async function cloudWorker() {
   const mode = process.env.CI_CACHE_MODE;
   if (!['record', 'publish', 'both'].includes(mode)) throw new Error('Invalid worker mode');
   if (mode === 'record' && process.env.CI_CACHE_BUILD_ID) {
-    const sha = process.env.CI_CACHE_RECEIPT_SHA || process.env.CI_CACHE_MAIN_SHA;
-    if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('Invalid native receipt SHA');
-    await execute('git', ['merge-base', '--is-ancestor', sha, 'HEAD']);
-    const observations = await nativeReceipt(process.env.CI_CACHE_BUILD_ID, sha);
+    const observations = await nativeReceipt(process.env.CI_CACHE_BUILD_ID);
     await importMain(observations);
     console.log(`Imported ${observations.length} verified native dependency requests.`);
     return;
@@ -258,7 +257,10 @@ async function launchCloud() {
     await fs.rm(file);
     const variables = {CI_CACHE_MAIN_SHA: env.CI_CACHE_MAIN_SHA, CI_CACHE_MODE: env.CI_CACHE_SEED === 'true' ? 'both' : 'publish', CI_CACHE_GRANT_PARAMETER: parameter};
     if (key) variables.CI_CACHE_RECEIPT_KEY = key;
-    if (native) variables.CI_CACHE_BUILD_ID = native;
+    if (native) {
+      variables.CI_CACHE_BUILD_ID = native;
+      variables.CI_CACHE_RECEIPT_SHA = env.CI_CACHE_RECEIPT_SHA || env.CI_CACHE_MAIN_SHA;
+    }
     const overrides = Object.entries(variables).map(([name, value]) => ({name, value, type: 'PLAINTEXT'}));
     id = (await aws('codebuild', 'start-build', '--project-name', project, '--environment-variables-override', JSON.stringify(overrides))).build.id;
     if (!id.startsWith(project + ':')) throw new Error('Unexpected cache worker');

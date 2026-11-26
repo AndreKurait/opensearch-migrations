@@ -140,7 +140,7 @@ Resources:
                     'codebuild:environment.fleet.fleetArn': 'true'
                     'codebuild:environment.registryCredential.credential': 'true'
                   'ForAllValues:StringEquals':
-                    'codebuild:environment.environmentVariables.name': [CI_CACHE_MAIN_SHA, CI_CACHE_MODE, CI_CACHE_GRANT_PARAMETER, CI_CACHE_RECEIPT_KEY, CI_CACHE_BUILD_ID]
+                    'codebuild:environment.environmentVariables.name': [CI_CACHE_MAIN_SHA, CI_CACHE_MODE, CI_CACHE_GRANT_PARAMETER, CI_CACHE_RECEIPT_KEY, CI_CACHE_BUILD_ID, CI_CACHE_RECEIPT_SHA]
               - {Effect: Allow, Action: ['codebuild:BatchGetBuilds', 'codebuild:StopBuild'], Resource: [!GetAtt DependencyCacheProject.Arn, !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:build/migrations-main-dependency-cache:*']}
               - {Effect: Allow, Action: ['ssm:PutParameter', 'ssm:DeleteParameter'], Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/migrations/cache-grants/*'}
   SandboxBoundary:
