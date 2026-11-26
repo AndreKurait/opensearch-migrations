@@ -180,6 +180,8 @@ if (!pushVersionsList.isEmpty()) {
                         "--push",
                         "--cache-to=type=registry,ref=${cacheDest},mode=max",
                         "--cache-from=type=registry,ref=${cacheDest}",
+                        *(RegistryImageBuildUtils.awsLayerCache(cacheDest, false).collect { "--cache-from=${it}" }),
+                        *(RegistryImageBuildUtils.awsLayerCache(cacheDest, true).collect { "--cache-to=${it}" }),
                         contextPath
                 ]
                 commandLine 'sh', '-c', buildArgs.join(" ")

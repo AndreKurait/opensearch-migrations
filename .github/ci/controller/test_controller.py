@@ -123,6 +123,17 @@ class ApprovalTests(unittest.TestCase):
 
 
 class ObservationTests(unittest.TestCase):
+    def test_cache_writer_role_only_for_recording_main(self):
+        env = dict(GITHUB_RUN_ID='123', GITHUB_REPOSITORY=REPO, GITHUB_RUN_ATTEMPT='2')
+        with patch.dict(os.environ, env), patch.object(build, 'summary'), patch.object(build, 'output'), \
+                patch.object(build, 'config', return_value={'account': '123456789012'}), \
+                patch.object(build, 'aws', return_value={'build': {'id': BUILD}}) as api:
+            for ref, options, writer in [('refs/heads/main', '{}', True),
+                                         ('refs/heads/main', '{"CI_DEPENDENCY_MODE":"replay"}', False),
+                                         ('refs/pull/12/head', '{}', False)]:
+                build.start('cfn-create', SHA, ref, '', options)
+                self.assertEqual('--service-role-override' in api.call_args.args, writer)
+
     def test_start_uses_bounded_timeout_and_identity(self):
         env = dict(GITHUB_RUN_ID='123', GITHUB_REPOSITORY=REPO, GITHUB_RUN_ATTEMPT='2')
         with patch.dict(os.environ, env), patch.object(build, 'summary'), patch.object(build, 'output'), \

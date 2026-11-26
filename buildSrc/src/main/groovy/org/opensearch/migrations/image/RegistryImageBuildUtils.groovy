@@ -14,9 +14,20 @@ class RegistryImageBuildUtils {
         return System.getenv('CI_AWS_DOCKERFILE_NETWORK') == 'none'
     }
 
+    static List<String> awsLayerCache(String ref, boolean export) {
+        def repository = System.getenv('CI_AWS_BUILDKIT_CACHE')
+        if (!repository || (export && System.getenv('CI_AWS_BUILDKIT_WRITE') != 'true')) return []
+        // ECR's single-repository formatter puts the service and architecture in the tag.
+        def tag = ref.substring(ref.lastIndexOf(':') + 1)
+        if (!(tag ==~ /migrations_[a-zA-Z0-9_.-]+_cache(?:_amd64|_arm64)?/)) return []
+        def target = "type=registry,ref=${repository}:${tag}"
+        return [(export ? "${target},mode=max,image-manifest=true,oci-mediatypes=true" : target).toString()]
+    }
+
     private static List<String> remoteCacheImports(List<String> refs) {
         def endpoint = System.getenv('CI_BUILDKIT_CACHE_ENDPOINT')
-        return endpoint ? refs.collect { "type=registry,ref=${endpoint}/${it.substring(it.indexOf('/') + 1)}".toString() } : []
+        def hosted = endpoint ? refs.collect { "type=registry,ref=${endpoint}/${it.substring(it.indexOf('/') + 1)}".toString() } : []
+        return hosted + refs.collectMany { awsLayerCache(it, false) }
     }
 
     static class Registry { // Helper object
@@ -573,6 +584,7 @@ class RegistryImageBuildUtils {
                                 "--cache-to=type=registry,ref=${cacheDestination}${suffix},mode=max,ignore-error=true",
                                 "--cache-from=type=registry,ref=${cacheDestination}${suffix}"
                         ]
+                        awsLayerCache("${cacheDestination}${suffix}", true).each { fullArgs.add("--cache-to=${it}") }
                         remoteCacheImports(["${cacheDestination}${suffix}"]).each { fullArgs.add("--cache-from=${it}") }
                         staticBuildArgFlags.each { fullArgs.add(it) }
                         resolveIntermediateArgs(suffix).each { fullArgs.add(it) }
@@ -614,6 +626,7 @@ class RegistryImageBuildUtils {
                             "--cache-from=type=registry,ref=${cacheDestination}_arm64"
                     ]
                     staticBuildArgFlags.each { fullArgs.add(it) }
+                    awsLayerCache(cacheDestination, true).each { fullArgs.add("--cache-to=${it}") }
                     remoteCacheImports([cacheDestination, "${cacheDestination}_amd64", "${cacheDestination}_arm64"]).each { fullArgs.add("--cache-from=${it}") }
                     resolveIntermediateArgs("").each { fullArgs.add(it) }
                     fullArgs.add("\"${contextPath}\"")
@@ -784,7 +797,7 @@ class RegistryImageBuildUtils {
                                 args        : buildArgs,
                                 platforms   : architecture == "multi" ? ["linux/amd64", "linux/arm64"] : ["linux/${architecture}".toString()],
                                 "cache-from": cacheFrom,
-                                "cache-to"  : ["type=registry,ref=${cacheDestination}${cacheSuffix},mode=max,ignore-error=true".toString()]
+                                "cache-to"  : ["type=registry,ref=${cacheDestination}${cacheSuffix},mode=max,ignore-error=true".toString()] + awsLayerCache("${cacheDestination}${cacheSuffix}", true)
                         ]
                         if (offlineDockerfileRuns()) {
                             bakeDefinition.target[targetName].network = 'none'

@@ -113,7 +113,10 @@ def handler(event, context):
         overrides = {'CI_STAGE': stage, 'CI_SUITE': suite, 'CI_MODE': 'cleanup', 'CI_RECOVER_BUILD': build['id']}
         key = hashlib.sha256(f"{build['id']}/{len(attempts)}".encode()).hexdigest()
         variables_override = [{'name': k, 'value': v} for k, v in overrides.items()]
-        started = client.start_build(projectName=project, timeoutInMinutesOverride=150, idempotencyToken=key,
+        role = {}
+        if build.get('serviceRole') and build['serviceRole'] == os.environ.get('MAIN_WORKER_ROLE'):
+            role = {'serviceRoleOverride': build['serviceRole']}
+        started = client.start_build(projectName=project, **role, timeoutInMinutesOverride=150, idempotencyToken=key,
                                      environmentVariablesOverride=variables_override)
         recovery.append(started['build']['id'])
         if len(recovery) == 4:

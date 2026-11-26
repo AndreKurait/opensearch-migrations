@@ -10,6 +10,11 @@ phases:
     commands:
       - |
         set -euo pipefail
+        actual_role=$(aws sts get-caller-identity --query Arn --output text)
+        if [[ "$actual_role" == */"${CI_MAIN_WORKER_ROLE_ARN##*/}"/* ]]; then
+          export CI_WORKER_ROLE_ARN="$CI_MAIN_WORKER_ROLE_ARN"
+          export CI_AWS_BUILDKIT_WRITE=true
+        fi
         mkdir -p "$CODEBUILD_SRC_DIR/ci-results"
         [[ "$CI_STAGE" =~ ^ci-[a-z0-9]{1,12}$ ]]
         [[ "$CI_SUITE" =~ ^[a-z][a-z0-9-]{1,48}$ ]]
@@ -25,7 +30,15 @@ phases:
           [[ -z "${CI_RELEASE_VERSION:-}" || "$CI_RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           git init -q "$CODEBUILD_SRC_DIR/harness"
           git -C "$CODEBUILD_SRC_DIR/harness" fetch --no-tags --depth=1 https://github.com/AndreKurait/opensearch-migrations.git "$CI_GIT_SHA"
-          git -C "$CODEBUILD_SRC_DIR/harness" checkout --quiet --detach FETCH_HEAD
+          if [[ "${CI_AWS_BUILDKIT_WRITE:-}" == true ]]; then
+            [[ "$CI_GIT_REF" == refs/heads/main ]]
+            head_sha=$(git ls-remote https://github.com/AndreKurait/opensearch-migrations.git refs/heads/main | cut -f1)
+            if [[ "$head_sha" != "$CI_GIT_SHA" ]]; then
+              git -C "$CODEBUILD_SRC_DIR/harness" fetch --filter=blob:none --unshallow https://github.com/AndreKurait/opensearch-migrations.git refs/heads/main:refs/remotes/origin/main
+              git -C "$CODEBUILD_SRC_DIR/harness" merge-base --is-ancestor "$CI_GIT_SHA" refs/remotes/origin/main
+            fi
+          fi
+          git -C "$CODEBUILD_SRC_DIR/harness" checkout --quiet --detach "$CI_GIT_SHA"
           test "$(git -C "$CODEBUILD_SRC_DIR/harness" rev-parse HEAD)" = "$CI_GIT_SHA"
           printf 'Verified candidate %s\n' "$CI_GIT_SHA"
           if [[ -n "${CI_RELEASE_VERSION:-}" ]]; then

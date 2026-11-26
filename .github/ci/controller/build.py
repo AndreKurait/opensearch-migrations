@@ -60,7 +60,11 @@ def start(suite, sha, ref, release, options):
     if release:
         values['CI_RELEASE_VERSION'] = release
     variables = [dict(name=name, value=value, type='PLAINTEXT') for name, value in values.items()]
-    build = aws('codebuild', 'start-build', '--project-name', PROJECT, '--idempotency-token', digest,
+    role = []
+    if ref == 'refs/heads/main' and values.get('CI_DEPENDENCY_MODE') != 'replay':
+        account = config()['account']
+        role = ['--service-role-override', f'arn:aws:iam::{account}:role/MigrationsGitHubMainWorker-us-west-2']
+    build = aws('codebuild', 'start-build', '--project-name', PROJECT, '--idempotency-token', digest, *role,
                 '--timeout-in-minutes-override', str(SUITES[ALIASES.get(suite, suite)].timeout_minutes),
                 '--environment-variables-override', json.dumps(variables))['build']
     if not re.fullmatch(BUILD_ID, build['id']):
