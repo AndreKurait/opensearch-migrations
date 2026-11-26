@@ -52,8 +52,10 @@ async function finish() {
     if (gradle) console.log(`Gradle remote cache ${gradle[1]}`);
     const misses = await fs.readFile(path.join(dir, 'misses.json'), 'utf8').catch(() => null);
     if (misses) console.error(`Missing published dependencies: ${JSON.parse(misses).join(', ')}`);
-    if (process.env.INPUT_MODE !== 'record') {
-      if (process.env.GITHUB_EVENT_NAME === 'pull_request' && process.env.CI_DEPENDENCY_STRICT_READ !== '1') {
+    const trustedMain = process.env.GITHUB_REF === 'refs/heads/main' &&
+      ['push', 'schedule', 'workflow_dispatch'].includes(process.env.GITHUB_EVENT_NAME);
+    if (process.env.INPUT_MODE !== 'record' && !trustedMain) {
+      if (process.env.GITHUB_EVENT_NAME === 'pull_request') {
         const file = path.join(dir, 'receipt.json');
         const text = await fs.readFile(file).catch(error => { if (error.code !== 'ENOENT') throw error; });
         if (text && readReceipt(text).length) {
@@ -64,7 +66,11 @@ async function finish() {
       }
       return;
     }
-    const text = await fs.readFile(path.join(dir, 'receipt.json'));
+    const text = await fs.readFile(path.join(dir, 'receipt.json')).catch(error => {
+      if (process.env.INPUT_MODE !== 'record' && error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (text === null) return;
     const observations = readReceipt(text);
     if (!observations.length) return;
     const cache = await require('../../ci/dependency-cache/github-store.cjs').loadToolkit();
