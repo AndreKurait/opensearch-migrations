@@ -26,3 +26,16 @@ test('HTTP chart pulls use the pinned local archive and reject unrecognized vers
     ['pull', `${loopback}/helm/argo-workflows/argo-workflows-1.0.5.tgz`, '--version', '1.0.5']);
   assert.throws(() => route('helm', [...args.slice(0, -1), '1.0.6'], loopback), /Missing pinned/);
 });
+
+test('every image in the EKS mirror manifest uses the dependency proxy', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const manifest = fs.readFileSync(path.resolve(__dirname,
+    '../../../deployment/k8s/charts/aggregates/migrationAssistantWithArgo/infra/mirror/private-ecr-manifest.yaml'), 'utf8');
+  const images = [...manifest.split('\nimages:\n')[1].matchAll(/^  - "([^"|]+)"$/gm)];
+  assert.ok(images.length > 0);
+  for (const [, image] of images) {
+    assert.match(route('crane', ['copy', image, 'private.example/test:latest'], loopback)[1],
+      /^127\.0\.0\.1:31234\//, image);
+  }
+});
