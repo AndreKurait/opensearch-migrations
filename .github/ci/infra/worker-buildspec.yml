@@ -72,6 +72,9 @@ phases:
           export PATH="$tool_dir/record:$PATH"
         fi
         command -v jq && docker buildx version && docker info >/dev/null
+        if [[ "${CI_DEPENDENCY_MODE:-}" == replay || "${CI_GIT_REF:-}" == refs/pull/* ]]; then
+          export CI_AWS_DOCKERFILE_NETWORK=none
+        fi
         command="$CI_SUITE"
         if [[ "${CI_MODE:-}" == cleanup ]]; then command=cleanup; fi
         python3 -u "$harness/.github/ci/aws/run.py" "$command"

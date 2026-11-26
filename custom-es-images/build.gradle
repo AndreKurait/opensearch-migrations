@@ -1,4 +1,5 @@
 import groovy.json.JsonSlurper
+import org.opensearch.migrations.image.RegistryImageBuildUtils
 import org.opensearch.migrations.image.RegistryImageBuildUtils.Registry
 import org.opensearch.migrations.image.ImageRegistryFormatterFactory
 import org.opensearch.migrations.image.PullThroughCacheHelper
@@ -164,6 +165,7 @@ if (!pushVersionsList.isEmpty()) {
             doFirst {
                 def buildArgs = [
                         "docker buildx build",
+                        *(RegistryImageBuildUtils.offlineDockerfileRuns() ? ["--network=none"] : []),
                         "--platform linux/amd64",
                         "--builder ${builder}",
                         "-f ${dockerfilePath}",

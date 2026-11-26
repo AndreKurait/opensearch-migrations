@@ -9,6 +9,11 @@ import org.opensearch.migrations.common.CommonUtils
 class RegistryImageBuildUtils {
     private static boolean builderWarningShown = false
 
+    // Remote Kubernetes builders run Dockerfile commands outside the CodeBuild dependency broker.
+    static boolean offlineDockerfileRuns() {
+        return System.getenv('CI_AWS_DOCKERFILE_NETWORK') == 'none'
+    }
+
     private static List<String> remoteCacheImports(List<String> refs) {
         def endpoint = System.getenv('CI_BUILDKIT_CACHE_ENDPOINT')
         return endpoint ? refs.collect { "type=registry,ref=${endpoint}/${it.substring(it.indexOf('/') + 1)}".toString() } : []
@@ -557,6 +562,7 @@ class RegistryImageBuildUtils {
                         metadataFile.parentFile.mkdirs()
                         def fullArgs = [
                                 "docker buildx build",
+                                *(offlineDockerfileRuns() ? ["--network=none"] : []),
                                 "--progress=plain",
                                 "--platform ${platform}",
                                 *(resolvedBuilder ? ["--builder ${resolvedBuilder}"] : []),
@@ -594,6 +600,7 @@ class RegistryImageBuildUtils {
                     multiArchMetadataFile.parentFile.mkdirs()
                     def fullArgs = [
                             "docker buildx build",
+                            *(offlineDockerfileRuns() ? ["--network=none"] : []),
                             "--progress=plain",
                             "--platform linux/amd64,linux/arm64",
                             *(resolvedBuilder ? ["--builder ${resolvedBuilder}"] : []),
@@ -779,6 +786,9 @@ class RegistryImageBuildUtils {
                                 "cache-from": cacheFrom,
                                 "cache-to"  : ["type=registry,ref=${cacheDestination}${cacheSuffix},mode=max,ignore-error=true".toString()]
                         ]
+                        if (offlineDockerfileRuns()) {
+                            bakeDefinition.target[targetName].network = 'none'
+                        }
                     }
                     bakeDefinition.group[phaseName] = [targets: targetsForPhase]
                 }
