@@ -60,9 +60,13 @@ spec:
                     jq --arg app "$APP_NAME" \
                         --arg version "$VERSION" \
                         --arg managedBy "$OWNER" \
+                        --arg dependencyMirror {{ default "" .Values.chartArchiveMirror | quote }} \
                         '.metadata.labels.app = $app |
                         .metadata.labels.version = $version |
-                        .metadata.labels."managed-by" = $managedBy' \
+                        .metadata.labels."managed-by" = $managedBy |
+                        if .metadata.name == "cluster-templates" and $dependencyMirror != "" then
+                          (.spec.templates[] | select(.container) | .container.env) += [{"name":"DEPENDENCY_MIRROR", "value":$dependencyMirror}]
+                        else . end' \
                         "$resource_json" > "$labelled_json"
                     kubectl apply -f "$labelled_json" -n "$NAMESPACE"
                   done

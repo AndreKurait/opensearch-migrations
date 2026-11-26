@@ -59,6 +59,12 @@
     "url": "https://github.com/localstack/helm-charts/releases/download/localstack-0.6.23/localstack-0.6.23.tgz",
     "digest": "38127117958bf76d8e8b08ac8cf5da85138589cd3c55b1ca9ed73f0bf84c2062"
   },
+  "opensearch": {
+    "version": "3.11.0",
+    "repository": "https://opensearch-project.github.io/helm-charts",
+    "url": "https://github.com/opensearch-project/helm-charts/releases/download/opensearch-3.11.0/opensearch-3.11.0.tgz",
+    "digest": "ea0330deb142151c9a6378edb2e63bfdbc351b01fc62ac6d0fd1bdb2ddb9fb5d"
+  },
   "opentelemetry-operator": {
     "version": "0.86.4",
     "repository": "https://open-telemetry.github.io/opentelemetry-helm-charts",

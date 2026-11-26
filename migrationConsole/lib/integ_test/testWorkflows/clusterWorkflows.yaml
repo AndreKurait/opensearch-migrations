@@ -837,13 +837,25 @@ spec:
                           mountPath: /usr/share/elasticsearch/plugins
                     - name: install-gcs-plugin
                       image: {{inputs.parameters.image-registry-prefix}}migrations/custom-elasticsearch:7.10.2
-                      command: ["sh", "-c", "bin/elasticsearch-plugin install --batch repository-gcs"]
+                      command:
+                        - sh
+                        - -c
+                        - |
+                          if [ -d "modules/repository-gcs" ]; then exit 0; fi
+                          plugin=repository-gcs; if [ -n "${DEPENDENCY_MIRROR:-}" ]; then plugin="${DEPENDENCY_MIRROR:-}/raw/elastic/downloads/elasticsearch-plugins/repository-gcs/repository-gcs-7.10.2.zip"; fi
+                          bin/elasticsearch-plugin install --batch "\$plugin"
                       volumeMounts:
                         - name: plugins
                           mountPath: /usr/share/elasticsearch/plugins
                     - name: install-azure-plugin
                       image: {{inputs.parameters.image-registry-prefix}}migrations/custom-elasticsearch:7.10.2
-                      command: ["sh", "-c", "bin/elasticsearch-plugin install --batch repository-azure"]
+                      command:
+                        - sh
+                        - -c
+                        - |
+                          if [ -d "modules/repository-azure" ]; then exit 0; fi
+                          plugin=repository-azure; if [ -n "${DEPENDENCY_MIRROR:-}" ]; then plugin="${DEPENDENCY_MIRROR:-}/raw/elastic/downloads/elasticsearch-plugins/repository-azure/repository-azure-7.10.2.zip"; fi
+                          bin/elasticsearch-plugin install --batch "\$plugin"
                       volumeMounts:
                         - name: plugins
                           mountPath: /usr/share/elasticsearch/plugins
@@ -1060,7 +1072,13 @@ spec:
                           mountPath: /usr/share/elasticsearch/plugins
                     - name: install-gcs-plugin
                       image: {{inputs.parameters.image-registry-prefix}}migrations/custom-elasticsearch:8.19.14
-                      command: ["sh", "-c", "bin/elasticsearch-plugin install --batch repository-gcs"]
+                      command:
+                        - sh
+                        - -c
+                        - |
+                          if [ -d "modules/repository-gcs" ]; then exit 0; fi
+                          plugin=repository-gcs; if [ -n "${DEPENDENCY_MIRROR:-}" ]; then plugin="${DEPENDENCY_MIRROR:-}/raw/elastic/downloads/elasticsearch-plugins/repository-gcs/repository-gcs-8.19.14.zip"; fi
+                          bin/elasticsearch-plugin install --batch "\$plugin"
                       volumeMounts:
                         - name: plugins
                           mountPath: /usr/share/elasticsearch/plugins
@@ -1206,9 +1224,14 @@ spec:
         command: [sh, -c]
         args:
           - |
-            # Add OpenSearch Helm repository
-            helm repo add opensearch https://opensearch-project.github.io/helm-charts/
-            helm repo update
+            set -e
+            if [ -n "${DEPENDENCY_MIRROR:-}" ]; then
+              chart="$DEPENDENCY_MIRROR/helm/opensearch/opensearch-3.11.0.tgz"
+            else
+              helm repo add opensearch https://opensearch-project.github.io/helm-charts/
+              helm repo update
+              chart=opensearch/opensearch
+            fi
             
             # Create OpenSearch configuration
             cat > /tmp/opensearch.yml << EOF
@@ -1244,7 +1267,7 @@ spec:
             EOF
             
             # Install OpenSearch 1.3
-            helm install {{inputs.parameters.cluster-name}} opensearch/opensearch --set rbac.create=false --set rbac.serviceAccountName=migration-console-access-role \
+            helm install {{inputs.parameters.cluster-name}} "$chart" --set rbac.create=false --set rbac.serviceAccountName=migration-console-access-role \
               --namespace {{inputs.parameters.namespace}} \
               --values /tmp/opensearch-values.yaml \
               --set-file config."opensearch\.yml"=/tmp/opensearch.yml
@@ -1298,9 +1321,14 @@ spec:
         command: [sh, -c]
         args:
           - |
-            # Add OpenSearch Helm repository
-            helm repo add opensearch https://opensearch-project.github.io/helm-charts/
-            helm repo update
+            set -e
+            if [ -n "${DEPENDENCY_MIRROR:-}" ]; then
+              chart="$DEPENDENCY_MIRROR/helm/opensearch/opensearch-3.11.0.tgz"
+            else
+              helm repo add opensearch https://opensearch-project.github.io/helm-charts/
+              helm repo update
+              chart=opensearch/opensearch
+            fi
             
             # Create OpenSearch configuration
             cat > /tmp/opensearch.yml << EOF
@@ -1339,7 +1367,7 @@ spec:
             EOF
             
             # Install OpenSearch 2.19.1
-            helm install {{inputs.parameters.cluster-name}} opensearch/opensearch --set rbac.create=false --set rbac.serviceAccountName=migration-console-access-role \
+            helm install {{inputs.parameters.cluster-name}} "$chart" --set rbac.create=false --set rbac.serviceAccountName=migration-console-access-role \
               --namespace {{inputs.parameters.namespace}} \
               --values /tmp/opensearch-values.yaml \
               --set-file config."opensearch\.yml"=/tmp/opensearch.yml
