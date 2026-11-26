@@ -31,7 +31,9 @@ true
 {{- end }}
               do_install_{{ $name | replace "-" "_" }}() {
 {{- $repo := $chart.repository }}
-{{- if hasPrefix "oci://" $repo }}
+{{- if $root.Values.chartArchiveMirror }}
+                helm upgrade --install {{ $name }} {{ printf "%s/helm/%s/%s-%s.tgz" ($root.Values.chartArchiveMirror | trimSuffix "/") $name $name $chart.version | quote }} \
+{{- else if hasPrefix "oci://" $repo }}
                 helm upgrade --install {{ $name }} {{ $repo }} \
 {{- else }}
                 helm upgrade --install {{ $name }} chart-repo-{{ $name }}/{{ $name }} \
