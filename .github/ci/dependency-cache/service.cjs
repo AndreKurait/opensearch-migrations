@@ -96,11 +96,12 @@ async function service(mode, dir) {
     }
     if (packages?.metrics)
       await fs.writeFile(path.join(dir, 'openartifact-metrics.json'), JSON.stringify(packages.metrics));
-    if (mode === 'read')
-      await fs.writeFile(path.join(dir, 'transfer-metrics.json'), JSON.stringify({
-        ...(store.metrics || { archiveTransfers: 0, archivePayloadBytes: 0 }),
-        ...(cold?.metrics || { originLookups: 0, originPayloadBytes: 0 }),
-      }));
+    const archives = mode === 'read' ? store.metrics : seed?.metrics;
+    const origins = mode === 'read' ? cold?.metrics : store.metrics;
+    await fs.writeFile(path.join(dir, 'transfer-metrics.json'), JSON.stringify({
+      ...(archives || { archiveTransfers: 0, archivePayloadBytes: 0 }),
+      ...(origins || { originLookups: 0, originPayloadBytes: 0 }),
+    }));
   } finally {
     try {
       await packages?.close();

@@ -33,6 +33,7 @@ test('an OCI HEAD followed by concurrent full and ranged GETs downloads the blob
     assert.deepEqual(Buffer.from(await full.arrayBuffer()), bytes);
     assert.deepEqual(Buffer.from(await range.arrayBuffer()), bytes.subarray(1, 4));
     assert.equal(downloads, 1);
+    assert.deepEqual(recorder.metrics, {originLookups: 1, originPayloadBytes: bytes.length});
   } finally { await proxy.close(); await recorder.close(); }
 });
 

@@ -61,6 +61,7 @@ async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now 
   const dir = await mkdtemp(path.join(tmpdir(), 'dependency-recorder-'));
   const pending = new Map();
   const observed = new Map();
+  const metrics = {originLookups: 0, originPayloadBytes: 0};
   let closed;
 
   async function record(entry) {
@@ -75,12 +76,15 @@ async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now 
         if (error.code !== 'CACHE_MISS') throw error;
       }
     }
+    metrics.originLookups++;
     const item = await fetchArtifact(key, file);
+    if (item) metrics.originPayloadBytes += item.size;
     if (item === null) entry.missing = true;
     else entry.digest = item.digest;
     return item === null ? null : {...item, path: file};
   }
   return {
+    metrics,
     observeMetadata(key, digest) {
       if (closed) throw new Error('Dependency recorder is closed');
       const accessed = now();
