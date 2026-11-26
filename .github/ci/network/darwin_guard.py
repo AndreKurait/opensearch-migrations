@@ -170,6 +170,8 @@ def local_ipc():
              'no state\n'
              f'block return-rst out quick on lo0 proto tcp user {GUEST_UID}\n'
              f'pass out quick on lo0 inet proto tcp to 127.0.0.1 user != {GUEST_UID} keep state\n'
+             # The actual broker can bind within the ephemeral range, unlike the fixture broker.
+             f'pass in quick on lo0 inet proto tcp to 127.0.0.1 port {broker_port} user {os.getuid()} keep state\n'
              f'pass in quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{last} user {GUEST_UID} keep state\n'
              f'block return-rst in quick on lo0 inet proto tcp to 127.0.0.1 port {first}:{last} flags S/SA\n')
     try:
