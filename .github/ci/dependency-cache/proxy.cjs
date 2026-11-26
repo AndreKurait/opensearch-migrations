@@ -112,6 +112,9 @@ function parseKey(key) {
     const url = new URL(chart.url);
     return {urls: [url], cdn: url.hostname === 'github.com' ? githubAssets : [], digest: chart.digest};
   }
+  if (key === '/sample-cdk/5f3e2b7d7459f7435bd9a1539ff7360663dded6f.tar.gz') {
+    return {urls: [new URL('https://codeload.github.com/aws-samples/amazon-opensearch-service-sample-cdk/tar.gz/5f3e2b7d7459f7435bd9a1539ff7360663dded6f')], cdn: [], digest: '22467ad1d1f341918dfb98f36704bc3738c8a87c818c7decda4e2a18945af2b8'};
+  }
   if (key === '/benchmark/workloads/fc64258a9b2ed2451423d7758ca1c5880626c520.tar.gz') {
     return {urls:[new URL('https://codeload.github.com/opensearch-project/opensearch-benchmark-workloads/tar.gz/fc64258a9b2ed2451423d7758ca1c5880626c520')], cdn:[], digest:'7127ec3aeb6123f44b87319f54d3a83c1e129bb35198095bac44580099f3bf40'};
   }

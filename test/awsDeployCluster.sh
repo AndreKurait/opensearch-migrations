@@ -115,15 +115,23 @@ SAMPLE_CDK_REPO="https://github.com/aws-samples/amazon-opensearch-service-sample
 SAMPLE_CDK_VERSION="v0.4.2"
 SAMPLE_CDK_COMMIT="5f3e2b7d7459f7435bd9a1539ff7360663dded6f"
 echo "Using sample CDK version: $SAMPLE_CDK_VERSION"
-if [ ! -d "amazon-opensearch-service-sample-cdk" ]; then
-  git clone "$SAMPLE_CDK_REPO"
+if [[ -n ${CI_DEPENDENCY_PROXY_URL:-} ]]; then
+  archive=$(mktemp)
+  trap 'rm -f "$archive"' EXIT
+  curl -fsS "$CI_DEPENDENCY_PROXY_URL/sample-cdk/$SAMPLE_CDK_COMMIT.tar.gz" -o "$archive"
+  echo "22467ad1d1f341918dfb98f36704bc3738c8a87c818c7decda4e2a18945af2b8  $archive" | sha256sum -c -
+  mkdir -p "$CLUSTER_CDK_PATH"
+  tar -xzf "$archive" --strip-components=1 -C "$CLUSTER_CDK_PATH"
+  cd "$CLUSTER_CDK_PATH"
 else
-  echo "Repo already exists, skipping clone."
+  if [[ ! -d "$CLUSTER_CDK_PATH" ]]; then
+    git clone "$SAMPLE_CDK_REPO" "$CLUSTER_CDK_PATH"
+  fi
+  cd "$CLUSTER_CDK_PATH"
+  git checkout -- .
+  git fetch --tags
+  git checkout --detach "$SAMPLE_CDK_COMMIT"
 fi
-cd amazon-opensearch-service-sample-cdk
-git checkout -- .
-git fetch --tags
-git checkout --detach "$SAMPLE_CDK_COMMIT"
 npm ci
 npm run build
 
