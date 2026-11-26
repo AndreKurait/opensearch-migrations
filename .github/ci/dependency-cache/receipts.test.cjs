@@ -159,3 +159,12 @@ test('recording workers reuse published indexes until publisher refresh while mi
   assert.equal(reusableRecordingEntry({...entry, missing: true}, 600_000), false);
   assert.equal(reusableRecordingEntry(entry, 86_400_000), false);
 });
+
+test('recorders reuse a published negative release plugin marker while the publisher rechecks it', () => {
+  const key = '/maven/example/example.gradle.plugin/1.0/example.gradle.plugin-1.0.jar';
+  const entry = {key, missing: true, verifiedAt: 0};
+  assert.equal(isFreshEntry(entry, 600_000), false);
+  assert.equal(reusableRecordingEntry(entry, 600_000), true);
+  assert.equal(reusableRecordingEntry(entry, 86_400_000), false);
+  assert.equal(reusableRecordingEntry({...entry, key: key.replace('/1.0/', '/1.0-SNAPSHOT/')}, 600_000), false);
+});

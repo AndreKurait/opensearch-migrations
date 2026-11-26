@@ -61,8 +61,10 @@ function isFreshEntry(entry, now = Date.now()) {
 // Bound the age served if publication has fallen behind.
 function reusableRecordingEntry(entry, now = Date.now()) {
   if (isFreshEntry(entry, now)) return true;
-  return Boolean(entry && !entry.missing && isPackageIndex(entry.key) &&
-    now - (entry.verifiedAt ?? entry.accessed) < 24 * 60 * 60 * 1000);
+  if (!entry || now - (entry.verifiedAt ?? entry.accessed) >= 24 * 60 * 60 * 1000) return false;
+  if (!entry.missing) return isPackageIndex(entry.key);
+  // Gradle probes for a JAR even when a released plugin marker contains only a POM.
+  return immutablePublicKey(entry.key) && /^\/maven\/.+\.gradle\.plugin\/[^/]+\/[^/]+\.jar$/.test(entry.key);
 }
 
 async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now = Date.now, lookup}) {
