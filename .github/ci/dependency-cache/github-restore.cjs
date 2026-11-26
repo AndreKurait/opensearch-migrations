@@ -26,7 +26,7 @@ function finished(child) {
 }
 
 // The only destination is chosen by the trusted caller. A member name in the archive never selects a file to create.
-async function extractOne(source, member, destination, maxBytes) {
+async function extractOne(input, member, destination, maxBytes) {
   if (
     !validMember(member) ||
     !path.isAbsolute(destination) ||
@@ -56,6 +56,8 @@ async function extractOne(source, member, destination, maxBytes) {
       cb(received > ceiling ? new Error('Compressed dependency cache entry exceeds its bound') : null, chunk);
     },
   });
+  // Attach pipeline error handling in the same turn as adapting the HTTP response.
+  const source = input instanceof Readable ? input : Readable.fromWeb(input);
   const tasks = [
     finished(zstd),
     finished(parser),
@@ -150,7 +152,7 @@ async function safeRestore(
   try {
     const data = await request(url, {redirect: 'error', signal: AbortSignal.timeout(15 * 60 * 1000)});
     if (!data.ok || !data.body) throw Object.assign(new Error('Cache archive HTTP error'), {code:`HTTP_${data.status}`});
-    await extractOne(Readable.fromWeb(data.body), paths[0], destination || path.resolve(paths[0]), maxBytes);
+    await extractOne(data.body, paths[0], destination || path.resolve(paths[0]), maxBytes);
   } catch (error) {
     throw safeFailure(url.hostname, 'archive', error);
   }

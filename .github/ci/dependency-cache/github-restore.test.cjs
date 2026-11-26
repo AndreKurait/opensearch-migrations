@@ -95,3 +95,16 @@ test('archive failure reports only backend hostname and HTTP status', async (t) 
   assert.equal(log.mock.calls.length, 1);
   assert.equal(log.mock.calls[0].arguments[0], 'Cache archive at cache.example.invalid failed (HTTP_403,Error).');
 });
+
+test('an archive response interrupted before extraction rejects only that restore', async (t) => {
+  const {dir, member} = await fixture(t);
+  const destination = path.join(dir, 'dest');
+  await assert.rejects(safeRestore([member], 'wanted', [], {
+    destination,
+    download: async () => ({ok: true, matchedKey: 'wanted', signedDownloadUrl: signed}),
+    request: async () => new Response(new ReadableStream({
+      start(controller) { controller.error(new TypeError('terminated')); },
+    })),
+  }), /Cache archive at cache.example.invalid failed/);
+  await assert.rejects(fs.stat(destination), {code: 'ENOENT'});
+});
