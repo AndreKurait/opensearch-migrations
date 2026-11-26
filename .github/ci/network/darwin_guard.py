@@ -66,7 +66,8 @@ def configured_hosts():
     token = os.environ['GITHUB_META_TOKEN']
     request = urllib.request.Request('https://api.github.com/meta', headers={'Authorization': 'Bearer ' + token})
     with urllib.request.urlopen(request, context=ssl.create_default_context(), timeout=10) as result:
-        platform = json.load(result)['domains']['actions']
+        metadata = json.load(result)
+    platform = metadata['domains']['actions']
     for host in platform:
         if re.fullmatch(r'[a-z0-9.-]+', host):
             hosts.add(host + ':443')
@@ -87,7 +88,12 @@ def configured_hosts():
         'pipelines.actions.githubusercontent.com',
     ]:
         hosts.add(host + ':443')
-    return hosts
+    # The runner fetches nested actions after checkout. Codeload DNS rotates within GitHub's
+    # Git service ranges, so resolving it once can strand subsequent runner archive requests.
+    git_networks = [ipaddress.ip_network(cidr) for cidr in metadata['git']]
+    if not git_networks or any(not network.is_global or network.prefixlen == 0 for network in git_networks):
+        raise RuntimeError('Invalid GitHub Git service network ranges')
+    return hosts, git_networks
 
 
 def verify_direct_denial():
@@ -109,7 +115,7 @@ def install():
     rules = command(sudo + ['-sr'], capture_output=True).stdout
     if not re.search(r'(?m)^anchor "com\.apple/\*"', rules):
         raise RuntimeError('The system PF configuration does not invoke com.apple child anchors')
-    endpoints = configured_hosts()
+    endpoints, git_networks = configured_hosts()
     tables = {80: set(), 443: set()}
     targets = [endpoint.rsplit(':', 1) for endpoint in sorted(endpoints)]
     with ThreadPoolExecutor(max_workers=8) as lookups:
@@ -121,6 +127,11 @@ def install():
         for value in re.findall(r'nameserver\[\d+\]\s*:\s*(\S+)', dns)
     }
     policy = ['anchor "gradle-ipc" quick on lo0', 'pass quick on lo0 all']
+    runner_uid = os.getuid()
+    if runner_uid in (0, GUEST_UID):
+        raise RuntimeError('Expected a distinct unprivileged runner account')
+    policy.insert(0, 'table <migrations_git> persist { ' + ', '.join(map(str, git_networks)) + ' }')
+    policy.append(f'pass out quick proto tcp to <migrations_git> port 443 user {runner_uid} keep state')
     if resolvers:
         policy.append(
             'pass out quick proto { udp tcp } to { ' + ', '.join(sorted(resolvers)) + ' } port 53 keep state'
