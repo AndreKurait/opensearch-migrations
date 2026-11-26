@@ -165,7 +165,6 @@ if (!pushVersionsList.isEmpty()) {
             doFirst {
                 def buildArgs = [
                         "docker buildx build",
-                        *(RegistryImageBuildUtils.offlineDockerfileRuns() ? ["--network=none"] : []),
                         "--platform linux/amd64",
                         "--builder ${builder}",
                         "-f ${dockerfilePath}",

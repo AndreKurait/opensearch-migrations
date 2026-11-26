@@ -168,6 +168,10 @@ ensure_eks_buildx_builder() {
     --driver-opt="limits.memory=${BUILDKIT_LIMITS_MEMORY:-16Gi}"
   )
 
+  if [[ "${CI_AWS_DOCKERFILE_NETWORK:-}" == none ]]; then
+    BUILDKIT_RESOURCE_OPTS+=(--buildkitd-flags=--oci-worker-net=bridge)
+  fi
+
   KUBECONFIG="${builder_kubeconfig}" docker buildx create \
     --name="${builder_name}" \
     --driver=kubernetes \
@@ -261,4 +265,28 @@ setup_build_backend() {
   export BUILDKIT_NAMESPACE="${BUILDKIT_NAMESPACE:-buildkit}"
   ensure_eks_buildkit_release
   ensure_eks_buildx_builder
+}
+
+# Install the packet filter before the BuildKit daemon starts. Init containers run
+# again on replacement pods, sharing the daemon's network namespace. Keeping the
+# default Dockerfile network mode preserves cache keys from the recording build.
+restrict_eks_buildkit_egress() {
+  [[ "${CI_AWS_DOCKERFILE_NETWORK:-}" == none ]] || return 0
+  local namespace=${BUILDKIT_NAMESPACE:-buildkit} name deployment image patch
+  local -a kube=(kubectl "${CONTEXT_ARGS[@]}" -n "$namespace")
+  local rules='set -eu
+    iptables -t raw -I PREROUTING -i buildkit0 -j DROP
+    iptables -t raw -C PREROUTING -i buildkit0 -j DROP
+    if test -s /proc/net/if_inet6; then
+      ip6tables -t raw -I PREROUTING -i buildkit0 -j DROP
+      ip6tables -t raw -C PREROUTING -i buildkit0 -j DROP
+    fi'
+  for name in builder-amd64 builder-arm64; do
+    deployment=$("${kube[@]}" get deployment "$name" -o json)
+    jq -e '.spec.template.spec.containers[] | select(.name == "buildkitd") | .args | index("--oci-worker-net=bridge") != null' <<<"$deployment" >/dev/null || return 1
+    image=$(jq -er '.spec.template.spec.containers[] | select(.name == "buildkitd") | .image' <<<"$deployment")
+    patch=$(jq -nc --arg image "$image" --arg rules "$rules" '{spec:{template:{spec:{initContainers:[{name:"block-build-step-egress",image:$image,command:["/bin/sh","-ec",$rules],securityContext:{privileged:true}}]}}}}')
+    "${kube[@]}" patch deployment "$name" --type=strategic --patch "$patch" >/dev/null || return 1
+    "${kube[@]}" rollout status deployment/"$name" --timeout=10m || return 1
+  done
 }

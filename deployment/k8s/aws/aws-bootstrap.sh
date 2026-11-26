@@ -2356,7 +2356,7 @@ if [[ "$build" == "true" && -z "$ma_images_source" ]]; then
   set_buildkit_node_class_helm_arg
   ensure_eks_buildkit_release
 
-  if builder_status=$(docker buildx inspect "$BUILDER_NAME" 2>/dev/null) \
+  if [[ "${CI_AWS_DOCKERFILE_NETWORK:-}" != none ]] && builder_status=$(docker buildx inspect "$BUILDER_NAME" 2>/dev/null) \
       && buildx_nodes_are_ready <<< "$builder_status"; then
     echo "Buildkit release reconciled and existing builder is healthy"
   else
@@ -2367,6 +2367,7 @@ if [[ "$build" == "true" && -z "$ma_images_source" ]]; then
     ensure_eks_buildx_builder
   fi
 
+  restrict_eks_buildkit_egress
   echo "Building images to MIGRATIONS_ECR_REGISTRY=$MIGRATIONS_ECR_REGISTRY"
   ecr_domain="${MIGRATIONS_ECR_REGISTRY%%/*}"
   echo "Logging in to ECR registry: $ecr_domain"
