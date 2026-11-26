@@ -486,7 +486,13 @@ spec:
                   initContainers:
                     - name: install-s3-plugin
                       image: {{inputs.parameters.image-registry-prefix}}migrations/custom-elasticsearch:5.6.16
-                      command: ["sh", "-c", "bin/elasticsearch-plugin install --batch repository-s3"]
+                      command:
+                        - sh
+                        - -c
+                        - |
+                          if [ -d "modules/repository-s3" ]; then exit 0; fi
+                          plugin=repository-s3; if [ -n "${DEPENDENCY_MIRROR:-}" ]; then plugin="${DEPENDENCY_MIRROR:-}/raw/elastic/downloads/elasticsearch-plugins/repository-s3/repository-s3-5.6.16.zip"; fi
+                          bin/elasticsearch-plugin install --batch "\$plugin"
                       volumeMounts:
                         - name: plugins
                           mountPath: /usr/share/elasticsearch/plugins
@@ -643,7 +649,13 @@ spec:
                   initContainers:
                     - name: install-s3-plugin
                       image: {{inputs.parameters.image-registry-prefix}}migrations/custom-elasticsearch:6.8.23
-                      command: ["sh", "-c", "bin/elasticsearch-plugin install --batch repository-s3"]
+                      command:
+                        - sh
+                        - -c
+                        - |
+                          if [ -d "modules/repository-s3" ]; then exit 0; fi
+                          plugin=repository-s3; if [ -n "${DEPENDENCY_MIRROR:-}" ]; then plugin="${DEPENDENCY_MIRROR:-}/raw/elastic/downloads/elasticsearch-plugins/repository-s3/repository-s3-6.8.23.zip"; fi
+                          bin/elasticsearch-plugin install --batch "\$plugin"
                       volumeMounts:
                         - name: plugins
                           mountPath: /usr/share/elasticsearch/plugins
@@ -831,7 +843,13 @@ spec:
                   initContainers:
                     - name: install-s3-plugin
                       image: {{inputs.parameters.image-registry-prefix}}migrations/custom-elasticsearch:7.10.2
-                      command: ["sh", "-c", "bin/elasticsearch-plugin install --batch repository-s3"]
+                      command:
+                        - sh
+                        - -c
+                        - |
+                          if [ -d "modules/repository-s3" ]; then exit 0; fi
+                          plugin=repository-s3; if [ -n "${DEPENDENCY_MIRROR:-}" ]; then plugin="${DEPENDENCY_MIRROR:-}/raw/elastic/downloads/elasticsearch-plugins/repository-s3/repository-s3-7.10.2.zip"; fi
+                          bin/elasticsearch-plugin install --batch "\$plugin"
                       volumeMounts:
                         - name: plugins
                           mountPath: /usr/share/elasticsearch/plugins
@@ -1066,7 +1084,13 @@ spec:
                   initContainers:
                     - name: install-s3-plugin
                       image: {{inputs.parameters.image-registry-prefix}}migrations/custom-elasticsearch:8.19.14
-                      command: ["sh", "-c", "bin/elasticsearch-plugin install --batch repository-s3"]
+                      command:
+                        - sh
+                        - -c
+                        - |
+                          if [ -d "modules/repository-s3" ]; then exit 0; fi
+                          plugin=repository-s3; if [ -n "${DEPENDENCY_MIRROR:-}" ]; then plugin="${DEPENDENCY_MIRROR:-}/raw/elastic/downloads/elasticsearch-plugins/repository-s3/repository-s3-8.19.14.zip"; fi
+                          bin/elasticsearch-plugin install --batch "\$plugin"
                       volumeMounts:
                         - name: plugins
                           mountPath: /usr/share/elasticsearch/plugins
