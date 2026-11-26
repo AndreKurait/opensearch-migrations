@@ -26,12 +26,18 @@ class StatusTests(unittest.TestCase):
             with patch('sys.argv', ['status.py', 'plan']):
                 status.main()
         self.assertEqual(json.loads((self.temp / status.PLAN_FILE).read_text()), self.plan)
-        with patch.object(status, 'api') as api, patch('sys.argv', ['status.py', 'pending']):
+        with patch.object(status, 'api', side_effect=[b'[]'] + [b''] * len(self.plan['suites'])) as api, patch('sys.argv', ['status.py', 'pending']):
             status.main()
-        self.assertEqual(len(api.call_args_list), len(self.plan['suites']))
-        for call in api.call_args_list:
+        self.assertEqual(len(api.call_args_list), 1 + len(self.plan['suites']))
+        for call in api.call_args_list[1:]:
             self.assertIn('state=pending', call.args)
             self.assertIn(f'target_url={self.url}', call.args)
+
+    def test_delayed_pending_cannot_replace_a_newer_suite_status(self):
+        newer = {'context': 'aws-integration/eks', 'state': 'success', 'target_url': self.url.replace('/123/', '/124/')}
+        with patch.object(status, 'api', return_value=json.dumps([{'statuses': [newer]}])) as api:
+            status.publish({**self.plan, 'suites': ['eks']}, 'pending')
+        self.assertEqual(api.call_count, 1)
 
     def test_stale_cancel_or_outcome_cannot_overwrite_another_run_attempt_or_finished_suite(self):
         rows = [{'context': 'aws-integration/' + suite, 'state': state, 'target_url': url}

@@ -124,7 +124,7 @@ jobs:
       cursor: ${{ needs.watch-3.outputs.cursor }}
   outcome:
     concurrency:
-      group: ${{ inputs.pr != '' && 'aws-integration-pr-status' || format('aws-outcome-{0}-{1}', github.run_id, inputs.suite) }}
+      group: ${{ inputs.pr != '' && format('aws-pr-{0}-status', inputs.pr) || format('aws-outcome-{0}-{1}', github.run_id, inputs.suite) }}
       queue: max
     needs: [start, watch, watch-2, watch-3, watch-4]
     if: >-

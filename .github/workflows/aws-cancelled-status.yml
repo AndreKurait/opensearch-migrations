@@ -6,32 +6,33 @@ on:
     branches: [main]
 permissions: {}
 jobs:
-  reconcile:
+  identify:
     if: >-
       github.repository == 'AndreKurait/opensearch-migrations' &&
       github.event.workflow_run.conclusion == 'cancelled' &&
       github.event.workflow_run.path == '.github/workflows/aws-integration.yml' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       (github.event.workflow_run.event == 'issue_comment' || github.event.workflow_run.event == 'workflow_dispatch')
-    concurrency:
-      group: aws-integration-pr-status
-      queue: max
+    outputs:
+      pr: ${{ steps.find.outputs.pr }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: read
       contents: read
-      statuses: write
+      pull-requests: read
     steps:
       # BEGIN generated network guard
-      - name: Restrict runner and container egress
+      - &network_1
+        name: Restrict runner and container egress
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           disable-telemetry: true
           allowed-endpoints: >-
             api.github.com:443 github.com:443 raw.githubusercontent.com:443
-      - name: Enforce Linux network policy before candidate checkout
+      - &enforce_unprivileged
+        name: Enforce Linux network policy before candidate checkout
         shell: bash
         working-directory: ${{ runner.temp }}
         env:
@@ -46,6 +47,29 @@ jobs:
           /usr/bin/python3 "$guard" probe
           sudo /usr/bin/python3 "$guard" lock-down
           if sudo -n true >/dev/null 2>&1 || docker info >/dev/null 2>&1; then exit 1; fi
+      # END generated network guard
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Identify the approved pull request for this cancellation
+        id: find
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: python3 .github/ci/controller/status.py identify
+  reconcile:
+    needs: identify
+    if: needs.identify.outputs.pr != ''
+    concurrency:
+      group: aws-pr-${{ needs.identify.outputs.pr }}-status
+      queue: max
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {actions: read, contents: read, statuses: write}
+    steps:
+      # BEGIN generated network guard
+      - *network_1
+      - *enforce_unprivileged
       # END generated network guard
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

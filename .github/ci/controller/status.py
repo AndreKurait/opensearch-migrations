@@ -27,7 +27,8 @@ def positive(value):
 
 
 def validate(plan, run, attempt):
-    if (not isinstance(plan, dict) or set(plan) != {'sha', 'suites', 'run', 'attempt'} or
+    if (not isinstance(plan, dict) or set(plan) - {'pr'} != {'sha', 'suites', 'run', 'attempt'} or
+            ('pr' in plan and not positive(plan['pr'])) or
             not positive(plan['run']) or not positive(plan['attempt']) or
             (plan['run'], plan['attempt']) != (run, attempt) or
             not isinstance(plan['sha'], str) or not re.fullmatch(SHA, plan['sha'])):
@@ -65,14 +66,16 @@ def publish(plan, state):
     target = f'{attempt_prefix}{attempt}'
     descriptions = {'pending': 'Approved and queued for Oregon capacity', 'error': 'AWS test run cancelled',
                     'failure': 'AWS test failure', 'success': 'AWS test success'}
-    latest = {}
-    if state != 'pending':
-        pages = json.loads(api(f'commits/{sha}/status?per_page=100', '--paginate', '--slurp'))
-        latest = {row['context']: row for page in pages for row in page['statuses']}
+    pages = json.loads(api(f'commits/{sha}/status?per_page=100', '--paginate', '--slurp'))
+    latest = {row['context']: row for page in pages for row in page['statuses']}
     for suite in plan['suites']:
         context = f'aws-integration/{suite}'
         row = latest.get(context, {})
-        if state != 'pending':
+        if state == 'pending':
+            previous = re.fullmatch(re.escape(f'https://github.com/{REPO}/actions/runs/') + r'(\d+)/attempts/(\d+)', row.get('target_url') or '')
+            if previous and tuple(map(int, previous.groups())) >= (run, attempt):
+                continue
+        else:
             previous_target = row.get('target_url') or ''
             pending = row.get('state') == 'pending' and previous_target == target
             # Rerunning only failed jobs reuses the successful selector and its prior attempt's status.
@@ -86,11 +89,11 @@ def publish(plan, state):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['plan', 'pending', 'success', 'failure', 'cancelled'])
+    parser.add_argument('action', choices=['plan', 'pending', 'success', 'failure', 'cancelled', 'identify'])
     action = parser.parse_args().action
     if os.environ['GITHUB_REPOSITORY'] != REPO or os.environ['GITHUB_REF'] != 'refs/heads/main':
         raise ValueError('PR statuses must originate from the fork default branch')
-    if action == 'cancelled':
+    if action in ('cancelled', 'identify'):
         event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
         run = event['workflow_run']
         if (event['action'] != 'completed' or run['status'] != 'completed' or run['conclusion'] != 'cancelled' or
@@ -99,7 +102,24 @@ def main():
                 not positive(run['id']) or not positive(run['run_attempt'])):
             raise ValueError('Unexpected cancelled workflow')
         plan = read_artifact(run['id'], run['run_attempt'])
-        if plan:
+        if plan and action == 'identify':
+            pr = plan.get('pr')
+            if not pr:
+                # Previous plans recorded only the reviewed commit. Legacy issue-comment
+                # runs already identify their PR in the workflow's controlled run title.
+                title = re.fullmatch(r'AWS tests · PR ([1-9]\d*)', run.get('display_title', ''))
+                if title and run['event'] == 'issue_comment':
+                    pr = int(title[1])
+                else:
+                    candidates = json.loads(api(f'commits/{plan["sha"]}/pulls?per_page=100'))
+                    matches = {p['number'] for p in candidates if positive(p.get('number')) and
+                               p.get('head', {}).get('sha') == plan['sha'] and p['base']['repo']['full_name'] == REPO}
+                    if len(matches) != 1:
+                        raise ValueError('Cannot identify unique PR for historical approved plan')
+                    pr = matches.pop()
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as outputs:
+                print(f'pr={pr}', file=outputs)
+        elif plan:
             publish(plan, 'error')
         return
     run, attempt = int(os.environ['GITHUB_RUN_ID']), int(os.environ['GITHUB_RUN_ATTEMPT'])
@@ -109,7 +129,10 @@ def main():
     else:
         suites = ([row['suite'] for row in json.loads(os.environ['MATRIX'])]
                   if action == 'plan' else [os.environ['SUITE']])
-        plan = validate(dict(sha=os.environ['SHA'], suites=suites, run=run, attempt=attempt), run, attempt)
+        plan = dict(sha=os.environ['SHA'], suites=suites, run=run, attempt=attempt)
+        if action == 'plan' and os.environ.get('PR'):
+            plan['pr'] = int(os.environ['PR'])
+        validate(plan, run, attempt)
     if action == 'plan':
         file.write_text(json.dumps(plan))
     else:

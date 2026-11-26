@@ -32,7 +32,7 @@ permissions: {}
 jobs:
   select:
     concurrency:
-      group: ${{ (github.event_name == 'issue_comment' || inputs.pr != '') && 'aws-integration-pr-status' || format('aws-select-{0}', github.run_id) }}
+      group: ${{ (github.event.issue.number || inputs.pr) && format('aws-pr-{0}-status', github.event.issue.number || inputs.pr) || format('aws-select-{0}', github.run_id) }}
       queue: max
     if: >-
       github.ref == 'refs/heads/main' &&
@@ -97,6 +97,7 @@ jobs:
         env:
           SHA: ${{ steps.plan.outputs.sha }}
           MATRIX: ${{ steps.plan.outputs.matrix }}
+          PR: ${{ steps.plan.outputs.pr }}
         run: python3 .github/ci/controller/status.py plan
       - if: steps.plan.outputs.pr != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

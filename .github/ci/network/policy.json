@@ -366,6 +366,10 @@
       ],
       "nativePrivileges": false
     },
+    "aws-cancelled-status.yml/identify": {
+      "purposes": ["github"],
+      "nativePrivileges": false
+    },
     "aws-cancelled-status.yml/reconcile": {
       "purposes": [
         "github"
