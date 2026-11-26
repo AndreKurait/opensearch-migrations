@@ -313,15 +313,25 @@ start_eks_package_relay() {
       {apiVersion:"v1",kind:"Pod",metadata:($meta+{labels:$labels}),spec:{automountServiceAccountToken:false,volumes:[{name:"code",configMap:{name:$name}}],containers:[{name:"relay",image:$image,command:["/usr/bin/python3","/app/relay.py","pod","8080","8081"],readinessProbe:{tcpSocket:{port:8080},periodSeconds:1},volumeMounts:[{name:"code",mountPath:"/app",readOnly:true}],securityContext:{runAsUser:65534,allowPrivilegeEscalation:false,readOnlyRootFilesystem:true,capabilities:{drop:["ALL"]}}}]}}]}' | "${kube[@]}" apply -f - || return 1
   "${kube[@]}" wait --for=condition=Ready pod/"$name" --timeout=5m || return 1
   CI_PACKAGE_FORWARD_LOG=$(mktemp)
-  "${kube[@]}" port-forward "pod/$name" :8081 --address 127.0.0.1 >"$CI_PACKAGE_FORWARD_LOG" 2>&1 &
-  CI_PACKAGE_FORWARD_PID=$!
-  for ((i=0; i<100; i++)); do
-    port=$(sed -nE 's/^Forwarding from 127\.0\.0\.1:([0-9]+) -> .*/\1/p' "$CI_PACKAGE_FORWARD_LOG")
+  # A new EKS node can report its pod ready before the API server can open a kubelet tunnel.
+  local deadline=$((SECONDS + 180))
+  while ((SECONDS < deadline)); do
+    "${kube[@]}" port-forward "pod/$name" :8081 --address 127.0.0.1 >"$CI_PACKAGE_FORWARD_LOG" 2>&1 &
+    CI_PACKAGE_FORWARD_PID=$!
+    for ((i=0; i<100; i++)); do
+      port=$(sed -nE 's/^Forwarding from 127\.0\.0\.1:([0-9]+) -> .*/\1/p' "$CI_PACKAGE_FORWARD_LOG")
+      [[ -z $port ]] || break
+      kill -0 "$CI_PACKAGE_FORWARD_PID" 2>/dev/null || break
+      sleep 0.1
+    done
     [[ -z $port ]] || break
-    kill -0 "$CI_PACKAGE_FORWARD_PID" || break
-    sleep 0.1
+    kill "$CI_PACKAGE_FORWARD_PID" 2>/dev/null || true
+    wait "$CI_PACKAGE_FORWARD_PID" 2>/dev/null || true
+    unset CI_PACKAGE_FORWARD_PID
+    cat "$CI_PACKAGE_FORWARD_LOG" >&2
+    sleep 3
   done
-  [[ -n $port ]] || { cat "$CI_PACKAGE_FORWARD_LOG" >&2; return 1; }
+  [[ -n $port ]] || return 1
   python3 "$source" worker "$port" &
   CI_PACKAGE_WORKER_PID=$!
   local builder
