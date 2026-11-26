@@ -198,7 +198,12 @@ async function openRecorder(options = {}) {
       if (!files.has(entry.digest)) {
         const filename = path.join(temp, randomUUID());
         files.set(entry.digest, storage.get(blobKey(entry.digest), filename)
-          .then(() => checkFile(filename, entry)).then(() => filename));
+          .then(() => checkFile(filename, entry)).then(() => filename)
+          .catch(async error => {
+            files.delete(entry.digest);
+            await fs.rm(filename, {force: true});
+            throw error;
+          }));
       }
       state.filename = await files.get(entry.digest);
     }

@@ -124,6 +124,13 @@ test('later main runs reuse digest-addressed OCI blobs and refresh tag-addressed
   await first.close();
   const changed = origin('new public registry manifest');
   const second = await openRecorder({storage, proxy: changed});
+  const get = storage.get;
+  storage.get = async (key, filename) => {
+    await fs.writeFile(filename, 'partial');
+    throw new Error('S3 stream interrupted');
+  };
+  await assert.rejects(second.resolve(pinned), /S3 stream interrupted/);
+  storage.get = get;
   const cached = await second.resolve(pinned);
   assert.equal(await fs.readFile(cached.path, 'utf8'), data);
   assert.equal(changed.hits, 0);
