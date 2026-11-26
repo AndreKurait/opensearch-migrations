@@ -41,6 +41,7 @@ function immutablePublicKey(key) {
   if (/^\/v2\/.+\/(?:manifests|blobs)\/sha256:[0-9a-f]{64}$/.test(key)) return true;
   // AL2023 publishes each repository snapshot under a distinct GUID.
   if (/^\/raw\/al2023\/core\/guids\/[a-f0-9]{64}\//.test(key)) return true;
+  if (/^\/gomod\/.+\/@v\/v[^/]+\.(?:mod|info|zip)$/.test(key) || key.startsWith('/k6-operator/')) return true;
   if (key.startsWith('/helm/')) return true;
   if (pinnedElasticDigest(key)) return true;
   if (key.startsWith('/maven/')) return !/(?:-SNAPSHOT\/|\/maven-metadata[^/]*\.xml)/i.test(key);

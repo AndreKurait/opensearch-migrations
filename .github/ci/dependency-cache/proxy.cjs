@@ -69,6 +69,7 @@ const mavenOrigins = ['https://repo.maven.apache.org/maven2/', 'https://plugins.
 const mavenCdn = ['plugins-artifacts.gradle.org', 'repo.maven.apache.org', 'repo1.maven.org'];
 
 function canonicalKey(key) {
+  if (typeof key === 'string' && key.startsWith('/gomod/')) return key.replace(/%21/gi, '!').replace(/%2b/gi, '+');
   // DNF appends the anonymous instance identifier to repo metadata requests.
   if (typeof key === 'string' && key.startsWith('/raw/al2023/') && key.endsWith('?instance_id=none')) {
     return key.slice(0, -'?instance_id=none'.length).replace(/%2b/gi, '+');
@@ -82,6 +83,17 @@ function canonicalKey(key) {
 function parseKey(key) {
   if (typeof key !== 'string' || key.length > 2048 || !key.startsWith('/')) throw new Error('Invalid artifact key');
   const parts = key.slice(1).split('/');
+  if (parts[0] === 'gomod') {
+    const segments = parts.slice(1);
+    if (segments.some(part => !/^[a-zA-Z0-9._+@!-]+$/.test(part) || part === '.' || part === '..')) {
+      throw new Error('Invalid Go module proxy path');
+    }
+    const artifact = segments.join('/');
+    const moduleRequest = /^(?!sumdb\/).+\/(?:@latest|@v\/(?:list|[a-zA-Z0-9._+!-]+\.(?:zip|mod|info)))$/.test(artifact);
+    const checksumRequest = /^sumdb\/sum\.golang\.org\/(?:supported|latest|lookup\/.+@[^/]+|tile\/[0-9]+\/.+)$/.test(artifact);
+    if (!moduleRequest && !checksumRequest) throw new Error('Unsupported Go module proxy request');
+    return {urls: [new URL('./' + artifact, 'https://proxy.golang.org/')], cdn: ['storage.googleapis.com']};
+  }
   if (parts.some(part => !/^[A-Za-z0-9._+@:-]+$/.test(part) || part === '.' || part === '..')) {
     throw new Error('Invalid artifact path');
   }

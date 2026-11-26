@@ -252,3 +252,17 @@ test('OCI manifest and blob probes use catalog metadata and defer byte verificat
   assert.equal((await get(proxy.url, wrong, 'HEAD')).status, 502);
   assert.deepEqual(observed, [manifest, manifest, blob, blob]);
 });
+
+test('Go modules and checksum database reads use the public Go proxy', async t => {
+  const dir = await scratch(t);
+  const keys = ['github.com/!burnt!sushi/toml/@v/v1.4.0.mod', 'sumdb/sum.golang.org/supported',
+    'sumdb/sum.golang.org/lookup/github.com/!burnt!sushi/toml@v1.4.0', 'sumdb/sum.golang.org/tile/8/0/x001/002'];
+  const calls = mockFetch(t, keys.map(() => new Response('data')));
+  for (const [i, asset] of keys.entries()) {
+    await fetchPublic(`/gomod/${asset}`, path.join(dir, String(i)));
+    assert.equal(calls[i].url.href, `https://proxy.golang.org/${asset}`);
+  }
+  for (const invalid of ['sumdb/elsewhere/supported', '../@v/base.mod', 'host:443/foo/@v/file.zip']) {
+    assert.throws(() => validateKey(`/gomod/${invalid}`));
+  }
+});

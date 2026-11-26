@@ -139,6 +139,8 @@ def buildKitProjects = [
 def ciPackageEndpoint = providers.environmentVariable('CI_BUILDKIT_PACKAGE_ENDPOINT')
         .orElse(providers.environmentVariable('CI_DEPENDENCY_REGISTRY_ENDPOINT')).getOrElse('')
 
+def goProxy = ciPackageEndpoint ? "http://${ciPackageEndpoint}/gomod" : (System.getenv('GOPROXY') ?: '')
+
 def k6Entry = [
     // Load-test-only k6 runtime for the Kubernetes integration. It contains a pinned
     // k6 executable with the Valkey-compatible xk6-redis extension plus the scenarios,
@@ -151,7 +153,7 @@ def k6Entry = [
     // through rather than naming a mirror here; empty is identical to unset, which is the Go
     // default. Networks that block proxy.golang.org set GOPROXY in the environment instead.
     buildArgs: [
-        GOPROXY: System.getenv("GOPROXY") ?: ""
+        GOPROXY: goProxy
     ]
 ]
 
@@ -166,7 +168,7 @@ def k6OperatorEntry = [
     // builder's GOPROXY the same way as k6Runner above.
     buildArgs: [
         CI_PACKAGE_ENDPOINT: ciPackageEndpoint,
-        GOPROXY: System.getenv("GOPROXY") ?: "",
+        GOPROXY: goProxy,
         BUILDER_IMAGE: ptc.rewrite(
             "docker.io/library/golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648"
         ),

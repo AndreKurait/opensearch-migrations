@@ -31,7 +31,7 @@ def dependency_report(archive):
         row = json.loads(line)
         if (not isinstance(row, dict) or set(row) != {'key', 'host', 'status'} or
                 not isinstance(row['key'], str) or len(row['key']) > 2048 or
-                not re.fullmatch(r'/[A-Za-z0-9._+@:/%-]+', row['key']) or
+                not re.fullmatch(r'/[A-Za-z0-9._+@!:/%-]+', row['key']) or
                 not isinstance(row['host'], str) or len(row['host']) > 253 or
                 not re.fullmatch(r'[a-z0-9.-]+', row['host']) or
                 not (row['status'] == 'error' or type(row['status']) is int and 100 <= row['status'] <= 599)):

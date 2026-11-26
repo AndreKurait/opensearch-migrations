@@ -89,7 +89,7 @@ async function bridgeRelay(upstream, address) {
   const server = http.createServer(async (request, response) => {
     let resource;
     try {
-      const permittedPath = /^(?:\/(?:v2|benchmark|helm|pypi|console-editor|k6-operator)\/|\/npm\/.+\/-\/.+\.tgz$|\/raw\/(?:al2023|alpine|elastic|elastic-legacy|opensearch|msk-iam|kubectl|helm|stern|mount-s3|gcsfuse)\/)/;
+      const permittedPath = /^(?:\/(?:v2|benchmark|helm|pypi|console-editor|k6-operator|gomod)\/|\/npm\/.+\/-\/.+\.tgz$|\/raw\/(?:al2023|alpine|elastic|elastic-legacy|opensearch|msk-iam|kubectl|helm|stern|mount-s3|gcsfuse)\/)/;
       if (!['GET', 'HEAD'].includes(request.method) || (!permittedPath.test(request.url) && request.url !== '/maven/com/floragunn/search-guard-suite-plugin/7.10.2-53.5.0/search-guard-suite-plugin-7.10.2-53.5.0.zip')) throw new Error();
       const target = new URL(request.url, 'http://localhost');
       if (target.origin !== 'http://localhost' || target.hash ||
