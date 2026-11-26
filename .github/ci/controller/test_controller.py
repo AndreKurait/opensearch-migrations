@@ -90,19 +90,18 @@ class ApprovalTests(unittest.TestCase):
                 self.assertEqual([s for s in suites if s not in plan.DISABLED_SUITES], json.loads(result['matrix']))
                 self.assertEqual('3.4.2' if cron == plan.CANARY else '', result['release'])
 
-    def test_paused_suites_are_never_started(self):
-        for group in ('byos', 'aoss', 'aoss-timeseries', 'aoss-vector', 'run-eks-byos-tests'):
-            with self.subTest(group=group), self.assertRaisesRegex(ValueError, 'paused'):
-                plan.select(group)
-        self.pr['labels'] = [{'name': 'run-eks-byos-tests'}]
-        with self.assertRaisesRegex(ValueError, 'paused'):
-            self.select()
+    def test_snapshot_aliases_and_pr_labels_select_runnable_suites(self):
+        for alias in ('aoss-timeseries', 'aoss-vector'):
+            self.assertEqual(('aoss',), plan.select(alias))
+        for label in ('run-eks-byos-tests', 'cdc-tests'):
+            self.pr['labels'] = [{'name': label}]
+            self.assertEqual(list(plan.GROUPS[label]), json.loads(self.select()['matrix']))
 
     def test_select_several_suites_on_one_approval(self):
         self.event['comment']['body'] = f'/aws-test {SHA} cfn-import,cdc-tests,cdc'
         result = self.select()
         self.assertEqual(['cfn-import', 'cdc', 'cdc-aoss', 'cdc-k6'], json.loads(result['matrix']))
-        for selection in ('cdc,unknown', 'cdc,', 'cdc,byos'):
+        for selection in ('cdc,unknown', 'cdc,'):
             with self.subTest(selection=selection), self.assertRaises(ValueError):
                 plan.select(selection)
 

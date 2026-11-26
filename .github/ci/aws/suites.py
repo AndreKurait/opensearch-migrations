@@ -48,10 +48,9 @@ SUITES = {
     'cdc-k6': Suite(tests='0080', timeout_minutes=300, reservation=Reservation(enis=128, vcpus=32)),
     'cdc-aoss': Suite(target='AOSS', tests='0034,0041', timeout_minutes=240,
                       reservation=Reservation(enis=96, vcpus=32)),
-    # The historic snapshots are unavailable. Assign a reservation after fixture access is restored.
-    'aoss': Suite(source='OS_1.3', target='AOSS', tests='0021,0024', reservation=None,
+    'aoss': Suite(source='OS_1.3', target='AOSS', tests='0021,0024', reservation=Reservation(enis=96, vcpus=32),
                   snapshot_prefixes=(AOSS_SNAPSHOT_PREFIX,)),
-    'byos': Suite(target='OS_2.19', tests='0010', timeout_minutes=1080, reservation=None,
+    'byos': Suite(target='OS_2.19', tests='0010', timeout_minutes=1080, reservation=Reservation(enis=96, vcpus=32),
                   snapshot_prefixes=tuple(preset[0] for preset in PRESETS.values())),
     'isolated': Suite(target='OS_2.19', tests='0040', timeout_minutes=240,
                       reservation=Reservation(vpcs=2, igws=2, eips=4, nat_per_az=2, enis=128, vcpus=32)),

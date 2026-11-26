@@ -176,13 +176,13 @@ class TestCloudWorker(unittest.TestCase):
         self.assertEqual(aws.call_count, 1)
         build.assert_not_called()
 
-    def test_disabled_suites_are_rejected_before_worker_setup_and_cleanup_still_runs(self):
+    def test_snapshot_suites_have_enabled_plans_and_support_cleanup(self):
         script = Path(__file__).parent / 'run.py'
         for suite in ['aoss', 'byos', 'aoss-vector', 'aoss-timeseries']:
             with self.subTest(suite=suite):
-                run = subprocess.run(['python3', script, suite], text=True, capture_output=True)
-                self.assertEqual(run.returncode, 2)
-                self.assertIn('temporarily disabled', run.stderr)
+                run = subprocess.run(['python3', script, suite, '--plan'], text=True, capture_output=True)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertTrue(json.loads(run.stdout)['enabled'])
                 self.assertFalse((self.temp / 'ci-results').exists())
         with patch('run.Worker') as worker, patch('sys.argv', [str(script), 'cleanup']):
             with patch.dict(os.environ, CI_SUITE='aoss'):

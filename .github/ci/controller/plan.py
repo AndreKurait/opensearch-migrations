@@ -43,7 +43,7 @@ def select(group):
     if ALIASES.get(group, group) in DISABLED_SUITES:
         raise ValueError('Snapshot suites are paused pending fixture access')
     if group in SUITES or group in ALIASES:
-        return (group,)
+        return (ALIASES.get(group, group),)
     raise ValueError(f'Unknown suite. Enabled suites: {", ".join(ALL)}')
 
 
@@ -106,7 +106,7 @@ def plan(event_name, event, repository, sha, ref, authenticate=api):
             suites = select(group)
         else:
             labels = {label['name'] for label in pr['labels']}
-            matched = [key for key in GROUPS if key.startswith('run-') and key in labels]
+            matched = [key for key in GROUPS if key != 'all' and key in labels]
             suites = tuple(dict.fromkeys(s for key in matched for s in GROUPS[key] if s not in DISABLED_SUITES))
             if matched and not suites:
                 raise ValueError('Only paused snapshot suites were requested')
