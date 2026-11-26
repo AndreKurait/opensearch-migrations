@@ -195,6 +195,16 @@ async function cloudWorker() {
         await run('skopeo', ['--override-os', 'linux', '--override-arch', 'amd64', 'copy', '--src-tls-verify=false',
           `docker://${proxy.host}/${kindNode}`, `dir:${temp}`], {...process.env, ...env});
       } finally { await fs.rm(temp, {recursive: true, force: true}); }
+      const pipenv = await fs.mkdtemp(path.join(os.tmpdir(), 'cluster-tools-pipenv-'));
+      try {
+        const bin = path.join(pipenv, 'bin');
+        const pythonEnv = {...process.env, ...env, PATH: `${bin}:${env.PATH || process.env.PATH}`,
+          PIP_NO_CACHE_DIR: '1', PIPENV_CACHE_DIR: path.join(pipenv, 'cache'), WORKON_HOME: path.join(pipenv, 'venvs'),
+          PIPENV_PIPFILE: path.resolve('migrationConsole/cluster_tools/Pipfile'), PIPENV_IGNORE_VIRTUALENVS: '1'};
+        await run('python3.11', ['-m', 'venv', pipenv], pythonEnv);
+        await run(path.join(bin, 'python'), ['-m', 'pip', 'install', 'pipenv==2026.5.0'], pythonEnv);
+        await run(path.join(bin, 'pipenv'), ['install', '--deploy', '--dev'], pythonEnv);
+      } finally { await fs.rm(pipenv, {recursive: true, force: true}); }
       await run(process.execPath, [path.join(__dirname, 'smoke.cjs')], {...process.env, ...env});
     });
   }
