@@ -182,6 +182,9 @@ async function cloudWorker() {
     console.log(`Imported ${observations.length} verified native dependency requests.`);
     return;
   }
+  // Linux repository tests install this verified sandbox prerequisite before requesting test dependencies.
+  await importMain([{key: '/raw/bubblewrap/bubblewrap_0.9.0-1ubuntu0.3_amd64.deb',
+    digest: '2461f1beee9cb04c8942739fe1a2b37e7b7c2a3d518f0779dc75f9245baa3094', accessed: Date.now()}]);
   if (mode !== 'publish') {
     const recorder = await require('./aws-store.cjs').openRecorder();
     await serve(recorder, 'record', env => run(process.execPath, [path.join(__dirname, 'smoke.cjs')], {...process.env, ...env}));
