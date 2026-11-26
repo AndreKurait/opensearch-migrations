@@ -4,7 +4,7 @@ const {mkdtemp, mkdir, rename, rm, writeFile} = require('node:fs/promises');
 const {randomUUID} = require('node:crypto');
 const path = require('node:path');
 const {tmpdir} = require('node:os');
-const {fetchPublic, validateKey, pinnedElasticDigest} = require('./proxy.cjs');
+const {fetchPublic, validateKey, pinnedRawDigest} = require('./proxy.cjs');
 
 const MAX_RECEIPT_BYTES = 2 * 1024 * 1024;
 const MAX_RECEIPT_ENTRIES = 8192;
@@ -43,7 +43,7 @@ function immutablePublicKey(key) {
   if (/^\/raw\/al2023\/core\/guids\/[a-f0-9]{64}\//.test(key)) return true;
   if (/^\/gomod\/.+\/@v\/v[^/]+\.(?:mod|info|zip)$/.test(key) || key.startsWith('/k6-operator/')) return true;
   if (key.startsWith('/helm/')) return true;
-  if (pinnedElasticDigest(key)) return true;
+  if (pinnedRawDigest(key)) return true;
   if (key.startsWith('/maven/')) return !/(?:-SNAPSHOT\/|\/maven-metadata[^/]*\.xml)/i.test(key);
   if (/^\/npm\/.+\/-\/.+\.tgz$/.test(key) || key.startsWith('/pypi/packages/')) return true;
   return /^\/raw\/(?:gradle\/gradle-[\d.]+-(?:bin|all)\.zip|corretto\/resources\/[\d.]+\/|(?:k3s|kind|argo|crane)\/v[\d.]+|kubectl\/release\/v[\d.]+\/|helm\/helm-v[\d.]+-)/.test(key);

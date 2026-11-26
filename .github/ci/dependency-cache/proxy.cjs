@@ -38,7 +38,8 @@ const registries = {
   gcr: {host: 'mirror.gcr.io', cdn: ['storage.googleapis.com']},
   distroless: {host: 'gcr.io', realm: 'https://gcr.io/v2/token', service: 'gcr.io', repo: 'distroless/static', cdn: []},
 };
-const elasticReleases = {
+const pinnedRawArtifacts = {
+  '/raw/bubblewrap/bubblewrap_0.9.0-1ubuntu0.3_amd64.deb': '2461f1beee9cb04c8942739fe1a2b37e7b7c2a3d518f0779dc75f9245baa3094',
   '/raw/elastic/downloads/elasticsearch/elasticsearch-5.6.16.tar.gz': '6b035a59337d571ab70cea72cc55225c027ad142fbb07fd8984e54261657c77f',
   '/raw/elastic/downloads/elasticsearch/elasticsearch-6.8.23.tar.gz': '424af91f838f9e5f13e0292f97cbd6333535450291a621d761bd479dfc2dff78',
   '/raw/elastic/downloads/elasticsearch/elasticsearch-7.10.2-linux-x86_64.tar.gz': '3b7ae3b6f5f2248fa4441aa2cf653638c9022108f813e0081da13c378a35e11e',
@@ -167,7 +168,7 @@ function parseKey(key) {
     const [origin, cdn] = rawOrigins[originId];
     const asset = parts.slice(2).join('/');
     const upstreamPath = originId === 'al2023' ? asset.replaceAll('+', '%2B') : asset;
-    return {urls: [new URL('./' + upstreamPath, origin)], cdn, digest: elasticReleases[key]};
+    return {urls: [new URL('./' + upstreamPath, origin)], cdn, digest: pinnedRawArtifacts[key]};
   }
   if (kind !== 'v2' || !Object.hasOwn(registries, originId) || parts.length < 5) throw new Error('Unsupported artifact route');
   const operation = parts.at(-2);
@@ -530,4 +531,4 @@ function isPackageIndex(key) {
     /^\/raw\/alpine\/(?:v[0-9]+\.[0-9]+|edge)\/(?:main|community|testing)\/[a-z0-9_]+\/APKINDEX\.tar\.gz$/.test(key);
 }
 
-module.exports = {isPackageIndex, startProxy, fetchPublic, validateKey, canonicalKey, pinnedElasticDigest: key => elasticReleases[key]};
+module.exports = {isPackageIndex, startProxy, fetchPublic, validateKey, canonicalKey, pinnedRawDigest: key => pinnedRawArtifacts[key]};
