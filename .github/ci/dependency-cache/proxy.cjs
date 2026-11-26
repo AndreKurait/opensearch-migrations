@@ -28,7 +28,9 @@ const registries = {
   quay: {host: 'quay.io', realm: 'https://quay.io/v2/auth', service: 'quay.io', cdn: [/^cdn[0-9]+\.quay\.io$/]},
   ecrpublic: {host: 'public.ecr.aws', realm: 'https://public.ecr.aws/token/', service: 'public.ecr.aws',
     cdn: [/^d[a-z0-9]+\.cloudfront\.net$/]},
-  k8s: {host: 'registry.k8s.io', cdn: [k8sCdn, 'prod-registry-k8s-io-eu-central-1.s3.dualstack.eu-central-1.amazonaws.com']},
+  k8s: {host: 'registry.k8s.io', cdn: [k8sCdn,
+    'prod-registry-k8s-io-eu-central-1.s3.dualstack.eu-central-1.amazonaws.com',
+    'prod-registry-k8s-io-us-west-2.s3.dualstack.us-west-2.amazonaws.com']},
   gcr: {host: 'mirror.gcr.io', cdn: ['storage.googleapis.com']},
   distroless: {host: 'gcr.io', realm: 'https://gcr.io/v2/token', service: 'gcr.io', repo: 'distroless/static', cdn: []},
 };
