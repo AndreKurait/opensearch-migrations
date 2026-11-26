@@ -240,22 +240,8 @@ jobs:
       # Set up Kind cluster for workflow integration tests (only for console_link project)
       - name: Restore verified kind and kubectl for the cluster action
         if: matrix.py-project == 'migrationConsole/lib/console_link' && env.CI_DEPENDENCY_PROXY_URL != ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          cache_dir="$RUNNER_TOOL_CACHE/kind/v0.33.0/amd64"
-          install_tool() {
-            local target="$cache_dir/$1/bin/$1" route="$2" digest="$3"
-            mkdir -p "$(dirname "$target")"
-            if ! echo "$digest  $target" | sha256sum --check --status 2>/dev/null; then
-              curl --fail --silent --show-error --retry 3 "$CI_DEPENDENCY_PROXY_URL/$route" -o "$target.tmp"
-              echo "$digest  $target.tmp" | sha256sum --check
-              chmod 0755 "$target.tmp"
-              mv "$target.tmp" "$target"
-            fi
-          }
-          install_tool kind raw/kind/v0.33.0/kind-linux-amd64 aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
-          install_tool kubectl raw/kubectl/release/v1.37.1/bin/linux/amd64/kubectl 65691ff77eb6fa44c908b77a1082c9f092c3b9733b5cefabec0d1104890e21a8
+        working-directory: ${{ github.workspace }}
+        run: bash .github/scripts/restore-kind-action-tools.sh v0.33.0
       - name: Set up Kind cluster
         if: matrix.py-project == 'migrationConsole/lib/console_link'
         uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
@@ -709,14 +695,26 @@ jobs:
       # END generated network guard
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-env
+        with:
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+          dependency-proxy-docker: 'true'
+          java-required: 'false'
+      - name: Restore verified kind and kubectl for the cluster action
+        if: env.CI_DEPENDENCY_PROXY_URL != ''
+        run: bash .github/scripts/restore-kind-action-tools.sh v0.31.0
       - name: Set up kind cluster
         uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
         with:
           version: v0.31.0
           cluster_name: mountable-transforms
-          node_image: kindest/node:v1.35.1
+          node_image: kindest/node:v1.35.1@sha256:05d7bcdefbda08b4e038f644c4df690cdac3fba8b06f8289f30e10026720a1ab
+          kubectl_version: v1.37.1
           config: deployment/k8s/tests/kindImageVolumeConfig.yaml
           wait: 120s
+      - name: Configure dependency proxy for kind workloads
+        if: env.CI_DEPENDENCY_REGISTRY_ENDPOINT != ''
+        run: .github/scripts/registry-cache.sh configure-kind mountable-transforms
       - name: Run mountable transforms image volume smoke test
         env:
           KIND_CLUSTER_NAME: mountable-transforms
