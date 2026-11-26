@@ -6,7 +6,7 @@ const {mkdtemp, readFile, rm, stat, writeFile} = require('node:fs/promises');
 const {createHash} = require('node:crypto');
 const {tmpdir} = require('node:os');
 const path = require('node:path');
-const {openLocalRecorder, readReceipt, MAX_RECEIPT_BYTES, MAX_RECEIPT_ENTRIES} = require('./receipts.cjs');
+const {openLocalRecorder, readReceipt, isFreshEntry, MAX_RECEIPT_BYTES, MAX_RECEIPT_ENTRIES} = require('./receipts.cjs');
 const {startProxy} = require('./proxy.cjs');
 
 test('an OCI HEAD followed by concurrent full and ranged GETs downloads the blob once', async t => {
@@ -99,4 +99,13 @@ test('normal hosted recording uses published package metadata and known 404s wit
   assert.equal(await recorder.resolve('/pypi/simple/no-package'), null);
   const observations = await recorder.close();
   assert.equal(observations.length, 2);
+});
+
+test('AL2023 snapshot reads stay warm while mirror lists and negative results expire', () => {
+  const snapshot = `/raw/al2023/core/guids/${'a'.repeat(64)}/x86_64/repodata/repomd.xml`;
+  const mirror = '/raw/al2023/core/mirrors/latest/x86_64/mirror.list';
+  const verifiedAt = 0;
+  assert.equal(isFreshEntry({key: snapshot, verifiedAt}, 600_000), true);
+  assert.equal(isFreshEntry({key: mirror, verifiedAt}, 600_000), false);
+  assert.equal(isFreshEntry({key: snapshot, verifiedAt, missing: true}, 600_000), false);
 });
