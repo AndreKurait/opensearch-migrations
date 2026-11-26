@@ -16,6 +16,10 @@ import urllib.parse
 
 class PackageRequest(http.server.BaseHTTPRequestHandler):
     def forward(self):
+        if self.path == '/healthz':
+            self.send_response(204)
+            self.end_headers()
+            return
         path = urllib.parse.urlsplit(self.path)
         if path.scheme or path.netloc or path.fragment or not self.path.startswith('/'):
             self.send_error(403)
@@ -52,6 +56,7 @@ def lane(port):
 
 
 class Server(socketserver.ThreadingTCPServer):
+    request_queue_size = 128
     allow_reuse_address = True
     daemon_threads = True
 

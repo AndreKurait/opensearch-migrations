@@ -309,7 +309,7 @@ start_eks_package_relay() {
     {app:$name} as $labels | {name:$name} as $meta | {kind:"List",apiVersion:"v1",items:[
       {apiVersion:"networking.k8s.io/v1",kind:"NetworkPolicy",metadata:$meta,spec:{podSelector:{matchLabels:$labels},policyTypes:["Ingress","Egress"],egress:[],ingress:[{from:$from,ports:[{port:8080,protocol:"TCP"}]}]}},
       {apiVersion:"v1",kind:"Service",metadata:$meta,spec:{selector:$labels,clusterIP:$ip,ports:[{port:8080}]}},
-      {apiVersion:"v1",kind:"Pod",metadata:($meta+{labels:$labels}),spec:{automountServiceAccountToken:false,volumes:[{name:"code",configMap:{name:$name}}],containers:[{name:"relay",image:$image,command:["/usr/bin/python3","/app/relay.py","pod","8080","8081"],volumeMounts:[{name:"code",mountPath:"/app",readOnly:true}],securityContext:{runAsUser:65534,allowPrivilegeEscalation:false,readOnlyRootFilesystem:true,capabilities:{drop:["ALL"]}}}]}}]}' | "${kube[@]}" apply -f - || return 1
+      {apiVersion:"v1",kind:"Pod",metadata:($meta+{labels:$labels}),spec:{automountServiceAccountToken:false,volumes:[{name:"code",configMap:{name:$name}}],containers:[{name:"relay",image:$image,command:["/usr/bin/python3","/app/relay.py","pod","8080","8081"],readinessProbe:{tcpSocket:{port:8080},periodSeconds:1},volumeMounts:[{name:"code",mountPath:"/app",readOnly:true}],securityContext:{runAsUser:65534,allowPrivilegeEscalation:false,readOnlyRootFilesystem:true,capabilities:{drop:["ALL"]}}}]}}]}' | "${kube[@]}" apply -f - || return 1
   "${kube[@]}" wait --for=condition=Ready pod/"$name" --timeout=5m || return 1
   CI_PACKAGE_FORWARD_LOG=$(mktemp)
   "${kube[@]}" port-forward "pod/$name" :8081 --address 127.0.0.1 >"$CI_PACKAGE_FORWARD_LOG" 2>&1 &
@@ -323,5 +323,15 @@ start_eks_package_relay() {
   [[ -n $port ]] || { cat "$CI_PACKAGE_FORWARD_LOG" >&2; return 1; }
   python3 "$source" worker "$port" &
   CI_PACKAGE_WORKER_PID=$!
+  local builder
+  for builder in builder-amd64 builder-arm64; do
+    "${kube[@]}" exec "deployment/$builder" -- sh -ec '
+      for attempt in $(seq 1 30); do
+        wget -T 3 -O /dev/null "http://$1:8080/healthz" 2>/dev/null && exit 0
+        sleep 1
+      done
+      echo "BuildKit cannot reach the package relay at $1:8080" >&2
+      exit 1' sh "$service_ip" || return 1
+  done
   export CI_BUILDKIT_PACKAGE_ENDPOINT="$service_ip:8080"
 }
