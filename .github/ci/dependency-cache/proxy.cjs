@@ -30,6 +30,7 @@ const registries = {
     cdn: [/^d[a-z0-9]+\.cloudfront\.net$/]},
   k8s: {host: 'registry.k8s.io', cdn: [k8sCdn,
     'prod-registry-k8s-io-eu-central-1.s3.dualstack.eu-central-1.amazonaws.com',
+    'prod-registry-k8s-io-us-east-1.s3.dualstack.us-east-1.amazonaws.com',
     'prod-registry-k8s-io-us-west-2.s3.dualstack.us-west-2.amazonaws.com']},
   mcr: {host: 'mcr.microsoft.com', cdn: [/^[a-z0-9-]+\.data\.mcr\.microsoft\.com$/]},
   gcr: {host: 'mirror.gcr.io', cdn: ['storage.googleapis.com']},
