@@ -37,7 +37,7 @@ test('all native origin mapping formats agree and cleanup leaves read jobs witho
     }
     const config = await fs.readFile(clients.env.CONTAINERS_REGISTRIES_CONF, 'utf8');
     assert.equal(config, containersConfig('127.0.0.1', '12345'));
-    for (const [host,id] of [['ghcr.io','ghcr'],['quay.io','quay'],['registry.k8s.io','k8s'],['public.ecr.aws','ecrpublic'],['docker.io','dockerhub']]) {
+    for (const [host,id] of [['ghcr.io','ghcr'],['quay.io','quay'],['mcr.microsoft.com','mcr'],['registry.k8s.io','k8s'],['public.ecr.aws','ecrpublic'],['docker.io','dockerhub']]) {
       assert.match(config, new RegExp(`location = "127.0.0.1:12345/${id}"`));
       assert.match(buildkitConfig('172.17.0.1', '12345'), new RegExp(`mirrors = \\["172.17.0.1:12345/${id}"\\]`));
       assert.equal(imageReference(`${host}/team/image:latest`).prefix, `${id}/team/image`);
@@ -154,7 +154,7 @@ cat > "$ROUTING_TEST_OUTPUT/$node-$host.toml"
   const env = { ...process.env, CI_DEPENDENCY_REGISTRY_ENDPOINT: '172.17.0.1:9521', ROUTING_TEST_OUTPUT: dir, PATH: `${dir}:${process.env.PATH}` };
   await exec('bash', [script, 'configure-dependency-nodes', 'kind-control-plane', 'kind-worker'], { env });
   for (const node of ['kind-control-plane', 'kind-worker']) {
-    for (const [origin, id] of [['docker.io', 'dockerhub'], ['ghcr.io', 'ghcr'], ['quay.io', 'quay'], ['public.ecr.aws', 'ecrpublic'], ['registry.k8s.io', 'k8s'], ['mirror.gcr.io', 'gcr'], ['gcr.io', 'distroless']]) {
+    for (const [origin, id] of [['docker.io', 'dockerhub'], ['ghcr.io', 'ghcr'], ['quay.io', 'quay'], ['mcr.microsoft.com', 'mcr'], ['public.ecr.aws', 'ecrpublic'], ['registry.k8s.io', 'k8s'], ['mirror.gcr.io', 'gcr'], ['gcr.io', 'distroless']]) {
       const config = await fs.readFile(path.join(dir, `${node}-${origin}.toml`), 'utf8');
       assert.ok(config.includes(`[host."http://172.17.0.1:9521/v2/${id}"]`));
       assert.ok(config.includes('override_path = true'));

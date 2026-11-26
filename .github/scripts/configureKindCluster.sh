@@ -77,6 +77,7 @@ for node in "${kind_nodes[@]}"; do
     configure_registry_mirror "${node}" mirror.gcr.io docker-hub
     configure_registry_mirror "${node}" quay.io quay
     configure_registry_mirror "${node}" public.ecr.aws ecr-public
+    configure_registry_mirror "${node}" mcr.microsoft.com mcr
     configure_registry_mirror "${node}" registry.k8s.io k8s
 done
 

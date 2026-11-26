@@ -31,6 +31,7 @@ const registries = {
   k8s: {host: 'registry.k8s.io', cdn: [k8sCdn,
     'prod-registry-k8s-io-eu-central-1.s3.dualstack.eu-central-1.amazonaws.com',
     'prod-registry-k8s-io-us-west-2.s3.dualstack.us-west-2.amazonaws.com']},
+  mcr: {host: 'mcr.microsoft.com', cdn: [/^[a-z0-9-]+\.data\.mcr\.microsoft\.com$/]},
   gcr: {host: 'mirror.gcr.io', cdn: ['storage.googleapis.com']},
   distroless: {host: 'gcr.io', realm: 'https://gcr.io/v2/token', service: 'gcr.io', repo: 'distroless/static', cdn: []},
 };

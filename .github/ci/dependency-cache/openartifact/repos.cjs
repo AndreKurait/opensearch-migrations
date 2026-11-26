@@ -9,6 +9,7 @@ const sources = [
   ['ghcr', 'docker', 'https://ghcr.io'],
   ['quay', 'docker', 'https://quay.io'],
   ['ecrpublic', 'docker', 'https://public.ecr.aws'],
+  ['mcr', 'docker', 'https://mcr.microsoft.com'],
   ['k8s', 'docker', 'https://registry.k8s.io'],
   ['gcr', 'docker', 'https://mirror.gcr.io'],
   ['distroless', 'docker', 'https://gcr.io'],

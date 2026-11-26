@@ -44,6 +44,7 @@
       "public.ecr.aws:443",
       "d2glxqk2uabbnd.cloudfront.net:443",
       "registry.k8s.io:443",
+      "mcr.microsoft.com:443",
       "us-west1-docker.pkg.dev:443",
       "us-central1-docker.pkg.dev:443",
       "us-east1-docker.pkg.dev:443",

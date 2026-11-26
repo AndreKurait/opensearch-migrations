@@ -16,7 +16,7 @@ const run = promisify(execFile);
 const origins = {
   'docker.io': 'dockerhub', 'registry-1.docker.io': 'dockerhub', 'index.docker.io': 'dockerhub',
   'ghcr.io': 'ghcr', 'quay.io': 'quay', 'public.ecr.aws': 'ecrpublic', 'registry.k8s.io': 'k8s', 'mirror.gcr.io': 'gcr',
-  'gcr.io': 'distroless',
+  'gcr.io': 'distroless', 'mcr.microsoft.com': 'mcr',
   'reg.kyverno.io': 'ghcr', 'cr.fluentbit.io': 'dockerhub',
 };
 const originEntries = Object.entries(origins).filter(([host]) => !['registry-1.docker.io', 'index.docker.io'].includes(host));
