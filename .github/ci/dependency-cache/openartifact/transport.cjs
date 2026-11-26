@@ -82,11 +82,19 @@ async function openPackageTransport({ mode, reader, imageMode = mode, coldAllowe
       const headers = {};
       for (const h of ['accept', 'if-none-match', 'range', 'if-range'])
         if (req.headers[h]) headers[h] = req.headers[h];
-      const response = await fetch(new URL(target.path, stack.url), {
-        method: req.method,
-        headers,
-        redirect: 'error',
-      });
+      let response;
+      try {
+        response = await fetch(new URL(target.path, stack.url), {
+          method: req.method,
+          headers,
+          redirect: 'error',
+        });
+      } catch (error) {
+        // A disconnected local package service can still be served by the ordinary
+        // digest-checked resolver. Strict replay surfaces the transport failure.
+        if (coldAllowed && ['ECONNRESET', 'ECONNREFUSED', 'UND_ERR_SOCKET'].includes(error.cause?.code)) return false;
+        throw error;
+      }
       if (mode === 'read' && !response.ok && response.status >= 500) {
         await response.body?.cancel();
         if (coldAllowed) return false;
