@@ -45,7 +45,8 @@ test('derive OpenArtifact cache metadata directly from published main paths, inc
     missing: true,
   };
   const oci = { ...sample, key: '/v2/dockerhub/hello-world/manifests/latest' };
-  const artifacts = readModel([sample, missing, oci, { ...sample, key: '/raw/gradle/dist.zip' }]);
+  const artifacts = readModel([sample, missing, oci, { ...sample, key: '/raw/gradle/dist.zip' },
+    { ...sample, key: '/future-tool/1/package' }, { ...sample, key: '/v2/future-registry/image/manifests/latest' }]);
   assert.deepEqual(
     artifacts.snapshot.map((row) => row.repo),
     ['maven-central', 'maven-central', 'maven-plugins', 'dockerhub'],

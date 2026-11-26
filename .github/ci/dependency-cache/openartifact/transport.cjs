@@ -5,6 +5,8 @@ const { pipeline } = require('node:stream/promises');
 const { startStack, validateRows } = require('./stack.cjs');
 const { startAdapter } = require('./adapter.cjs');
 const { validateKey } = require('../proxy.cjs');
+const { repositories } = require('./repos.cjs');
+const ociRepositories = new Set(repositories.filter(repo => repo.format === 'docker').map(repo => repo.name));
 
 function nativePath(key) {
   validateKey(key);
@@ -30,6 +32,10 @@ function readModel(entries) {
     if (!previous || previous.accessed < row.accessed) rows.set(identity, row);
   }
   for (const entry of entries) {
+    // A newer main index may contain package routes absent from this runner revision.
+    // Only import rows served by this version of OpenArtifact. Requests still use validateKey.
+    if (!entry.key.startsWith('/maven/') &&
+        !(entry.key.startsWith('/v2/') && ociRepositories.has(entry.key.split('/', 4)[2]))) continue;
     const native = nativePath(entry.key);
     if (!native) continue;
     const row = {
