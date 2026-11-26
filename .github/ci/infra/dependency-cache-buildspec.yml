@@ -33,7 +33,7 @@ phases:
         # Queued publishers can start after newer trusted recorders add routes to the shared S3 catalog.
         # Keep the original worker SHA for provenance, and publish with the current trusted catalog reader.
         revision="$CI_CACHE_MAIN_SHA"
-        if [[ "$CI_CACHE_MODE" == publish || "$CI_CACHE_MODE" == ingest || "$CI_CACHE_MODE" == both ]]; then revision=FETCH_HEAD; fi
+        if [[ "$CI_CACHE_MODE" != record || -n "${CI_CACHE_BUILD_ID:-}" ]]; then revision=FETCH_HEAD; fi
         git checkout --quiet --detach "$revision"
         node -e 'if (process.versions.node.split(".")[0] !== "22") throw Error("Node 22 is required")'
         npm ci --prefix .github/ci/dependency-cache --ignore-scripts --no-audit --no-fund
