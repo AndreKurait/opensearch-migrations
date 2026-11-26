@@ -4,7 +4,7 @@ const {mkdtemp, mkdir, rename, rm, writeFile} = require('node:fs/promises');
 const {randomUUID} = require('node:crypto');
 const path = require('node:path');
 const {tmpdir} = require('node:os');
-const {fetchPublic, validateKey, pinnedRawDigest} = require('./proxy.cjs');
+const {fetchPublic, validateKey, pinnedRawDigest, isPackageIndex} = require('./proxy.cjs');
 
 const MAX_RECEIPT_BYTES = 2 * 1024 * 1024;
 const MAX_RECEIPT_ENTRIES = 8192;
@@ -55,6 +55,14 @@ function isFreshEntry(entry, now = Date.now()) {
   if (!entry.missing && immutablePublicKey(entry.key)) return true;
   const ttl = entry.missing ? 60_000 : 300_000;
   return now - (entry.verifiedAt ?? entry.accessed) < ttl;
+}
+
+// Main workers submit receipts to the publisher, which revalidates mutable indexes.
+// Bound the age served if publication has fallen behind.
+function reusableRecordingEntry(entry, now = Date.now()) {
+  if (isFreshEntry(entry, now)) return true;
+  return Boolean(entry && !entry.missing && isPackageIndex(entry.key) &&
+    now - (entry.verifiedAt ?? entry.accessed) < 24 * 60 * 60 * 1000);
 }
 
 async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now = Date.now, lookup}) {
@@ -136,4 +144,4 @@ async function openLocalRecorder({receiptFile, fetchArtifact = fetchPublic, now 
   };
 }
 
-module.exports = {openLocalRecorder, readReceipt, immutablePublicKey, isFreshEntry, MAX_RECEIPT_BYTES, MAX_RECEIPT_ENTRIES};
+module.exports = {openLocalRecorder, readReceipt, immutablePublicKey, isFreshEntry, reusableRecordingEntry, MAX_RECEIPT_BYTES, MAX_RECEIPT_ENTRIES};

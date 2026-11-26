@@ -34,13 +34,13 @@ async function service(mode, dir) {
     if (hosted && mode === 'record') {
       try {
         const snapshot = await openReader();
-        const {isFreshEntry} = require('./receipts.cjs');
-        const entries = snapshot.entries.filter(entry => isFreshEntry(entry));
+        const {reusableRecordingEntry} = require('./receipts.cjs');
+        const entries = snapshot.entries.filter(entry => reusableRecordingEntry(entry));
         const byKey = new Map(entries.map(entry => [entry.key, entry]));
-        seed = {...snapshot, entries, resolve: key => isFreshEntry(byKey.get(key)) ? snapshot.resolve(key) : undefined};
+        seed = {...snapshot, entries, resolve: key => reusableRecordingEntry(byKey.get(key)) ? snapshot.resolve(key) : undefined};
         store.metadataCatalog = {get(key) {
           const entry = byKey.get(key);
-          return isFreshEntry(entry) ? entry : undefined;
+          return reusableRecordingEntry(entry) ? entry : undefined;
         }};
       } catch (error) {
         console.warn(

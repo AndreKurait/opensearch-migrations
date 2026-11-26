@@ -6,7 +6,7 @@ const {mkdtemp, readFile, rm, stat, writeFile} = require('node:fs/promises');
 const {createHash} = require('node:crypto');
 const {tmpdir} = require('node:os');
 const path = require('node:path');
-const {openLocalRecorder, readReceipt, isFreshEntry, MAX_RECEIPT_BYTES, MAX_RECEIPT_ENTRIES} = require('./receipts.cjs');
+const {openLocalRecorder, readReceipt, isFreshEntry, reusableRecordingEntry, MAX_RECEIPT_BYTES, MAX_RECEIPT_ENTRIES} = require('./receipts.cjs');
 const {startProxy} = require('./proxy.cjs');
 
 test('an OCI HEAD followed by concurrent full and ranged GETs downloads the blob once', async t => {
@@ -149,4 +149,13 @@ test('a recorded OCI HEAD observes the digest without restoring the layer until 
   assert.equal(restores, 1);
   const rows = await recorder.close();
   assert.deepEqual(rows.map(({key, digest}) => ({key, digest})), [{key, digest}]);
+});
+
+
+test('recording workers reuse published indexes until publisher refresh while misses expire normally', () => {
+  const entry = {key: '/npm/example', verifiedAt: 0, accessed: 600_000};
+  assert.equal(isFreshEntry(entry, 600_000), false);
+  assert.equal(reusableRecordingEntry(entry, 600_000), true);
+  assert.equal(reusableRecordingEntry({...entry, missing: true}, 600_000), false);
+  assert.equal(reusableRecordingEntry(entry, 86_400_000), false);
 });

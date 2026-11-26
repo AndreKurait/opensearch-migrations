@@ -9,7 +9,7 @@ const {promisify} = require('node:util');
 const {setTimeout: delay} = require('node:timers/promises');
 const {startProxy} = require('./proxy.cjs');
 const {setupClients} = require('./client-routing.cjs');
-const {openLocalRecorder, isFreshEntry, readReceipt, MAX_RECEIPT_BYTES} = require('./receipts.cjs');
+const {openLocalRecorder, reusableRecordingEntry, readReceipt, MAX_RECEIPT_BYTES} = require('./receipts.cjs');
 
 const project = 'migrations-main-dependency-cache';
 const sourceBuild = /^migrations-github-eks:([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/;
@@ -100,7 +100,7 @@ async function nativeWorker(command, args) {
     receiptFile: process.env.CI_DEPENDENCY_RECEIPT,
     async fetchArtifact(key, file) {
       const entry = entries.get(key);
-      if (entry && (strict || isFreshEntry(entry))) {
+      if (entry && (strict || reusableRecordingEntry(entry))) {
         if (entry.missing) return null;
         await snapshot.materialize(entry, file);
         stats.restored++;
@@ -121,7 +121,7 @@ async function nativeWorker(command, args) {
   store.observeMetadata = (key, digest) => { observeMetadata(key, digest); metadataReads++; };
   store.metadataCatalog = {get(key) {
     const entry = entries.get(key);
-    return strict || isFreshEntry(entry) ? entry : undefined;
+    return strict || reusableRecordingEntry(entry) ? entry : undefined;
   }};
   try {
     await serve(store, 'record', env => run(command, args, {...process.env, ...env}));
