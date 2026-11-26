@@ -7,6 +7,7 @@ import org.opensearch.migrations.image.PullThroughCacheHelper
 // Used by buildImage_es_* tasks to look up version info (url, full version tag) for a given esMinor
 def versionsFile = file('versions.json')
 def versions = new JsonSlurper().parse(versionsFile) as Map<String, Map>
+def ciPackageEndpoint = providers.environmentVariable('CI_DEPENDENCY_REGISTRY_ENDPOINT').getOrElse('')
 def imagePrefix = findProperty('esImagePrefix') ?: 'custom-elasticsearch'
 
 // ECR pull-through cache: auto-derived from ECR_PULL_THROUGH_ENDPOINT env var in root build.gradle.
@@ -49,6 +50,7 @@ versions.each { minor, info ->
         group = 'docker'
         description = "Build ${imagePrefix}:${version}"
         inputs.file('dockerfiles/Dockerfile')
+        inputs.file('dockerfiles/configure-ci-packages.sh')
         inputs.property('version', version)
         def dockerfilePath = file('dockerfiles/Dockerfile').absolutePath
         def contextPath = file('dockerfiles').absolutePath
@@ -84,6 +86,7 @@ versions.each { minor, info ->
                             exec {
                                 commandLine 'docker', 'build',
                                         '--build-arg', "CORRETTO_VERSION=${corretto}",
+                                        '--build-arg', "CI_PACKAGE_ENDPOINT=${ciPackageEndpoint}",
                                         '--build-arg', "BASE_IMAGE=${base}",
                                         '--build-arg', "JAVA_HOME_PATH=${javaHome}",
                                         '--build-arg', "ES_VERSION=${version}",
@@ -169,6 +172,7 @@ if (!pushVersionsList.isEmpty()) {
                         "--builder ${builder}",
                         "-f ${dockerfilePath}",
                         "--build-arg CORRETTO_VERSION=${corretto}",
+                        "--build-arg CI_PACKAGE_ENDPOINT=${ciPackageEndpoint}",
                         "--build-arg BASE_IMAGE=${base}",
                         "--build-arg JAVA_HOME_PATH=${javaHome}",
                         "--build-arg ES_VERSION=${version}",

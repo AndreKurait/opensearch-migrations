@@ -35,6 +35,9 @@ const registries = {
   distroless: {host: 'gcr.io', realm: 'https://gcr.io/v2/token', service: 'gcr.io', repo: 'distroless/static', cdn: []},
 };
 const rawOrigins = {
+  al2023: ['https://cdn.amazonlinux.com/al2023/', []],
+  alpine: ['https://dl-cdn.alpinelinux.org/alpine/', []],
+  'elastic-legacy': ['https://download.elastic.co/', []],
   bubblewrap: ['https://security.ubuntu.com/ubuntu/pool/main/b/bubblewrap/', []],
   jdk: ['https://download.java.net/', []],
   corretto: ['https://corretto.aws/downloads/', []],

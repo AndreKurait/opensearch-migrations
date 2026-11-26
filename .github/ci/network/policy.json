@@ -156,6 +156,12 @@
       "pypi.org:443",
       "files.pythonhosted.org:443"
     ],
+    "es-build-packages": [
+      "cdn.amazonlinux.com:443",
+      "dl-cdn.alpinelinux.org:443",
+      "download.elastic.co:443",
+      "artifacts.elastic.co:443"
+    ],
     "console-image": [
       "cdn.amazonlinux.com:443",
       "mountpoint-s3-release.s3.amazonaws.com:443"
@@ -269,6 +275,7 @@
     },
     "ci-jobs.yml/gradle-tests": {
       "purposes": [
+        "es-build-packages",
         "github",
         "bootstrap",
         "package",
@@ -511,6 +518,7 @@
     },
     "k8s-local-test.yml/k8s-local-test": {
       "purposes": [
+        "es-build-packages",
         "github",
         "bootstrap",
         "package",
@@ -535,6 +543,7 @@
     },
     "local-integ-jobs.yml/docker-compose-e2e-test": {
       "purposes": [
+        "es-build-packages",
         "github",
         "bootstrap",
         "package",

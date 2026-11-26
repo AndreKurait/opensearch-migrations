@@ -89,7 +89,7 @@ async function bridgeRelay(upstream, address) {
   const server = http.createServer(async (request, response) => {
     let resource;
     try {
-      if (!['GET', 'HEAD'].includes(request.method) || !(request.url.startsWith('/v2/') || request.url.startsWith('/benchmark/'))) throw new Error();
+      if (!['GET', 'HEAD'].includes(request.method) || !(request.url.startsWith('/v2/') || request.url.startsWith('/benchmark/') || /^\/raw\/(?:al2023|alpine|elastic|elastic-legacy)\//.test(request.url))) throw new Error();
       const target = new URL(request.url, 'http://localhost');
       if (target.origin !== 'http://localhost' || target.hash ||
           [...target.searchParams.keys()].some(k => k !== 'ns')) throw new Error();

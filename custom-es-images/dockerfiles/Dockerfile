@@ -16,14 +16,23 @@ FROM ${DOWNLOADER_IMAGE} AS downloader
 ARG ES_VERSION
 ARG TARBALL_URL
 ARG TARGETARCH
+ARG CI_PACKAGE_ENDPOINT
+COPY configure-ci-packages.sh /tmp/configure-ci-packages.sh
 
-RUN dnf install -y --allowerasing tar gzip findutils curl && dnf clean all && \
+RUN sh /tmp/configure-ci-packages.sh && dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y --allowerasing tar gzip findutils curl && dnf clean all && \
     # Map Docker TARGETARCH (amd64/arm64) to ES arch names (x86_64/aarch64)
     case "${TARGETARCH}" in \
       arm64) ES_ARCH="aarch64" ;; \
       *) ES_ARCH="x86_64" ;; \
     esac && \
     RESOLVED_URL=$(echo "${TARBALL_URL}" | sed "s/ARCH/${ES_ARCH}/g") && \
+    if [ -n "$CI_PACKAGE_ENDPOINT" ]; then \
+      case "$RESOLVED_URL" in \
+        https://artifacts.elastic.co/*) RESOLVED_URL="http://$CI_PACKAGE_ENDPOINT/raw/elastic/${RESOLVED_URL#https://artifacts.elastic.co/}" ;; \
+        https://download.elastic.co/*) RESOLVED_URL="http://$CI_PACKAGE_ENDPOINT/raw/elastic-legacy/${RESOLVED_URL#https://download.elastic.co/}" ;; \
+        *) exit 1 ;; \
+      esac; \
+    fi && \
     # Fallback: if aarch64 tarball doesn't exist (ES 7.0-7.6), use no-jdk variant
     if [ "${ES_ARCH}" = "aarch64" ]; then \
       HTTP_CODE=$(curl -sI -o /dev/null -w "%{http_code}" "${RESOLVED_URL}") && \
@@ -74,6 +83,8 @@ RUN dnf install -y --allowerasing tar gzip findutils curl && dnf clean all && \
 
 # --- Stage 2: Build cgroups v2 fix for ES 5.1-5.2 ---
 FROM ${BASE_IMAGE} AS cgroup-fixer
+ARG CI_PACKAGE_ENDPOINT
+COPY configure-ci-packages.sh /tmp/configure-ci-packages.sh
 ARG ES_VERSION
 COPY cgroup_fix.c /tmp/fix.c
 
@@ -81,11 +92,12 @@ RUN MAJOR=$(echo "${ES_VERSION}" | cut -d. -f1) && \
     MINOR=$(echo "${ES_VERSION}" | cut -d. -f2) && \
     mkdir -p /opt/fix && \
     if [ "$MAJOR" -eq 5 ] && [ "$MINOR" -ge 1 ] && [ "$MINOR" -le 2 ]; then \
+      sh /tmp/configure-ci-packages.sh && \
       # Detect Alpine (apk) vs AL2023 (dnf) for compiler installation
       if command -v apk >/dev/null 2>&1; then \
-        apk add --no-cache gcc musl-dev; \
+        apk ${CI_PACKAGE_ENDPOINT:+--repositories-file /tmp/ci-apk/repositories} add --no-cache gcc musl-dev; \
       else \
-        dnf install -y gcc glibc-devel && dnf clean all; \
+        dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y gcc glibc-devel && dnf clean all; \
       fi && \
       gcc -shared -fPIC -o /opt/fix/libcgroup_fix.so /tmp/fix.c -ldl; \
     else \
@@ -131,6 +143,8 @@ RUN MAJOR=$(echo "${ES_VERSION}" | cut -d. -f1) && \
 
 # --- Stage 4: Runtime ---
 FROM ${BASE_IMAGE}
+ARG CI_PACKAGE_ENDPOINT
+COPY configure-ci-packages.sh /tmp/configure-ci-packages.sh
 
 ARG ES_VERSION
 ARG CORRETTO_VERSION
@@ -144,10 +158,10 @@ ENV ES_HOME=/usr/share/elasticsearch \
 
 # Install minimal runtime deps — bash for ES scripts, curl for healthcheck
 # Alpine (Corretto 8): apk, AL2023 (Corretto 11+): dnf
-RUN if command -v apk >/dev/null 2>&1; then \
-      apk add --no-cache bash coreutils curl shadow which; \
+RUN sh /tmp/configure-ci-packages.sh && if command -v apk >/dev/null 2>&1; then \
+      apk ${CI_PACKAGE_ENDPOINT:+--repositories-file /tmp/ci-apk/repositories} add --no-cache bash coreutils curl shadow which; \
     else \
-      dnf install -y --allowerasing bash coreutils curl hostname shadow-utils which util-linux && \
+      dnf ${CI_PACKAGE_ENDPOINT:+--setopt=reposdir=/tmp/ci-rpm-repos} install -y --allowerasing bash coreutils curl hostname shadow-utils which util-linux && \
       dnf clean all && rm -rf /var/cache/dnf; \
     fi && \
     groupadd -g 1000 elasticsearch && \
