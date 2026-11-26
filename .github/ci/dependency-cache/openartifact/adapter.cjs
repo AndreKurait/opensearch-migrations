@@ -72,7 +72,7 @@ async function startAdapter(options = {}) {
   const store = await openStorage(options);
   let active = 0;
   const count = {};
-  const metrics = Object.assign(store.metrics, {operations: count, errors: {}});
+  const metrics = Object.assign(store.metrics, {operations: count, errors: {}, internalErrors: {}});
   const op = (name) => {
     count[name] = (count[name] || 0) + 1;
   };
@@ -239,6 +239,12 @@ async function startAdapter(options = {}) {
       .catch((error) => {
         const code = error.status ? error.code : 'InternalError';
         metrics.errors[code] = (metrics.errors[code] || 0) + 1;
+        if (!error.status) {
+          const stage = res.headersSent ? 'response-stream' : 'before-response';
+          const cause = /^[A-Z][A-Z0-9_]{1,48}$/.test(error.code) ? error.code : 'UNKNOWN';
+          const detail = `${stage}/${cause}`;
+          metrics.internalErrors[detail] = (metrics.internalErrors[detail] || 0) + 1;
+        }
         if (res.headersSent) {
           res.destroy();
           return;
