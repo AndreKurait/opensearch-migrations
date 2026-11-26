@@ -175,7 +175,7 @@ test('workers reuse release image tags for at most a day while the publisher ref
   assert.equal(isFreshEntry(entry, 600_000), false);
   assert.equal(reusableRecordingEntry(entry, 600_000), true);
   assert.equal(reusableRecordingEntry(entry, 86_400_000), false);
-  for (const tag of ['2', '2.8', 'latest', 'v1.31.6-k3s1']) {
+  for (const tag of ['2', '2.8', 'latest', 'v1.31.6-k3s1', '2.4.66-alpine']) {
     const version = {...entry, key: prefix + tag};
     assert.equal(reusableRecordingEntry(version, 600_000), true);
     assert.equal(reusableRecordingEntry(version, 86_400_000), false);

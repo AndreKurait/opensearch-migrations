@@ -48,6 +48,9 @@ const pinnedRawArtifacts = {
   '/raw/elastic/downloads/elasticsearch-plugins/repository-gcs/repository-gcs-5.6.16.zip': '0194c3f1f1fbd7b6e23df0ccd75f1d1ea2a7c078f9eddb18038cd8063de99843',
   '/raw/elastic/downloads/elasticsearch-plugins/repository-gcs/repository-gcs-6.8.23.zip': '7984d286ec016539947b5b15f968151a8525689debaf905056e64a0db501ca8a',
   '/raw/elastic/downloads/elasticsearch-plugins/repository-gcs/repository-gcs-7.10.2.zip': '25d5ade4bcd26ecd0c204b8b24813571e4e735e4d823926dd8dd178fb3813ba8',
+  '/raw/elastic/downloads/elasticsearch-plugins/repository-azure/repository-azure-7.17.29.zip': '3a50c815590a4a3913a3a54f8b1dd67ff4b91be1e954726328b0a10129da90fd',
+  '/raw/elastic/downloads/elasticsearch-plugins/repository-gcs/repository-gcs-7.17.29.zip': '4760c0e99c0073a73f7574169bccc9f870bea5990ff5fba6e1b5cd2930f13281',
+  '/raw/elastic/downloads/elasticsearch/elasticsearch-7.17.29-linux-x86_64.tar.gz': 'f7175de3ac8ca16326b9dbdff4ef70bc3da6405efe624655444ba2464073ea8e',
 };
 const rawOrigins = {
   'msk-iam': ['https://github.com/aws/aws-msk-iam-auth/releases/download/', githubAssets],
