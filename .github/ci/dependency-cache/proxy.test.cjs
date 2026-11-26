@@ -92,7 +92,7 @@ test('Maven falls back on a true Central 404 and caches exact uncompressed bytes
   const file = path.join(dir, 'artifact');
   const calls = mockFetch(t, [new Response('', {status: 404}), new Response('plugin', {headers: {'content-length': '6'}}),
     new Response('', {status: 404}), new Response('', {status: 404}), new Response('', {status: 429}),
-    new Response('', {status: 429}), new Response('', {status: 429}), new Response('', {status: 404}), new Response('', {status: 404})]);
+    new Response('', {status: 429, headers: {'retry-after': '120'}}), new Response('', {status: 429}), new Response('', {status: 404}), new Response('', {status: 404})]);
   assert.deepEqual(await fetchPublic('/maven/org/example/plugin.jar', file),
     {type: 'text/plain', size: 6, digest: hash('plugin')});
   assert.equal((await readFile(file)).toString(), 'plugin');
@@ -102,6 +102,13 @@ test('Maven falls back on a true Central 404 and caches exact uncompressed bytes
   assert.equal(await fetchPublic('/maven/org/example/optional-marker.jar', path.join(dir, 'optional')), null);
   assert.deepEqual(calls.slice(-3).map(c => c.url.hostname),
     ['repo.maven.apache.org', 'maven-central.storage-download.googleapis.com', 'plugins.gradle.org']);
+});
+
+test('a throttled package download retries and records the successful response', async t => {
+  const file = path.join(await scratch(t), 'package');
+  const calls = mockFetch(t, [new Response(null, {status: 429}), new Response('artifact')]);
+  assert.equal((await fetchPublic('/npm/example/-/example-1.0.0.tgz', file)).digest, hash('artifact'));
+  assert.equal(calls.length, 2);
 });
 
 test('a Plugin Portal redirect to the same throttled Central metadata uses the confirmed mirror miss', async t => {

@@ -264,7 +264,22 @@ async function packageIndex(route, response) {
   return Buffer.from(JSON.stringify(data));
 }
 
-async function fetchPublic(key, destination, {maxBytes = Infinity} = {}) {
+async function fetchPublic(key, destination, options) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetchPublicOnce(key, destination, options);
+    } catch (error) {
+      if (error.status !== 429 || attempt >= 3) throw error;
+      const seconds = /^\d+$/.test(error.retryAfter) ? Number(error.retryAfter) : NaN;
+      const requested = Number.isNaN(seconds) ? Date.parse(error.retryAfter) - Date.now() : seconds * 1000;
+      const delay = Math.max(1000 * 2 ** attempt + Math.random() * 500, requested || 0);
+      if (delay > 60_000) throw error;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+async function fetchPublicOnce(key, destination, {maxBytes = Infinity} = {}) {
   const route = parseKey(key);
   const headers = {};
   if (route.manifest) headers.accept = manifestTypes.join(', ');
@@ -293,7 +308,9 @@ async function fetchPublic(key, destination, {maxBytes = Infinity} = {}) {
     }
     if (response.status !== 200 || !response.body) {
       await response.body?.cancel();
-      throw new Error(`Artifact upstream returned ${response.status}`);
+      throw Object.assign(new Error(`Artifact upstream returned ${response.status} for ${key}`), {
+        status: response.status, retryAfter: response.headers.get('retry-after'),
+      });
     }
     const type = response.headers.get('content-type')?.split(';')[0].trim() || 'application/octet-stream';
     const announced = response.headers.get('docker-content-digest');
