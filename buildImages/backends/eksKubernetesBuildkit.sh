@@ -277,7 +277,7 @@ restrict_eks_buildkit_egress() {
   local rules='set -eu
     iptables -t raw -I PREROUTING -i buildkit0 -j DROP
     iptables -t raw -C PREROUTING -i buildkit0 -j DROP
-    if test -s /proc/net/if_inet6; then
+    if test -e /proc/net/if_inet6; then
       ip6tables -t raw -I PREROUTING -i buildkit0 -j DROP
       ip6tables -t raw -C PREROUTING -i buildkit0 -j DROP
     fi'
