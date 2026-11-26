@@ -1,6 +1,6 @@
 'use strict';
 
-const { Readable } = require('node:stream');
+const http = require('node:http');
 const { pipeline } = require('node:stream/promises');
 const { startStack, validateRows } = require('./stack.cjs');
 const { startAdapter } = require('./adapter.cjs');
@@ -90,24 +90,24 @@ async function openPackageTransport({ mode, reader, imageMode = mode, coldAllowe
         if (req.headers[h]) headers[h] = req.headers[h];
       let response;
       try {
-        response = await fetch(new URL(target.path, stack.url), {
-          method: req.method,
-          headers,
-          redirect: 'error',
+        response = await new Promise((resolve, reject) => {
+          const upstream = http.request(new URL(target.path, stack.url), { method: req.method, headers }, resolve);
+          upstream.once('error', reject);
+          upstream.end();
         });
       } catch (error) {
         // A disconnected local package service can still be served by the ordinary
         // digest-checked resolver. Strict replay surfaces the transport failure.
-        if (coldAllowed && ['ECONNRESET', 'ECONNREFUSED', 'UND_ERR_SOCKET'].includes(error.cause?.code)) return false;
+        if (coldAllowed && ['ECONNRESET', 'ECONNREFUSED', 'UND_ERR_SOCKET'].includes(error.code)) return false;
         throw error;
       }
-      if (mode === 'read' && !response.ok && response.status >= 500) {
-        await response.body?.cancel();
+      if (mode === 'read' && response.statusCode >= 500) {
+        response.destroy();
         if (coldAllowed) return false;
         reportMiss(key);
         throw Object.assign(new Error('Published storage object unavailable'), { code: 'CACHE_MISS' });
       }
-      if (mode === 'record' && (response.ok || response.status === 304 || response.status === 404))
+      if (mode === 'record' && ((response.statusCode >= 200 && response.statusCode < 300) || [304, 404].includes(response.statusCode)))
         observed.set(key, Date.now());
       const output = {};
       for (const h of [
@@ -121,12 +121,15 @@ async function openPackageTransport({ mode, reader, imageMode = mode, coldAllowe
         'cache-control',
         'vary',
       ]) {
-        const value = response.headers.get(h);
-        if (value !== null) output[h] = value;
+        const value = response.headers[h];
+        if (value !== undefined) output[h] = value;
       }
-      res.writeHead(response.status, output);
-      if (req.method === 'HEAD' || !response.body) res.end();
-      else await pipeline(Readable.fromWeb(response.body), res);
+      if (res.destroyed) {
+        response.destroy();
+        return true;
+      }
+      res.writeHead(response.statusCode, output);
+      await pipeline(response, res);
       return true;
     },
     async observations() {
