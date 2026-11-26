@@ -98,6 +98,14 @@ function parseKey(key) {
   if (/^\/benchmark\/corpora\/(geonames|http_logs|nested|nyc_taxis)\/[\w.-]+-1k(?:\.[\w.-]+)?$/.test(key)) {
     return {urls:[new URL(key.slice('/benchmark'.length), 'https://opensearch-benchmark-workloads.s3.amazonaws.com')], cdn:[]};
   }
+  if (kind === 'raw' && originId === 'node') {
+    const digests = {
+      'node-v22.14.0-linux-x64.tar.gz': '9d942932535988091034dc94cc5f42b6dc8784d6366df3a36c4c9ccb3996f0c2',
+      'node-v22.14.0-linux-arm64.tar.gz': '8cf30ff7250f9463b53c18f89c6c606dfda70378215b2c905d0a9a8b08bd45e0',
+    };
+    if (parts.length !== 4 || parts[2] !== 'v22.14.0' || !Object.hasOwn(digests, parts[3])) throw new Error('Unpinned Node.js distribution');
+    return {urls: [new URL(`https://nodejs.org/dist/${parts[2]}/${parts[3]}`)], cdn: [], digest: digests[parts[3]]};
+  }
   if (kind === 'raw' && Object.hasOwn(rawOrigins, originId) && parts.length >= 3) {
     const [origin, cdn] = rawOrigins[originId];
     return {urls: [new URL('./' + parts.slice(2).join('/'), origin)], cdn};
