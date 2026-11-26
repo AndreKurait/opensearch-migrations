@@ -148,6 +148,16 @@ class ObservationTests(unittest.TestCase):
             self.assertEqual(('123', '2'), (overrides['CI_GH_RUN_ID'], overrides['CI_GH_RUN_ATTEMPT']))
             self.assertRegex(overrides['CI_STAGE'], r'^ci-[a-f0-9]{12}$')
 
+    def test_lease_waits_for_successful_recovery_after_a_failed_attempt(self):
+        earlier, retry = 'older-cleanup', 'newer-cleanup'
+        env = {'environmentVariables': [{'name': 'CI_MODE', 'value': 'cleanup'},
+                                       {'name': 'CI_RECOVER_BUILD', 'value': BUILD}]}
+        rows = [dict(id=retry, buildStatus='SUCCEEDED', environment=env),
+                dict(id=earlier, buildStatus='TIMED_OUT', environment=env)]
+        with patch.object(build, 'aws', side_effect=[{'ids': [retry, earlier, BUILD]}, {'builds': rows}]), \
+                patch.object(build, 'summary'):
+            self.assertEqual('SUCCEEDED', build.wait_for_cleanup(BUILD, 0))
+
     def test_empty_next_page_and_delayed_stream(self):
         logs = {'groupName': build.LOG_GROUP, 'streamName': 'worker'}
         pages = [{'events': [{'message': '::error::from worker\r\n'}], 'nextForwardToken': 'next'},

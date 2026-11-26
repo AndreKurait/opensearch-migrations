@@ -958,8 +958,9 @@ def main():
             traceback.print_exc()
             errors.append(('integration', str(error)))
         finally:
-            with phase('stage cleanup', cleanup_minutes(suite)):
-                errors.extend(worker.cleanup())
+            if cleanup or os.environ.get('CI_SEPARATE_CLEANUP') != 'true':
+                with phase('stage cleanup', cleanup_minutes(suite)):
+                    errors.extend(worker.cleanup())
             # Copy the test harness logs before the temporary worker is reclaimed.
             logs = worker.root / 'libraries/testAutomation/logs'
             if logs.is_dir():

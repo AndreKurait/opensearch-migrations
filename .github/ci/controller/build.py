@@ -56,7 +56,7 @@ def start(suite, sha, ref, release, options):
     digest = hashlib.sha256(run_key.encode()).hexdigest()
     stage = 'ci-' + digest[:12]
     values = {'CI_SUITE': suite, 'CI_GIT_SHA': sha, 'CI_GIT_REF': ref, 'CI_STAGE': stage,
-              'CI_GH_RUN_ID': run_id, 'CI_GH_RUN_ATTEMPT': attempt}
+              'CI_GH_RUN_ID': run_id, 'CI_GH_RUN_ATTEMPT': attempt, 'CI_SEPARATE_CLEANUP': 'true'}
     values.update(parameters((suite,), options))
     if release:
         values['CI_RELEASE_VERSION'] = release
@@ -134,6 +134,38 @@ def collect(build):
     return True
 
 
+def wait_for_cleanup(build_id, deadline):
+    # Recovery invokes the operator-owned cleanup archive even if the test worker
+    # timed out, never started its first command, or ran a historical candidate.
+    cursors = {}
+    while True:
+        token = []
+        attempts = []
+        while True:
+            page = aws('codebuild', 'list-builds-for-project', '--project-name', PROJECT, '--no-paginate', *token)
+            ids = page.get('ids', [])
+            if ids:
+                rows = aws('codebuild', 'batch-get-builds', '--ids', *ids)['builds']
+                for row in rows:
+                    env = {v['name']: v['value'] for v in row['environment']['environmentVariables']}
+                    if env.get('CI_RECOVER_BUILD') == build_id and env.get('CI_MODE') == 'cleanup':
+                        attempts.append(row)
+            if build_id in ids or not page.get('nextToken'):
+                break
+            token = ['--next-token', page['nextToken']]
+        for attempt in reversed(attempts):
+            key = attempt['id']
+            cursors[key] = stream(attempt.get('logs', {}), cursors.get(key, ''))
+            if attempt['buildStatus'] == 'SUCCEEDED':
+                summary(f'Cleanup `{key}` succeeded.')
+                return 'SUCCEEDED'
+        if len(attempts) >= 3 and all(a['buildStatus'] in TERMINAL for a in attempts):
+            return 'FAILED'
+        if time.monotonic() >= deadline:
+            return 'IN_PROGRESS'
+        time.sleep(20)
+
+
 def watch(build_id, cursor, minutes):
     if not re.fullmatch(BUILD_ID, build_id):
         raise ValueError('Unexpected build ID')
@@ -155,6 +187,14 @@ def watch(build_id, cursor, minutes):
                 for section in build.get('phases', []):
                     print(section.get('phaseType'), section.get('phaseStatus'),
                           [error.get('statusCode') for error in section.get('contexts', [])], flush=True)
+            env = {v['name']: v['value'] for v in build.get('environment', {}).get('environmentVariables', [])}
+            if env.get('CI_SEPARATE_CLEANUP') == 'true':
+                cleanup_state = wait_for_cleanup(build_id, stop_at)
+                if cleanup_state == 'IN_PROGRESS':
+                    output(state='IN_PROGRESS', cursor=cursor or '', artifact='false')
+                    return
+                if cleanup_state != 'SUCCEEDED':
+                    state = 'FAILED'
             summary(f"CodeBuild `{build_id}` finished **{state}**.")
             # In a provisioning failure CodeBuild can advertise an S3 destination without creating an object.
             # A successful suite must have produced its evidence. A failed suite remains failed either way.

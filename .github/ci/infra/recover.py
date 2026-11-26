@@ -97,9 +97,10 @@ def handler(event, context):
         stop_cancelled_attempts(client, past, project)
     recovery = []
     for build in candidates:
-        if build['projectName'] != project or build['buildStatus'] not in FAILED:
-            continue
         env = variables(build)
+        separate = env.get('CI_SEPARATE_CLEANUP') == 'true' and build['buildStatus'] == 'SUCCEEDED'
+        if build['projectName'] != project or (build['buildStatus'] not in FAILED and not separate):
+            continue
         stage = env.get('CI_STAGE', '')
         suite = env.get('CI_SUITE', '')
         if env.get('CI_MODE') == 'cleanup' or not re.fullmatch(r'ci-[a-z0-9]{1,12}', stage):

@@ -90,7 +90,23 @@ phases:
         fi
         command="$CI_SUITE"
         if [[ "${CI_MODE:-}" == cleanup ]]; then command=cleanup; fi
-        python3 -u "$harness/.github/ci/aws/run.py" "$command"
+        runner="$harness/.github/ci/aws/run.py"
+        if [[ "${CI_SEPARATE_CLEANUP:-}" == true && "$command" != cleanup ]] && ! grep -q CI_SEPARATE_CLEANUP "$runner"; then
+          # Historical reviewed candidates have an unconditional cleanup() in finally.
+          # Run their own tests and JUnit generation, with teardown delegated to recovery.
+          python3 -u - "$runner" "$command" <<'PYTHON'
+        import runpy, sys
+        from pathlib import Path
+        runner, command = sys.argv[1:]
+        sys.path.insert(0, str(Path(runner).parent))
+        sys.argv = [runner, command]
+        old_runner = runpy.run_path(runner)
+        old_runner['Worker'].cleanup = lambda worker: []
+        raise SystemExit(old_runner['main']())
+        PYTHON
+        else
+          python3 -u "$runner" "$command"
+        fi
         WORKER
   build:
     commands:
