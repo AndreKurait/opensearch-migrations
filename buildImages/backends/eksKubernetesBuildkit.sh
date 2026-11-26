@@ -332,6 +332,22 @@ start_eks_package_relay() {
     sleep 3
   done
   [[ -n $port ]] || return 1
+  # Keep the worker's selected loopback port stable if the API server drops an established tunnel.
+  (
+    forward_pid=
+    trap 'if [[ -n $forward_pid ]]; then kill "$forward_pid" 2>/dev/null || true; fi; exit 0' TERM INT
+    while kill -0 "$CI_PACKAGE_FORWARD_PID" 2>/dev/null; do sleep 1; done
+    while true; do
+      echo "Reconnecting EKS package relay on port $port" >&2
+      "${kube[@]}" port-forward "pod/$name" "$port:8081" --address 127.0.0.1 >"$CI_PACKAGE_FORWARD_LOG" 2>&1 &
+      forward_pid=$!
+      wait "$forward_pid" || true
+      forward_pid=
+      cat "$CI_PACKAGE_FORWARD_LOG" >&2
+      sleep 2
+    done
+  ) &
+  CI_PACKAGE_RECONNECT_PID=$!
   python3 "$source" worker "$port" &
   CI_PACKAGE_WORKER_PID=$!
   local builder

@@ -874,6 +874,7 @@ include_ma_images=false
 cleanup_bootstrap_mirroring() {
   [[ "${BASH_SUBSHELL:-0}" -eq 0 ]] || return
   if [[ -n ${CI_PACKAGE_WORKER_PID:-} ]]; then kill "$CI_PACKAGE_WORKER_PID" 2>/dev/null || true; fi
+  if [[ -n ${CI_PACKAGE_RECONNECT_PID:-} ]]; then kill "$CI_PACKAGE_RECONNECT_PID" 2>/dev/null || true; wait "$CI_PACKAGE_RECONNECT_PID" 2>/dev/null || true; fi
   if [[ -n ${CI_PACKAGE_FORWARD_PID:-} ]]; then kill "$CI_PACKAGE_FORWARD_PID" 2>/dev/null || true; fi
   if [[ -n ${CI_PACKAGE_FORWARD_LOG:-} ]]; then rm -f "$CI_PACKAGE_FORWARD_LOG"; fi
   if [[ -n "$mirror_pid" ]] && kill -0 "$mirror_pid" 2>/dev/null; then
