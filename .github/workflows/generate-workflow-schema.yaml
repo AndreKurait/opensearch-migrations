@@ -199,6 +199,10 @@ jobs:
       - name: Generate workflow schema artifact
         run: |
           chmod +x ./deployment/k8s/generateWorkflowSchemaArtifact.sh
+          if [[ -n "${CI_DEPENDENCY_REGISTRY_ENDPOINT:-}" ]]; then
+            export CHART_VALUES_FILE="$RUNNER_TEMP/schema-cache-values.yaml"
+            printf 'chartArchiveMirror: "http://%s"\n' "$CI_DEPENDENCY_REGISTRY_ENDPOINT" > "$CHART_VALUES_FILE"
+          fi
           KUBE_CONTEXT=kind-generate-workflow-schema \
           IMAGE_REPOSITORY_PREFIX=localhost:5000 \
           IMAGE_TAG=latest \
@@ -225,8 +229,8 @@ jobs:
           helm --kube-context kind-generate-workflow-schema -n ma list --all || true
           helm --kube-context kind-generate-workflow-schema -n ma status ma || true
           kubectl --context kind-generate-workflow-schema -n ma get jobs,pods,events || true
-          kubectl --context kind-generate-workflow-schema -n ma describe job ma-helm-installer || true
-          kubectl --context kind-generate-workflow-schema -n ma logs job/ma-helm-installer --all-containers --tail=-1 || true
+          kubectl --context kind-generate-workflow-schema -n ma describe job ma-dependency-installer || true
+          kubectl --context kind-generate-workflow-schema -n ma logs job/ma-dependency-installer --all-containers --tail=-1 || true
           kubectl --context kind-generate-workflow-schema -n ma get configmap ma-installation-notes -o yaml || true
           kubectl --context kind-generate-workflow-schema -n ma describe statefulset migration-console || true
           kubectl --context kind-generate-workflow-schema -n ma describe pod migration-console-0 || true
