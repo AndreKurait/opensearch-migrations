@@ -165,8 +165,10 @@ test('receipt import independently refreshes a changed package index and still v
   const alpine = '/raw/alpine/v3.24/main/x86_64/';
   await recorder.importObservation({...observation, key: alpine + 'APKINDEX.tar.gz'});
   await assert.rejects(recorder.importObservation({...observation, key: alpine + 'busybox-1.37.0-r0.apk'}), /no longer matches/);
+  await recorder.importObservation({...observation, key: '/terraform-registry/aws/versions'});
+  await assert.rejects(recorder.importObservation({...observation, key: '/terraform-registry/aws/6.1.0/download/linux/amd64'}), /no longer matches/);
   const entries = await recorder.close();
-  assert.equal(entries.length, 2);
+  assert.equal(entries.length, 3);
   for (const entry of entries) {
     assert.equal(entry.digest, createHash('sha256').update('new registry bytes').digest('hex'));
     assert.equal(entry.verifiedAt, 100);

@@ -122,7 +122,8 @@ function parseKey(key) {
         !(resource === 'versions' || /^\d+\.\d+\.\d+\/download\/linux\/amd64$/.test(resource))) {
       throw new Error('Unsupported Terraform registry request');
     }
-    return {urls: [new URL(`https://registry.terraform.io/v1/providers/hashicorp/${provider}/${resource}`)], cdn: []};
+    return {urls: [new URL(`https://registry.terraform.io/v1/providers/hashicorp/${provider}/${resource}`)], cdn: [],
+      terraformIndex: resource === 'versions'};
   }
   if (kind === 'terraform-provider') {
     const [, provider, version, platform, digest] = parts;
@@ -565,7 +566,7 @@ async function startProxy({host = '127.0.0.1', port = 0, resolve, catalog, obser
 
 function isPackageIndex(key) {
   const route = parseKey(key);
-  return Boolean(route.npmMetadata || route.pypiMetadata) ||
+  return Boolean(route.npmMetadata || route.pypiMetadata || route.terraformIndex) ||
     /^\/raw\/alpine\/(?:v[0-9]+\.[0-9]+|edge)\/(?:main|community|testing)\/[a-z0-9_]+\/APKINDEX\.tar\.gz$/.test(key);
 }
 
