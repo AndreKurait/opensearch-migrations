@@ -42,7 +42,7 @@ jobs:
           disable-telemetry: true
           allowed-endpoints: >-
             api.github.com:443 github.com:443 raw.githubusercontent.com:443
-            sts.us-west-2.amazonaws.com:443 sts.amazonaws.com:443 codebuild.us-west-2.amazonaws.com:443 ssm.us-west-2.amazonaws.com:443
+            sts.us-west-2.amazonaws.com:443 sts.amazonaws.com:443 codebuild.us-west-2.amazonaws.com:443 ssm.us-west-2.amazonaws.com:443 sts.ca-central-1.amazonaws.com:443 codebuild.ca-central-1.amazonaws.com:443 ssm.ca-central-1.amazonaws.com:443
       - &enforce_unprivileged
         name: Enforce Linux network policy before candidate checkout
         shell: bash

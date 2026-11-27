@@ -20,7 +20,7 @@ const cacheEnv = ['ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RESULTS_URL', 'ACTIONS_CACHE
 
 async function aws(service, operation, ...flags) {
   try {
-    const {stdout} = await execute('aws', ['--region', 'us-west-2', '--no-cli-pager', '--output', 'json', service, operation, ...flags], {maxBuffer: 5 * 1024 * 1024});
+    const {stdout} = await execute('aws', ['--region', process.env.AWS_REGION || 'us-west-2', '--no-cli-pager', '--output', 'json', service, operation, ...flags], {maxBuffer: 5 * 1024 * 1024});
     return stdout.trim() ? JSON.parse(stdout) : {};
   } catch (error) {
     // Never relay AWS CLI argv, the private bucket, OIDC identifiers or the cache grant.

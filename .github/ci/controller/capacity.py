@@ -1,4 +1,4 @@
-"""Assign each AWS suite a shared GitHub queue using the Oregon sandbox's available capacity."""
+"""Assign each AWS suite a shared GitHub queue using the sandbox's available capacity."""
 import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -14,6 +14,7 @@ import time
 from parameters import SUITES
 
 REGION = 'us-west-2'
+REGIONS = (REGION, 'ca-central-1')
 PROJECT = 'migrations-github-eks'
 REPO = 'AndreKurait/opensearch-migrations'
 ENVIRONMENT = 'aws-ci'
@@ -33,8 +34,8 @@ def cli(*args, payload=None):
     return result.stdout
 
 
-def client(profile=None):
-    prefix = ['aws', '--region', REGION, '--no-cli-pager', '--output', 'json']
+def client(profile=None, region=REGION):
+    prefix = ['aws', '--region', region, '--no-cli-pager', '--output', 'json']
     if profile:
         prefix += ['--profile', profile]
 
@@ -178,7 +179,7 @@ def usage(call, account, ignore_active=False):
         page = call('ec2', 'describe-instance-types', '--instance-types', *instance_types[start:start + 100])
         sizes.update({i['InstanceType']: i['VCpuInfo']['DefaultVCpus'] for i in page['InstanceTypes']})
     if sizes.keys() != set(instance_types):
-        raise ValueError('EC2 returned incomplete vCPU counts for the Oregon capacity inventory')
+        raise ValueError('EC2 returned incomplete vCPU counts for the sandbox capacity inventory')
     for counter in [other, *by_stage.values()]:
         counter['vcpus'] = sum(counter['type:' + name] * size for name, size in sizes.items())
         nat_peak = max((n for k, n in counter.items() if k.startswith('nat:')), default=0)
@@ -225,7 +226,7 @@ def lanes(room):
 
 def config():
     cfg = json.loads(os.environ['AWS_CI_CONFIG'])
-    if not re.fullmatch(r'[0-9]{12}', cfg['account']) or cfg['region'] != REGION:
+    if not re.fullmatch(r'[0-9]{12}', cfg['account']) or cfg['region'] not in REGIONS:
         raise ValueError('Invalid sandbox account configuration')
     if set(cfg['room']) != set(QUOTAS) or any(type(v) is not int or v < 0 for v in cfg['room'].values()):
         raise ValueError('Invalid sandbox capacity configuration')
@@ -242,7 +243,7 @@ def admit(suite, call, cfg, wait_seconds=4 * 3600):
             return
         print('Waiting for capacity in ' + ', '.join(short), flush=True)
         if time.monotonic() >= deadline:
-            raise RuntimeError('Oregon capacity is still occupied; rerun this suite when resources are available')
+            raise RuntimeError('Sandbox capacity is still occupied; rerun this suite when resources are available')
         time.sleep(60)
 
 
@@ -272,14 +273,15 @@ def publish(cfg):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile', help='Operator AWS profile')
+    parser.add_argument('--region', default=REGION, choices=REGIONS)
     parser.add_argument('--publish', action='store_true', help='Set AWS_CI_CONFIG on the main-only environment')
     opts = parser.parse_args()
-    aws = client(opts.profile)
+    aws = client(opts.profile, opts.region)
     account = aws('sts', 'get-caller-identity')['Account']
     measured = parallel({'limits': lambda: quotas(aws), 'used': lambda: usage(aws, account, ignore_active=True)})
     room = {k: max(0, measured['limits'][k] - measured['used'][k]) for k in QUOTAS}
-    cfg = dict(account=account, region=REGION, room=room)
-    print('Oregon capacity after background usage:', json.dumps(room, sort_keys=True))
+    cfg = dict(account=account, region=opts.region, room=room)
+    print(f'{opts.region} capacity after background usage:', json.dumps(room, sort_keys=True))
     print('Shared GitHub queues:', json.dumps(lanes(room), sort_keys=True))
     if opts.publish:
         publish(cfg)

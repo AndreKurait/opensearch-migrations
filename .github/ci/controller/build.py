@@ -64,8 +64,9 @@ def start(suite, sha, ref, release, options):
     variables = [dict(name=name, value=value, type='PLAINTEXT') for name, value in values.items()]
     role = []
     if ref == 'refs/heads/main' and values.get('CI_DEPENDENCY_MODE') != 'replay':
-        account = config()['account']
-        role = ['--service-role-override', f'arn:aws:iam::{account}:role/MigrationsGitHubMainWorker-us-west-2']
+        cfg = config()
+        account, region = cfg['account'], cfg['region']
+        role = ['--service-role-override', f'arn:aws:iam::{account}:role/MigrationsGitHubMainWorker-{region}']
     requested_timeout = worker_timeout_minutes(ALIASES.get(suite, suite))
     build = aws('codebuild', 'start-build', '--project-name', PROJECT, '--idempotency-token', digest, *role,
                 '--timeout-in-minutes-override', str(requested_timeout),
@@ -278,7 +279,8 @@ if __name__ == '__main__':
     watch_parser.add_argument('--minutes', type=int, default=305)
     opts = parser.parse_args()
     if opts.operation == 'start':
-        admit(opts.suite, client(), config())
+        cfg = config()
+        admit(opts.suite, client(region=cfg['region']), cfg)
         start(opts.suite, opts.sha, opts.ref, opts.release, opts.options)
     else:
         def cancel(signum, _frame):

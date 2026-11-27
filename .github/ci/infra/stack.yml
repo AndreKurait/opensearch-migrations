@@ -4,6 +4,8 @@ Parameters:
   ProviderArn: {Type: String}
   WorkerLimit: {Type: Number, Default: 12, MinValue: 2, MaxValue: 100}
   RecoveryDigest: {Type: String, AllowedPattern: '[a-f0-9]{64}'}
+Conditions:
+  Oregon: {'Fn::Equals': [!Ref 'AWS::Region', us-west-2]}
 Resources:
   Artifacts:
     Type: AWS::S3::Bucket
@@ -100,7 +102,7 @@ Resources:
   DependencyCacheLauncher:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: MigrationsGitHubCacheLauncher
+      RoleName: {'Fn::If': [Oregon, MigrationsGitHubCacheLauncher, !Sub 'MigrationsGitHubCacheLauncher-${AWS::Region}']}
       MaxSessionDuration: 10800
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -225,7 +227,7 @@ Resources:
   Launcher:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: MigrationsGitHubLauncher
+      RoleName: {'Fn::If': [Oregon, MigrationsGitHubLauncher, !Sub 'MigrationsGitHubLauncher-${AWS::Region}']}
       MaxSessionDuration: 21600
       AssumeRolePolicyDocument:
         Version: '2012-10-17'

@@ -23,7 +23,7 @@ function awsStorage(bucket) {
   // Installed only inside the AWS worker. PR jobs require only the GitHub cache client.
   const awsRequire = createRequire(path.join(__dirname, 'aws/package.json'));
   const {S3Client, PutObjectCommand, GetObjectCommand, paginateListObjectsV2} = awsRequire('@aws-sdk/client-s3');
-  const s3 = new S3Client({region: 'us-west-2'});
+  const s3 = new S3Client({region: process.env.AWS_REGION || 'us-west-2'});
   return {
     async put(key, filename, digest, etag) {
       const options = {Bucket: bucket, Key: key, ContentLength: (await fs.stat(filename)).size,

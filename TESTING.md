@@ -76,12 +76,12 @@ GitHub’s orchestration code comes from `main`. It verifies current collaborato
 
 The disposable CodeBuild worker checks out the approved SHA and runs the PR’s code with `MigrationsGitHubWorker-us-west-2`. Approval gives that revision and its dependencies temporary access to the CI sandbox. Their output streams to public GitHub logs, and the test reports are downloadable. Review code that can print credentials or fixture data, and give the worker access only to fixtures suitable for public disclosure. The builds share a test account and an IAM role across runs. Separate projects and roles are required if suites must be mutually isolated. Worker cleanup runs after tests. An EventBridge rule starts a fresh cleanup worker on terminal failure or cancellation. Every 15 minutes, a reconciler also checks the exact GitHub run attempt and stops any original worker left running after GitHub confirmed cancellation. Check its result in CodeBuild if the original worker was interrupted.
 
-Provision the Oregon (`us-west-2`) stack using an operator profile and the expected sandbox account ID supplied locally. It needs PyYAML. Refresh the account configuration after provisioning or changing quotas. The discovery command without `--publish` prints available capacity and suite queues. With `--publish`, it writes a single `AWS_CI_CONFIG` secret to the `aws-ci` GitHub environment restricted to `main`.
+Provision the CI stack in Oregon (`us-west-2`) or Canada Central (`ca-central-1`) using an operator profile and the expected sandbox account ID supplied locally. It needs PyYAML. Use the same region when provisioning the stack and publishing the account configuration. Refresh the configuration after changing quotas. The discovery command without `--publish` prints available capacity and suite queues. With `--publish`, it writes a single `AWS_CI_CONFIG` secret to the `aws-ci` GitHub environment restricted to `main`.
 
 ```bash
 python3 .github/ci/infra/deploy.py --profile github-actions-test --region us-west-2 \
   --expected-account "$AWS_CI_ACCOUNT_ID"
-python3 .github/ci/controller/capacity.py --profile github-actions-test --publish
+python3 .github/ci/controller/capacity.py --profile github-actions-test --region us-west-2 --publish
 ```
 
 For source runs, the production bootstrap builds the CloudFormation templates and deployable images for the approved commit. GitHub-hosted workflows own general Gradle checks. The AWS deployment check covers CloudFormation, EKS startup and console readiness. Use a named migration suite for data migration, CDC or isolation assertions.

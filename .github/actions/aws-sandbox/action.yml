@@ -1,4 +1,4 @@
-name: Connect to the Oregon CI sandbox
+name: Connect to the AWS CI sandbox
 description: Mask the private account identifier and acquire a short-lived launcher session through GitHub OIDC.
 inputs:
   config:
@@ -14,6 +14,7 @@ runs:
   using: composite
   steps:
     - name: Mask the sandbox identifier
+      id: sandbox
       shell: bash
       env:
         AWS_CI_CONFIG: ${{ inputs.config }}
@@ -24,10 +25,18 @@ runs:
         fi
         account=$(jq -er '.account | select(test("^[0-9]{12}$"))' <<< "$AWS_CI_CONFIG")
         echo "::add-mask::$account"
+        region=$(jq -er '.region' <<< "$AWS_CI_CONFIG")
+        case "$region" in
+          us-west-2) role_suffix='' ;;
+          ca-central-1) role_suffix="-$region" ;;
+          *) echo '::error::Unsupported sandbox region.'; exit 1 ;;
+        esac
+        echo "region=$region" >> "$GITHUB_OUTPUT"
+        echo "role_suffix=$role_suffix" >> "$GITHUB_OUTPUT"
     - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
       with:
-        aws-region: us-west-2
-        role-to-assume: ${{ format('arn:aws:iam::{0}:role/{1}', fromJSON(inputs.config).account, inputs.role) }}
+        aws-region: ${{ steps.sandbox.outputs.region }}
+        role-to-assume: ${{ format('arn:aws:iam::{0}:role/{1}{2}', fromJSON(inputs.config).account, inputs.role, steps.sandbox.outputs.role_suffix) }}
         allowed-account-ids: ${{ fromJSON(inputs.config).account }}
         mask-aws-account-id: true
         role-session-name: gha-${{ github.run_id }}-${{ github.run_attempt }}

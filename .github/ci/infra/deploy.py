@@ -94,7 +94,7 @@ def publish_recovery(aws, bucket, digest, archive):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile')
-    parser.add_argument('--region', default='us-west-2')
+    parser.add_argument('--region', default='us-west-2', choices=('us-west-2', 'ca-central-1'))
     parser.add_argument('--expected-account', default=os.environ.get('AWS_CI_ACCOUNT_ID'),
                         help='Expected sandbox account number. Defaults to AWS_CI_ACCOUNT_ID.')
     parser.add_argument('--worker-limit', type=int, default=12, help='CodeBuild project concurrency limit')
@@ -110,8 +110,8 @@ def main():
         return json.loads(subprocess.check_output([*aws, *arguments, '--output', 'json']))
 
     account = call('sts', 'get-caller-identity')['Account']
-    if not args.expected_account or account != args.expected_account or args.region != 'us-west-2':
-        parser.error('Select the expected sandbox account with --expected-account and the us-west-2 region')
+    if not args.expected_account or account != args.expected_account:
+        parser.error('Select the expected sandbox account with --expected-account')
     issuer = 'token.actions.githubusercontent.com'
     arn = f'arn:aws:iam::{account}:oidc-provider/{issuer}'
     providers = call('iam', 'list-open-id-connect-providers')['OpenIDConnectProviderList']
