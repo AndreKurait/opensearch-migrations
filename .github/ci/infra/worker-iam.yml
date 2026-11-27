@@ -53,6 +53,12 @@ Statement:
     Effect: Allow
     Action: lambda:InvokeFunction
     Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:migrations-ci-private-endpoint'
+  # AOSS checks collection and index entries in a data access policy separately.
+  - Sid: ServerlessIndexPolicies
+    Effect: Allow
+    Action: [aoss:CreateAccessPolicy, aoss:GetAccessPolicy, aoss:UpdateAccessPolicy, aoss:DeleteAccessPolicy]
+    Resource: '*'
+    Condition: {StringLike: {'aoss:index': 'ci-*/*'}, StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
   - Sid: DiscoverSandboxResources
     Effect: Allow
     Action: ['cloudformation:ListStacks', 'cloudformation:ListExports', 'cloudformation:ValidateTemplate', 'ecr:DescribeRepositories', 'elasticloadbalancing:DescribeLoadBalancers', 'elasticloadbalancing:DescribeTargetGroups', 'elasticloadbalancing:DescribeTags', 'elasticloadbalancing:DescribeListeners', 'tag:GetResources']
