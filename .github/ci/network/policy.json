@@ -529,6 +529,7 @@
       "unreviewedForkSandbox": "false"
     },
     "k8s-local-test.yml/k8s-local-test": {
+      "cacheOnlyInput": true,
       "purposes": [
         "es-build-packages",
         "github",
@@ -554,6 +555,7 @@
       "delegates": "./.github/workflows/k8s-local-test.yml"
     },
     "local-integ-jobs.yml/docker-compose-e2e-test": {
+      "cacheOnlyInput": true,
       "purposes": [
         "es-build-packages",
         "github",
