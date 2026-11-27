@@ -114,6 +114,16 @@ function parseKey(key) {
     return {urls: [new URL(`https://codeload.github.com/grafana/k6-operator/tar.gz/${originId}`)], cdn: [],
       digest: '87808985b4c5519b13673d1c1227250e6d215a710f04d5fe7c65c370105c7c0e'};
   }
+  if (kind === 'terraform-provider') {
+    const [, provider, version, platform, digest] = parts;
+    if (parts.length !== 5 || !/^(aws|helm|google|google-beta|kubernetes|random)$/.test(provider) ||
+        !/^\d+\.\d+\.\d+$/.test(version) || platform !== 'linux_amd64' || !digestPattern.test(digest)) {
+      throw new Error('Unsupported Terraform provider archive');
+    }
+    const name = `terraform-provider-${provider}`;
+    const archive = `${name}_${version}_${platform}.zip`;
+    return {urls: [new URL(`https://releases.hashicorp.com/${name}/${version}/${archive}`)], cdn: [], digest};
+  }
   if (kind === 'npm') {
     const scoped = /^@[a-z0-9._-]+$/.test(parts[1]);
     const packageLength = scoped ? 3 : 2;

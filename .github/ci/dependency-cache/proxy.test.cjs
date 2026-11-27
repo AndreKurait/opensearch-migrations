@@ -37,6 +37,16 @@ function get(base, key, method = 'GET', headers = {}) {
   });
 }
 
+test('Terraform provider downloads verify the archive checksum', async t => {
+  const dir = await scratch(t);
+  const calls = mockFetch(t, [new Response('archive'), new Response('wrong bytes')]);
+  const key = `/terraform-provider/google-beta/7.1.0/linux_amd64/${hash('archive')}`;
+  assert.equal((await fetchPublic(key, path.join(dir, 'good'))).digest, hash('archive'));
+  assert.equal(calls[0].url.href,
+    'https://releases.hashicorp.com/terraform-provider-google-beta/7.1.0/terraform-provider-google-beta_7.1.0_linux_amd64.zip');
+  await assert.rejects(fetchPublic(key, path.join(dir, 'bad')), /digest|checksum/i);
+});
+
 test('native OCI, HEAD, conditional GET, ranges, and distinct offline miss', async t => {
   const dir = await scratch(t);
   const bytes = Buffer.from('{"schemaVersion":2}');
