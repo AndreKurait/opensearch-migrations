@@ -4,6 +4,9 @@ inputs:
   module:
     required: true
     description: Terraform module path
+  report-name:
+    required: true
+    description: Unique artifact name for this Terraform suite
   cache-only:
     required: true
     description: Require cached CLI and provider requests
@@ -74,6 +77,6 @@ runs:
       if: always()
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
       with:
-        name: terraform-test-${{ github.job }}
+        name: ${{ inputs.report-name }}-${{ github.run_attempt }}
         path: ${{ runner.temp }}/terraform-tools/junit.xml
         if-no-files-found: warn

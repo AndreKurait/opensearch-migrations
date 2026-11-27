@@ -775,6 +775,7 @@ jobs:
       - uses: ./.github/actions/terraform-test
         with:
           module: deployment/terraform/gcp
+          report-name: terraform-test-gcp
           cache-only: ${{ inputs.cache-only }}
 
   aws-terraform-test:
@@ -790,6 +791,7 @@ jobs:
       - uses: ./.github/actions/terraform-test
         with:
           module: deployment/terraform/aws
+          report-name: terraform-test-aws
           cache-only: ${{ inputs.cache-only }}
 
   codeql-analyze:
