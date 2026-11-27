@@ -31,7 +31,9 @@ env:
 
 jobs:
   generate-cache-key:
-    if: github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch'
+    if: >-
+      !inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true' &&
+      (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-22.04
     outputs:
       docker_cache_key: ${{ steps.generate_docker_cache_key.outputs.key }}
@@ -72,6 +74,10 @@ jobs:
 
   generate-workflow-schema:
     needs: [generate-cache-key]
+    if: >-
+      !cancelled() &&
+      (github.repository != 'AndreKurait/opensearch-migrations' || vars.AWS_CI_DEVELOPMENT_PAUSE != 'true' || github.event_name == 'workflow_dispatch') &&
+      (inputs.cache-only || vars.DEPENDENCY_PROXY_ENABLED == 'true' || needs.generate-cache-key.result == 'success')
     name: Generate workflow schema artifact
     runs-on: ubuntu-22.04
     steps:
