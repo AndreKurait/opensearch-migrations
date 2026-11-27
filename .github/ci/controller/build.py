@@ -141,7 +141,10 @@ def collect(build, *, cleanup=False):
         if cleanup:
             directory.mkdir(exist_ok=True)
             directory = directory / 'cleanup'
-        report, counts = render(private, output_dir=directory)
+        worker_env = build.get('environment', {}).get('environmentVariables', [])
+        replay = any(v['name'] == 'CI_DEPENDENCY_MODE' and v['value'] == 'replay' for v in worker_env)
+        report, counts = render(private, output_dir=directory,
+                                require_cache_replay=replay and build['buildStatus'] == 'SUCCEEDED')
     finally:
         private.unlink(missing_ok=True)
     summary(report)

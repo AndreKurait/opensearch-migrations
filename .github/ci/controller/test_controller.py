@@ -231,6 +231,28 @@ class ObservationTests(unittest.TestCase):
             origin_log = base / 'output/dependency-origin.jsonl'
             self.assertEqual(rows, [json.loads(row) for row in origin_log.read_text().splitlines()])
 
+    def test_successful_cache_replay_requires_clean_dependency_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'result.zip'
+            for stats, rows, error in (
+                (None, '', 'no dependency report'),
+                (dict(restored=2, bytes=4, originRequests=0, misses=1), '', 'missing dependencies'),
+                (dict(restored=2, bytes=4, originRequests=1, misses=0), '', 'upstream requests'),
+                (dict(restored=2, bytes=4, originRequests=0, misses=0),
+                 json.dumps({'key': '/npm/package', 'host': 'registry.npmjs.org', 'status': 200}), 'upstream requests'),
+                (dict(restored=2, bytes=4, originRequests=0, misses=0), '', None),
+            ):
+                with self.subTest(stats=stats, rows=rows), ZipFile(path, 'w') as archive:
+                    archive.writestr('junit.xml', '<testsuite><testcase name="test"/></testsuite>')
+                    if stats is not None:
+                        archive.writestr('dependency-cache-stats.json', json.dumps(stats))
+                        archive.writestr('dependency-origin.jsonl', rows)
+                if error:
+                    with self.assertRaisesRegex(ValueError, error):
+                        render(path, require_cache_replay=True)
+                else:
+                    self.assertEqual(1, render(path, require_cache_replay=True)[1]['passed'])
+
     def test_dependency_report_survives_failure_before_junit(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

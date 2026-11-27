@@ -40,7 +40,7 @@ def dependency_report(archive):
     return stats, rows
 
 
-def render(path, output_dir=None):
+def render(path, output_dir=None, *, require_cache_replay=False):
     with ZipFile(path) as archive:
         dependencies = dependency_report(archive)
         if output_dir and dependencies is not None:
@@ -48,6 +48,12 @@ def render(path, output_dir=None):
             output_dir.mkdir(exist_ok=True)
             (output_dir / 'dependency-origin.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
             (output_dir / 'dependency-cache-stats.json').write_text(json.dumps(stats) + '\n')
+        if require_cache_replay:
+            if dependencies is None:
+                raise ValueError('Successful cache replay has no dependency report')
+            stats, rows = dependencies
+            if rows or stats['originRequests'] or stats['misses']:
+                raise ValueError('Successful cache replay reported upstream requests or missing dependencies')
         entries = [entry for entry in archive.infolist() if entry.filename == 'junit.xml']
         if len(entries) != 1 or entries[0].file_size > 8 * 1024**2:
             raise ValueError('Expected one root junit.xml under 8 MiB')
