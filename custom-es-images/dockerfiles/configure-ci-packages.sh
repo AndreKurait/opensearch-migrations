@@ -19,4 +19,6 @@ else
     awk '/^\[/{core=($0=="[amazonlinux]")} core' /etc/yum.repos.d/amazonlinux.repo |
         sed "s|^mirrorlist=.*|baseurl=$url|" > /tmp/ci-rpm-repos/amazonlinux.repo
     grep -q '^baseurl=' /tmp/ci-rpm-repos/amazonlinux.repo
+    # Hosted cache reads are paced across concurrent jobs and verified before serving bytes.
+    printf '\ntimeout=120\n' >> /tmp/ci-rpm-repos/amazonlinux.repo
 fi
