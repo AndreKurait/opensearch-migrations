@@ -411,21 +411,43 @@ class Worker:
     def pod_role(self):
         return f'arn:aws:iam::{self.account}:role/{self.cluster}-migrations-role'
 
-    def clusters(self, vpc=None):
-        vpc = vpc or self.exports['VPC_ID']
-        eks_net = self.aws('eks', 'describe-cluster', '--name', self.cluster)['cluster']['resourcesVpcConfig']
+    def pending_cluster_network(self):
+        try:
+            cluster = self.aws('eks', 'describe-cluster', '--name', self.cluster)['cluster']
+        except subprocess.CalledProcessError as error:
+            if 'ResourceNotFoundException' in (error.stderr or ''):
+                return None
+            raise
+        network = cluster.get('resourcesVpcConfig', {})
+        if cluster['status'] not in ('CREATING', 'ACTIVE') or not network.get('vpcId') or not network.get('subnetIds'):
+            return None
+        if network.get('clusterSecurityGroupId'):
+            return network
+        # EKS creates the cluster group while the control plane is still starting.
+        groups = self.aws('ec2', 'describe-security-groups', '--filters',
+                          f'Name=vpc-id,Values={network["vpcId"]}',
+                          f'Name=tag:aws:eks:cluster-name,Values={self.cluster}',
+                          f'Name=tag:kubernetes.io/cluster/{self.cluster},Values=owned')['SecurityGroups']
+        if len(groups) == 1:
+            return dict(network, clusterSecurityGroupId=groups[0]['GroupId'])
+        return None
+
+    def clusters(self, network=None):
+        if network is None:
+            network = self.aws('eks', 'describe-cluster', '--name', self.cluster)['cluster']['resourcesVpcConfig']
+        vpc = network['vpcId']
         endpoints = self.cfn(
             self.stage + '-endpoints',
             HERE / 'endpoints.yaml',
             Stage=self.stage,
             VpcId=vpc,
-            Subnets=','.join(eks_net['subnetIds']),
-            ClusterGroup=eks_net['clusterSecurityGroupId'],
+            Subnets=','.join(network['subnetIds']),
+            ClusterGroup=network['clusterSecurityGroupId'],
             Classic=str(self.classic).lower(),
             NextGen=str(self.nextgen).lower(),
         )
         # Isolated EKS pods stay in route-less subnets; managed domains use the private NAT subnets.
-        subnets = self.network['SubnetIds'].split(',') if self.suite == 'isolated' else eks_net['subnetIds']
+        subnets = self.network['SubnetIds'].split(',') if self.suite == 'isolated' else network['subnetIds']
         clusters = []
         if self.suite not in ('aoss', 'byos'):
             clusters.append(self.managed('source', self.source, subnets, endpoints['SecurityGroup']))
@@ -609,21 +631,14 @@ class Worker:
         endpoints = None
         with phase('EKS deployment and install', bootstrap_minutes):
             if self.suite in ('eks', 'cdc', 'cdc-k6', 'cdc-aoss'):
-                # Domain and collection creation only need the completed EKS infrastructure.
+                # Domain and collection provisioning can overlap EKS startup once its network is ready.
                 with ThreadPoolExecutor(max_workers=1) as executor:
                     install = executor.submit(copy_context().run, self.bootstrap)
                     while not wait([install], timeout=20).done:
-                        try:
-                            stack = self.aws('cloudformation', 'describe-stacks', '--stack-name', self.ma)['Stacks'][0]
-                        except subprocess.CalledProcessError as error:
-                            if 'does not exist' in (error.stderr or ''):
-                                continue
-                            raise
-                        if stack['StackStatus'] == 'CREATE_COMPLETE':
-                            cluster = self.aws('eks', 'describe-cluster', '--name', self.cluster)['cluster']
-                            network = cluster['resourcesVpcConfig']
+                        network = self.pending_cluster_network()
+                        if network:
                             with phase('private cluster deployment', bootstrap_minutes):
-                                endpoints = self.clusters(network['vpcId'])
+                                endpoints = self.clusters(network)
                             break
                     install.result()
             else:

@@ -41,8 +41,11 @@ class TestCloudWorker(unittest.TestCase):
         def bootstrap():
             self.assertTrue(provisioned.wait(5), 'Test endpoints were not provisioned during bootstrap')
 
-        def clusters(vpc):
-            self.assertEqual(vpc, 'vpc-test')
+        network = {'vpcId': 'vpc-test', 'subnetIds': ['subnet-test']}
+        expected = dict(network, clusterSecurityGroupId='sg-test')
+
+        def clusters(config):
+            self.assertEqual(config, expected)
             provisioned.set()
             return endpoints
 
@@ -51,12 +54,15 @@ class TestCloudWorker(unittest.TestCase):
                 patch.object(worker, 'clusters', side_effect=clusters) as provision, \
                 patch.object(worker, 'configure_clusters') as configure, \
                 patch.object(worker, 'aws', side_effect=[
-                    {'Stacks': [{'StackStatus': 'CREATE_COMPLETE'}]},
-                    {'cluster': {'resourcesVpcConfig': {'vpcId': 'vpc-test'}}},
-                ]), patch('run.wait', return_value=SimpleNamespace(done=set())), \
+                    {'cluster': {'status': 'CREATING', 'resourcesVpcConfig': network}},
+                    {'SecurityGroups': []},
+                    {'cluster': {'status': 'CREATING', 'resourcesVpcConfig': network}},
+                    {'SecurityGroups': [{'GroupId': 'sg-test'}]},
+                ]) as aws, patch('run.wait', return_value=SimpleNamespace(done=set())), \
                 patch('run.nodepools'):
             worker.execute()
-        provision.assert_called_once_with('vpc-test')
+        self.assertEqual(4, aws.call_count)
+        provision.assert_called_once_with(expected)
         configure.assert_called_once_with(endpoints)
 
     def test_source_suites_prepare_only_the_production_bootstrap(self):
