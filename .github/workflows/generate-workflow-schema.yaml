@@ -125,6 +125,22 @@ jobs:
           key: docker-${{ runner.os }}-${{ needs.generate-cache-key.outputs.docker_cache_key }}
           read-only: ${{ github.event_name != 'push' }}
 
+      - name: Configure BuildKit registry mirrors
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="$RUNNER_TEMP/schema-buildkit.toml"
+          if [[ -n "${BUILDKIT_EXTRA_CONFIG:-}" ]]; then
+            cp "$BUILDKIT_EXTRA_CONFIG" "$config"
+          else
+            : > "$config"
+          fi
+          cat >> "$config" <<'TOML'
+          [registry."docker-registry:5000"]
+            http = true
+            insecure = true
+          TOML
+
       - name: Set up Buildx builder (BuildKit)
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
         with:
@@ -132,10 +148,7 @@ jobs:
           name: local-remote-builder
           install: true
           driver-opts: network=host
-          buildkitd-config-inline: |
-            [registry."docker-registry:5000"]
-              http = true
-              insecure = true
+          buildkitd-config: ${{ runner.temp }}/schema-buildkit.toml
 
       - name: Set up Kind cluster
         uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
