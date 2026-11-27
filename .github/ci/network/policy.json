@@ -454,12 +454,7 @@
     },
     "dependency-cache-check.yml/protocol": {
       "purposes": [
-        "github",
-        "bootstrap",
-        "ubuntu",
-        "package",
-        "oci",
-        "kubernetes"
+        "github"
       ],
       "nativePrivileges": true
     },
