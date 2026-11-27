@@ -73,7 +73,10 @@ async function finish() {
     const gradle = serviceLog.match(/^Gradle remote cache (\{[^\n]+\})$/m);
     if (gradle) console.log(`Gradle remote cache ${gradle[1]}`);
     const misses = await fs.readFile(path.join(dir, 'misses.json'), 'utf8').catch(() => null);
-    if (misses) console.error(`Missing published dependencies: ${JSON.parse(misses).join(', ')}`);
+    if (misses) {
+      console.error(`Missing published dependencies: ${JSON.parse(misses).join(', ')}`);
+      if (process.env.CI_DEPENDENCY_STRICT_READ === '1') process.exitCode = 1;
+    }
     const trustedMain = process.env.GITHUB_REF === 'refs/heads/main' &&
       ['push', 'schedule', 'workflow_dispatch'].includes(process.env.GITHUB_EVENT_NAME);
     if (process.env.INPUT_MODE !== 'record' && !trustedMain) {
