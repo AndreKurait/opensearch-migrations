@@ -12,7 +12,7 @@ import boto3
 def endpoint(client, endpoint_id):
     result = client.batch_get_vpc_endpoint(ids=[endpoint_id])
     for error in result.get('vpcEndpointErrorDetails', []):
-        if error.get('errorCode') not in ('ResourceNotFoundException', 'NotFound'):
+        if error.get('errorCode') not in ('NOT_FOUND', 'ResourceNotFoundException', 'NotFound'):
             raise ValueError(f'Endpoint lookup failed: {error}')
     return next(iter(result['vpcEndpointDetails']), None)
 

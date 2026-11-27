@@ -77,7 +77,7 @@ class TestDelete(unittest.TestCase):
         aoss.batch_get_vpc_endpoint.side_effect = [
             {'vpcEndpointDetails': [{'name': name, 'vpcId': 'vpc-other'}]},
             {'vpcEndpointDetails': [{'id': 'vpce-test', 'name': name, 'vpcId': 'vpc-test', 'status': 'ACTIVE'}]},
-            {'vpcEndpointDetails': []},
+            {'vpcEndpointDetails': [], 'vpcEndpointErrorDetails': [{'errorCode': 'NOT_FOUND'}]},
         ]
         self.delete_without_physical_id(aoss)
         self.assertEqual([call(maxResults=100), call(maxResults=100, nextToken='next')],
