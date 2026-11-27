@@ -234,7 +234,7 @@ jobs:
         with:
           dependency-proxy-enabled: ${{ inputs.cache-only || vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
           dependency-proxy-docker: ${{ startsWith(matrix.py-project, 'migrationConsole/') }}
-          java-required: 'false'
+          java-required: ${{ matrix.py-project == 'migrationConsole/lib/console_link' }}
 
       # Set up Kind cluster for workflow integration tests (only for console_link project)
       - name: Restore verified kind and kubectl for the cluster action
@@ -293,7 +293,7 @@ jobs:
           PY_PROJECT: ${{ matrix.py-project }}
         run: echo "SANITIZED_PY_PROJECT=${PY_PROJECT//\//-}" >> $GITHUB_ENV
       - name: Upload coverage to Codecov
-        if: always() && env.HAS_CODECOV_TOKEN == 'true' && ((!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true') || startsWith(matrix.py-project, 'migrationConsole/') || steps.isolated_check.outcome == 'success')
+        if: always() && !inputs.cache-only && env.HAS_CODECOV_TOKEN == 'true' && (vars.DEPENDENCY_PROXY_ENABLED != 'true' || startsWith(matrix.py-project, 'migrationConsole/') || steps.isolated_check.outcome == 'success')
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           fail_ci_if_error: true
@@ -555,7 +555,7 @@ jobs:
             **/build/test-results/**/TEST-*.xml
 
       - name: Upload coverage to Codecov
-        if: always() && env.HAS_CODECOV_TOKEN == 'true'
+        if: always() && !inputs.cache-only && env.HAS_CODECOV_TOKEN == 'true'
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           fail_ci_if_error: true
@@ -650,7 +650,7 @@ jobs:
         if: matrix.npm-project == './orchestrationSpecs'
         run: npm run test:integ:crds
       - name: Upload coverage to Codecov
-        if: always() && env.HAS_CODECOV_TOKEN == 'true' && ((!inputs.cache-only && vars.DEPENDENCY_PROXY_ENABLED != 'true') || matrix.npm-project == './orchestrationSpecs' || steps.isolated_check.outcome == 'success')
+        if: always() && !inputs.cache-only && env.HAS_CODECOV_TOKEN == 'true' && (vars.DEPENDENCY_PROXY_ENABLED != 'true' || matrix.npm-project == './orchestrationSpecs' || steps.isolated_check.outcome == 'success')
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           fail_ci_if_error: true

@@ -37,7 +37,9 @@ class TestDelete(unittest.TestCase):
         event = {
             'RequestType': 'Delete',
             'StackId': 'arn:aws:cloudformation:us-west-2:123456789012:stack/ci-test-endpoints/123-abc',
-            'ResponseURL': 'https://cloudformation-custom-resource-response-uswest2.s3-us-west-2.amazonaws.com/response',
+            'ResponseURL': (
+                'https://cloudformation-custom-resource-response-uswest2.s3-us-west-2.amazonaws.com/response'
+            ),
             'RequestId': 'abc',
             'LogicalResourceId': 'ClassicEndpoint',
             'PhysicalResourceId': 'ci-test-endpoints-ClassicEndpoint-17VWUX7NXHXM5',

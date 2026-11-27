@@ -28,7 +28,8 @@ class Mirror(BaseHTTPRequestHandler):
                         checksum = json.load(response)['shasum']
                     if not re.fullmatch('[0-9a-f]{64}', checksum):
                         raise ValueError('Invalid package checksum')
-                    data = {'archives': {'linux_amd64': {'url': f'/terraform-provider/{provider}/{version}/linux_amd64/{checksum}', 'hashes': ['zh:' + checksum]}}}
+                    archive = f'/terraform-provider/{provider}/{version}/linux_amd64/{checksum}'
+                    data = {'archives': {'linux_amd64': {'url': archive, 'hashes': ['zh:' + checksum]}}}
                 body = json.dumps(data).encode()
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
@@ -55,5 +56,7 @@ if __name__ == '__main__':
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(cert, key)
     server.socket = context.wrap_socket(server.socket, server_side=True)
-    Path(config).write_text('provider_installation {\n  network_mirror {\n    url = "https://127.0.0.1:%d/"\n  }\n}\n' % server.server_port)
+    Path(config).write_text(
+        'provider_installation {\n  network_mirror {\n    url = "https://127.0.0.1:%d/"\n  }\n}\n' % server.server_port
+    )
     server.serve_forever()
