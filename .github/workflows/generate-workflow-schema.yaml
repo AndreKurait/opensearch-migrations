@@ -102,14 +102,16 @@ jobs:
           exit 1
       # END generated network guard
 
-      - name: Start the local image registry after enforcing egress
-        run: docker run -d --name ci-registry --publish 127.0.0.1:5000:5000 registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-env
         with:
           gradle-cache-enabled: 'true'
           gradle-cache-read-only: 'false'
           dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
+          dependency-proxy-docker: 'true'
+
+      - name: Start the local image registry after enforcing egress
+        run: docker run -d --name ci-registry --publish 127.0.0.1:5000:5000 registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
 
       - name: Alias docker-registry to 127.0.0.1
         run: |
