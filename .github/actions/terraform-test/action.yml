@@ -19,7 +19,8 @@ runs:
         tools="$RUNNER_TEMP/terraform-tools"
         mkdir -p "$tools"
         if command -v terraform >/dev/null && CHECKPOINT_DISABLE=1 terraform version -json | jq -e '.terraform_version == "1.17.2"' >/dev/null; then
-          cp "$(command -v terraform)" "$tools/terraform"
+          binary=$(command -v terraform)
+          ln -L "$binary" "$tools/terraform" 2>/dev/null || cp "$binary" "$tools/terraform"
           echo 'available=true' >> "$GITHUB_OUTPUT"
         fi
     - name: Restore the requested Terraform CLI
