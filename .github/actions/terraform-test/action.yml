@@ -69,4 +69,11 @@ runs:
         done
         test -s "$TF_CLI_CONFIG_FILE"
         "$tools/terraform" init -backend=false
-        "$tools/terraform" test
+        "$tools/terraform" test -junit-xml="$tools/junit.xml"
+    - name: Upload Terraform JUnit report
+      if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      with:
+        name: terraform-test-${{ github.job }}
+        path: ${{ runner.temp }}/terraform-tools/junit.xml
+        if-no-files-found: warn
