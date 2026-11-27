@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 with patch.dict(sys.modules, boto3=ModuleType('boto3')):
     provider = runpy.run_path(str(Path(__file__).with_name('private-endpoint.py')))
@@ -33,7 +33,7 @@ class TestResponseURL(unittest.TestCase):
 
 
 class TestDelete(unittest.TestCase):
-    def test_delete_after_create_failed_to_return_physical_id(self):
+    def delete_without_physical_id(self, aoss, *, tagged=True):
         event = {
             'RequestType': 'Delete',
             'StackId': 'arn:aws:cloudformation:us-west-2:123456789012:stack/ci-test-endpoints/123-abc',
@@ -46,15 +46,50 @@ class TestDelete(unittest.TestCase):
             'ResourceProperties': {'Name': 'ci-test-classic', 'VpcId': 'vpc-test'},
         }
         context = Mock(invoked_function_arn='arn:aws:lambda:us-west-2:123456789012:function:ci')
+        context.get_remaining_time_in_millis.return_value = 60000
         cloudformation = Mock()
         cloudformation.describe_stacks.return_value = {
             'Stacks': [{'Parameters': [{'ParameterKey': 'VpcId', 'ParameterValue': 'vpc-test'}]}],
         }
-        aoss = Mock()
+        ec2 = Mock()
+        tags = [{'Key': 'MigrationCI', 'Value': 'github'}] if tagged else []
+        ec2.describe_vpcs.return_value = {'Vpcs': [{'Tags': tags}]}
         with patch.dict('os.environ', AWS_REGION='us-west-2'), \
-                patch.object(provider['boto3'], 'client', side_effect=[cloudformation, aoss], create=True), \
+                patch.object(provider['boto3'], 'client', side_effect=[cloudformation, aoss, ec2], create=True), \
                 patch('urllib.request.urlopen') as callback:
             handler(event, context)
+        self.assertIn(b'"Status": "SUCCESS"' if tagged else b'"Status": "FAILED"', callback.call_args.args[0].data)
+
+    def test_absent_endpoint_is_already_deleted(self):
+        aoss = Mock()
+        aoss.list_vpc_endpoints.return_value = {'vpcEndpointSummaries': []}
+        self.delete_without_physical_id(aoss)
         aoss.batch_get_vpc_endpoint.assert_not_called()
         aoss.delete_vpc_endpoint.assert_not_called()
-        self.assertIn(b'"Status": "SUCCESS"', callback.call_args.args[0].data)
+
+    def test_finds_endpoint_created_before_callback_failed(self):
+        aoss = Mock()
+        name = 'ci-test-classic'
+        aoss.list_vpc_endpoints.side_effect = [
+            {'nextToken': 'next', 'vpcEndpointSummaries': [{'name': name, 'id': 'vpce-other'}]},
+            {'vpcEndpointSummaries': [{'name': name, 'id': 'vpce-test'}]},
+        ]
+        aoss.batch_get_vpc_endpoint.side_effect = [
+            {'vpcEndpointDetails': [{'name': name, 'vpcId': 'vpc-other'}]},
+            {'vpcEndpointDetails': [{'id': 'vpce-test', 'name': name, 'vpcId': 'vpc-test', 'status': 'ACTIVE'}]},
+            {'vpcEndpointDetails': []},
+        ]
+        self.delete_without_physical_id(aoss)
+        self.assertEqual([call(maxResults=100), call(maxResults=100, nextToken='next')],
+                         aoss.list_vpc_endpoints.call_args_list)
+        aoss.delete_vpc_endpoint.assert_called_once_with(id='vpce-test')
+
+    def test_fallback_leaves_untagged_vpc_endpoint_alone(self):
+        aoss = Mock()
+        name = 'ci-test-classic'
+        aoss.list_vpc_endpoints.return_value = {'vpcEndpointSummaries': [{'name': name, 'id': 'vpce-test'}]}
+        aoss.batch_get_vpc_endpoint.return_value = {
+            'vpcEndpointDetails': [{'id': 'vpce-test', 'name': name, 'vpcId': 'vpc-test', 'status': 'ACTIVE'}],
+        }
+        self.delete_without_physical_id(aoss, tagged=False)
+        aoss.delete_vpc_endpoint.assert_not_called()

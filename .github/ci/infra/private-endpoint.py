@@ -17,6 +17,21 @@ def endpoint(client, endpoint_id):
     return next(iter(result['vpcEndpointDetails']), None)
 
 
+def find_endpoint(client, name, vpc_id):
+    request = {'maxResults': 100}
+    while True:
+        page = client.list_vpc_endpoints(**request)
+        for result in page['vpcEndpointSummaries']:
+            if result['name'] == name:
+                current = endpoint(client, result['id'])
+                if current and current['name'] == name and current['vpcId'] == vpc_id:
+                    return current
+        token = page.get('nextToken')
+        if not token:
+            return None
+        request['nextToken'] = token
+
+
 def wait(client, endpoint_id, deleting, remaining):
     while remaining() > 25000:
         current = endpoint(client, endpoint_id)
@@ -43,6 +58,12 @@ def response_url(value, region):
         raise ValueError('Expected the regional CloudFormation response bucket')
 
 
+def require_sandbox_vpc(ec2, vpc_id):
+    vpc = ec2.describe_vpcs(VpcIds=[vpc_id])['Vpcs'][0]
+    if {'Key': 'MigrationCI', 'Value': 'github'} not in vpc.get('Tags', []):
+        raise ValueError('Expected a sandbox VPC')
+
+
 def handler(event, context):
     props = event['ResourceProperties']
     account = context.invoked_function_arn.split(':')[4]
@@ -63,19 +84,22 @@ def handler(event, context):
             raise ValueError('VPC does not match stack')
         client = boto3.client('opensearchserverless')
         if event['RequestType'] == 'Delete':
-            # When Create never returned a physical ID, CloudFormation supplies its generated ID.
+            # The Create callback can fail after AOSS has allocated the endpoint.
             placeholder = f'{stack[1]}-endpoints-{event["LogicalResourceId"]}-'
-            if endpoint_id != 'never-created' and not re.fullmatch(re.escape(placeholder) + r'[A-Z0-9]+', endpoint_id):
+            if endpoint_id == 'never-created' or re.fullmatch(re.escape(placeholder) + r'[A-Z0-9]+', endpoint_id):
+                current = find_endpoint(client, props['Name'], vpc_id)
+                if current:
+                    require_sandbox_vpc(boto3.client('ec2'), vpc_id)
+            else:
                 current = endpoint(client, endpoint_id)
-                if current and current['name'] == props['Name'] and current['vpcId'] == vpc_id:
-                    if current['status'] != 'DELETING':
-                        client.delete_vpc_endpoint(id=endpoint_id)
-                    wait(client, endpoint_id, True, context.get_remaining_time_in_millis)
+            if current and current['name'] == props['Name'] and current['vpcId'] == vpc_id:
+                actual_id = current['id']
+                if current['status'] != 'DELETING':
+                    client.delete_vpc_endpoint(id=actual_id)
+                wait(client, actual_id, True, context.get_remaining_time_in_millis)
         else:
             ec2 = boto3.client('ec2')
-            vpc = ec2.describe_vpcs(VpcIds=[vpc_id])['Vpcs'][0]
-            if {'Key': 'MigrationCI', 'Value': 'github'} not in vpc.get('Tags', []):
-                raise ValueError('Expected a sandbox VPC')
+            require_sandbox_vpc(ec2, vpc_id)
             for collection, query, key in [('Subnets', ec2.describe_subnets, 'SubnetIds'),
                                            ('SecurityGroups', ec2.describe_security_groups, 'GroupIds')]:
                 ids = props['SubnetIds' if key == 'SubnetIds' else 'SecurityGroupIds']

@@ -362,7 +362,7 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - {Effect: Allow, Action: ['ec2:DescribeVpcs', 'ec2:DescribeSubnets', 'ec2:DescribeSecurityGroups', 'ec2:DescribeVpcEndpoints', 'ec2:DescribeNetworkInterfaces', 'aoss:CreateVpcEndpoint', 'aoss:BatchGetVpcEndpoint', 'aoss:DeleteVpcEndpoint'], Resource: '*', Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}}
+              - {Effect: Allow, Action: ['ec2:DescribeVpcs', 'ec2:DescribeSubnets', 'ec2:DescribeSecurityGroups', 'ec2:DescribeVpcEndpoints', 'ec2:DescribeNetworkInterfaces', 'aoss:CreateVpcEndpoint', 'aoss:BatchGetVpcEndpoint', 'aoss:ListVpcEndpoints', 'aoss:DeleteVpcEndpoint'], Resource: '*', Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}}
               # AOSS implements Classic endpoints with PrivateLink and Route 53.
               # This operator-owned Lambda validates the real CI stack and VPC before
               # calling AOSS. No candidate job can assume or change its role.
