@@ -43,6 +43,7 @@ function immutablePublicKey(key) {
   if (/^\/raw\/al2023\/core\/guids\/[a-f0-9]{64}\//.test(key)) return true;
   if (/^\/gomod\/.+\/@v\/v[^/]+\.(?:mod|info|zip)$/.test(key) || key.startsWith('/k6-operator/')) return true;
   if (key.startsWith('/helm/')) return true;
+  if (/^\/terraform-provider\/[a-z-]+\/\d+\.\d+\.\d+\/linux_amd64\/[a-f0-9]{64}$/.test(key)) return true;
   if (pinnedRawDigest(key)) return true;
   if (key.startsWith('/maven/')) return !/(?:-SNAPSHOT\/|\/maven-metadata[^/]*\.xml)/i.test(key);
   if (/^\/npm\/.+\/-\/.+\.tgz$/.test(key) || key.startsWith('/pypi/packages/')) return true;
