@@ -62,7 +62,7 @@ jobs:
         env: {CI_DEPENDENCY_STRICT_READ: "${{ github.event_name == 'workflow_dispatch' && inputs.record && '0' || '1' }}"}
       - &dependency_broker
         uses: ./.github/actions/dependency-cache
-        env: {CI_DEPENDENCY_STRICT_READ: '1', CI_GRADLE_REMOTE_CACHE: 'true'}
+        env: {CI_DEPENDENCY_STRICT_READ: "${{ github.event_name == 'workflow_dispatch' && inputs.record && '0' || '1' }}", CI_GRADLE_REMOTE_CACHE: 'true'}
         with:
           catalog-token: ${{ github.token }}
           mode: ${{ github.event_name == 'workflow_dispatch' && inputs.record && github.ref == 'refs/heads/main' && 'record' || 'read' }}
