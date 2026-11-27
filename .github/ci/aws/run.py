@@ -173,7 +173,7 @@ class Worker:
         self.ma = self.stage + '-ma'
         self.cluster = self.cluster_name(self.stage)
         self.kube_context = self.cluster
-        self.build_stage = 'ci-' + hashlib.sha256((self.stage + '-build').encode()).hexdigest()[:12]
+        self.build_stage = 'ci-' + hashlib.sha256((self.stage + '-build').encode()).hexdigest()[:len(self.stage) - len('ci-')]
         self.build_cluster = self.cluster_name(self.build_stage)
         self.cdc = suite.startswith('cdc')
         fixture_bucket = f'migrations-ci-fixtures-{self.account}-{self.region}'

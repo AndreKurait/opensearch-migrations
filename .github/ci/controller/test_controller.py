@@ -150,7 +150,7 @@ class ApprovalTests(unittest.TestCase):
 
 class ObservationTests(unittest.TestCase):
     def test_cache_writer_role_only_for_recording_main(self):
-        env = dict(GITHUB_RUN_ID='123', GITHUB_REPOSITORY=REPO, GITHUB_RUN_ATTEMPT='2')
+        env = dict(GITHUB_RUN_ID='123', GITHUB_REPOSITORY=REPO, GITHUB_RUN_ATTEMPT='2', AWS_REGION='ca-central-1')
         with patch.dict(os.environ, env), patch.object(build, 'summary'), patch.object(build, 'output'), \
                 patch.object(build, 'config', return_value={'account': '123456789012', 'region': 'ca-central-1'}), \
                 patch.object(build, 'aws', return_value={'build': {'id': BUILD}}) as api:
@@ -160,6 +160,8 @@ class ObservationTests(unittest.TestCase):
                 build.start('cfn-create', SHA, ref, '', options)
                 self.assertEqual('--service-role-override' in api.call_args.args, writer)
                 args = api.call_args.args
+                overrides = {item['name']: item['value'] for item in json.loads(args[-1])}
+                self.assertRegex(overrides['CI_STAGE'], r'^ci-[a-f0-9]{10}$')
                 if writer:
                     self.assertEqual('arn:aws:iam::123456789012:role/MigrationsGitHubMainWorker-ca-central-1',
                                      args[args.index('--service-role-override') + 1])

@@ -110,7 +110,8 @@ def usage(call, account, ignore_active=False):
     owner = dict((s, s) for s in stages)
     for stage, suite in stages.items():
         if suite == 'isolated':
-            owner['ci-' + hashlib.sha256((stage + '-build').encode()).hexdigest()[:12]] = stage
+            build_stage = 'ci-' + hashlib.sha256((stage + '-build').encode()).hexdigest()[:len(stage) - len('ci-')]
+            owner[build_stage] = stage
 
     def tags(row):
         return {t['Key']: t['Value'] for t in row.get('Tags', row.get('TagSet', []))}
@@ -118,7 +119,7 @@ def usage(call, account, ignore_active=False):
     def direct(row):
         t = tags(row)
         if t.get('MigrationCI') == 'github':
-            stack = re.match(r'^(ci-[a-f0-9]{12})-', t.get('aws:cloudformation:stack-name', ''))
+            stack = re.match(r'^(ci-[a-f0-9]{10,12})-', t.get('aws:cloudformation:stack-name', ''))
             return owner.get(t.get('MATestStage')) or (owner.get(stack[1]) if stack else None)
         return None
 

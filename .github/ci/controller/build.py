@@ -55,7 +55,9 @@ def start(suite, sha, ref, release, options):
     attempt = os.environ['GITHUB_RUN_ATTEMPT']
     run_key = f"{os.environ['GITHUB_REPOSITORY']}/{run_id}/{attempt}/{suite}"
     digest = hashlib.sha256(run_key.encode()).hexdigest()
-    stage = 'ci-' + digest[:12]
+    # The regional suffix is part of a generated IAM role with a 64-character limit.
+    stage_length = 10 if os.environ.get('AWS_REGION') == 'ca-central-1' else 12
+    stage = 'ci-' + digest[:stage_length]
     values = {'CI_SUITE': suite, 'CI_GIT_SHA': sha, 'CI_GIT_REF': ref, 'CI_STAGE': stage,
               'CI_GH_RUN_ID': run_id, 'CI_GH_RUN_ATTEMPT': attempt, 'CI_SEPARATE_CLEANUP': 'true'}
     values.update(parameters((suite,), options))
