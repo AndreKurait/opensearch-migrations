@@ -514,6 +514,7 @@
       "nativePrivileges": false
     },
     "generate-workflow-schema.yaml/generate-workflow-schema": {
+      "cacheOnlyInput": true,
       "purposes": [
         "github",
         "bootstrap",

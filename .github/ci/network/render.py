@@ -66,7 +66,10 @@ def guard(job, definitions):
                 raise ValueError(f'Invalid public network destination: {host}')
         hosts.update(group)
         if group:
-            groups.append(' '.join(group))
+            endpoints = ' '.join(group)
+            if job.get('cacheOnlyInput') and purpose != 'github':
+                endpoints = "${{ !inputs.cache-only && '" + endpoints + "' || '' }}"
+            groups.append(endpoints)
     key = tuple(groups)
     prefix = f'network_{len(definitions[0]) + 1}'
     if key in definitions[0]:
