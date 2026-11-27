@@ -70,7 +70,8 @@ def worker_timeout_minutes(suite):
 
 
 ALIASES = {'aoss-timeseries': 'aoss', 'aoss-vector': 'aoss'}
-DISABLED_SUITES = frozenset(name for name, suite in SUITES.items() if suite.reservation is None)
+# Remove these skips when the original Jenkins fixtures are restored in the CI replica.
+DISABLED_SUITES = frozenset({'aoss', 'byos'})
 
 
 def fixture_uri(bucket, prefix, override=None):

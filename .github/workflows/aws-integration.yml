@@ -107,13 +107,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/ci/controller/plan.py
       - name: Save the approved PR status plan
-        if: steps.plan.outputs.pr != ''
+        if: steps.plan.outputs.pr != '' && steps.plan.outputs.matrix != '[]'
         env:
           SHA: ${{ steps.plan.outputs.sha }}
           MATRIX: ${{ steps.plan.outputs.matrix }}
           PR: ${{ steps.plan.outputs.pr }}
         run: python3 .github/ci/controller/status.py plan
-      - if: steps.plan.outputs.pr != ''
+      - if: steps.plan.outputs.pr != '' && steps.plan.outputs.matrix != '[]'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: aws-approved-plan-${{ github.run_id }}-${{ github.run_attempt }}
@@ -121,12 +121,13 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Link the queued suites to the approved PR commit
-        if: steps.plan.outputs.pr != ''
+        if: steps.plan.outputs.pr != '' && steps.plan.outputs.matrix != '[]'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/ci/controller/status.py pending
   test:
     needs: select
+    if: needs.select.outputs.matrix != '[]'
     strategy:
       fail-fast: false
       matrix:

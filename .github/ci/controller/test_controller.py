@@ -94,7 +94,9 @@ class ApprovalTests(unittest.TestCase):
             self.select('workflow_dispatch')
 
     def test_push_schedules_default_suite_and_canary(self):
-        self.assertEqual(set(plan.ALL), set(json.loads(self.select('push')['matrix'])))
+        push = self.select('push')
+        self.assertEqual(set(plan.ALL) - plan.DISABLED_SUITES, set(json.loads(push['matrix'])))
+        self.assertEqual({'byos', 'aoss'}, set(json.loads(push['skipped'])))
         with patch.object(plan, 'latest_release', return_value='3.4.2'):
             for cron, suites in plan.SCHEDULES.items():
                 self.event['schedule'] = cron
@@ -102,12 +104,19 @@ class ApprovalTests(unittest.TestCase):
                 self.assertEqual([s for s in suites if s not in plan.DISABLED_SUITES], json.loads(result['matrix']))
                 self.assertEqual('3.4.2' if cron == plan.CANARY else '', result['release'])
 
-    def test_snapshot_aliases_and_pr_labels_select_runnable_suites(self):
+    def test_snapshot_aliases_and_pr_labels_report_skips(self):
         for alias in ('aoss-timeseries', 'aoss-vector'):
-            self.assertEqual(('aoss',), plan.select(alias))
-        for label in ('run-eks-byos-tests', 'cdc-tests'):
-            self.pr['labels'] = [{'name': label}]
-            self.assertEqual(list(plan.GROUPS[label]), json.loads(self.select()['matrix']))
+            self.event['comment']['body'] = f'/aws-test {SHA} {alias}'
+            result = self.select()
+            self.assertEqual([], json.loads(result['matrix']))
+            self.assertEqual(['aoss'], json.loads(result['skipped']))
+        self.event['comment']['body'] = f'/aws-test {SHA}'
+        self.pr['labels'] = [{'name': 'run-eks-byos-tests'}]
+        result = self.select()
+        self.assertEqual([], json.loads(result['matrix']))
+        self.assertEqual(['byos'], json.loads(result['skipped']))
+        self.pr['labels'].append({'name': 'cdc-tests'})
+        self.assertEqual(list(plan.GROUPS['cdc-tests']), json.loads(self.select()['matrix']))
 
     def test_select_several_suites_on_one_approval(self):
         self.event['comment']['body'] = f'/aws-test {SHA} cfn-import,cdc-tests,cdc'
@@ -124,7 +133,7 @@ class ApprovalTests(unittest.TestCase):
         self.event['inputs'].update(suite='all')
         self.event['inputs']['cache-only'] = 'true'
         result = self.select('workflow_dispatch')
-        self.assertEqual(set(plan.ALL), set(json.loads(result['matrix'])))
+        self.assertEqual(set(plan.ALL) - plan.DISABLED_SUITES, set(json.loads(result['matrix'])))
         self.assertEqual({'CI_DEPENDENCY_MODE': 'replay'}, json.loads(result['parameters']))
 
     def test_only_supported_inputs_for_each_suite(self):
@@ -300,7 +309,6 @@ class ObservationTests(unittest.TestCase):
 class CapacityTests(unittest.TestCase):
     def test_every_enabled_suite_reserves_every_quota_by_name(self):
         self.assertEqual(set(plan.ALL), set(capacity.RESERVATIONS))
-        self.assertFalse(set(capacity.RESERVATIONS) & plan.DISABLED_SUITES)
         for name, needs in capacity.RESERVATIONS.items():
             with self.subTest(name=name):
                 self.assertEqual(set(capacity.QUOTAS), set(needs))

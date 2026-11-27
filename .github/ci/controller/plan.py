@@ -9,7 +9,7 @@ from capacity import config, lanes
 from parameters import ALIASES, SUITES, parameters
 from suites import DISABLED_SUITES
 
-ALL = tuple(s for s in SUITES if s not in DISABLED_SUITES)
+ALL = tuple(SUITES)
 DEFAULT_PR_SUITE = 'cfn-create'
 GROUPS = {
     'all': ALL,
@@ -36,15 +36,10 @@ def select(group):
     if ',' in group:
         return tuple(dict.fromkeys(suite for name in group.split(',') for suite in select(name)))
     if group in GROUPS:
-        enabled = tuple(suite for suite in GROUPS[group] if suite not in DISABLED_SUITES)
-        if enabled:
-            return enabled
-        raise ValueError('Snapshot suites are paused pending fixture access')
-    if ALIASES.get(group, group) in DISABLED_SUITES:
-        raise ValueError('Snapshot suites are paused pending fixture access')
+        return GROUPS[group]
     if group in SUITES or group in ALIASES:
         return (ALIASES.get(group, group),)
-    raise ValueError(f'Unknown suite. Enabled suites: {", ".join(ALL)}')
+    raise ValueError(f'Unknown suite. Available selections: {", ".join(ALL)}')
 
 
 def latest_release():
@@ -80,7 +75,7 @@ def plan(event_name, event, repository, sha, ref, authenticate=api):
         sha = event['pull_request']['head']['sha']
         actor = event['sender']['login']
     elif event_name == 'schedule':
-        suites = tuple(s for s in SCHEDULES[event['schedule']] if s not in DISABLED_SUITES)
+        suites = SCHEDULES[event['schedule']]
         if event['schedule'] == CANARY:
             release = latest_release()
     elif event_name == 'workflow_dispatch':
@@ -114,16 +109,17 @@ def plan(event_name, event, repository, sha, ref, authenticate=api):
         else:
             labels = {label['name'] for label in pr['labels']}
             matched = [key for key in GROUPS if key != 'all' and key in labels]
-            suites = tuple(dict.fromkeys(s for key in matched for s in GROUPS[key] if s not in DISABLED_SUITES))
-            if matched and not suites:
-                raise ValueError('Only paused snapshot suites were requested')
+            suites = tuple(dict.fromkeys(s for key in matched for s in GROUPS[key]))
             suites = suites or (DEFAULT_PR_SUITE,)
     if not re.fullmatch(SHA, sha) or (release and not re.fullmatch(RELEASE, release)):
         raise ValueError('Invalid commit SHA or release version')
     worker_options = parameters(suites, options)
     if event_name == 'workflow_dispatch' and event['inputs'].get('cache-only') == 'true':
         worker_options['CI_DEPENDENCY_MODE'] = 'replay'
-    return {'sha': sha, 'ref': git_ref, 'matrix': json.dumps(list(suites), separators=(',', ':')),
+    enabled = [s for s in suites if s not in DISABLED_SUITES]
+    skipped = [s for s in suites if s in DISABLED_SUITES]
+    return {'sha': sha, 'ref': git_ref, 'matrix': json.dumps(enabled, separators=(',', ':')),
+            'skipped': json.dumps(skipped, separators=(',', ':')),
             'release': release, 'pr': str(pull or ''), 'parameters': json.dumps(worker_options)}
 
 
@@ -131,7 +127,7 @@ if __name__ == '__main__':
     result = plan(os.environ['GITHUB_EVENT_NAME'], json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text()),
                   os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA'], os.environ['GITHUB_REF'])
     selected = json.loads(result['matrix'])
-    slots = lanes(config()['room'])
+    slots = lanes(config()['room']) if selected else {}
     if any(s not in slots for s in selected):
         raise ValueError('Sandbox capacity cannot fit this selection; refresh AWS_CI_CONFIG after capacity changes')
     result['matrix'] = json.dumps([dict(suite=s, lane=slots[s]) for s in selected])
@@ -140,4 +136,8 @@ if __name__ == '__main__':
             print(f'{key}={value}', file=output)
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
         print(f"**Revision** `{result['sha']}` · **Source** `{result['ref']}`", file=summary)
-        print('\n' + '\n'.join(f'- {s}' for s in selected), file=summary)
+        print(file=summary)
+        for suite in selected:
+            print(f'- `{suite}` selected', file=summary)
+        for suite in json.loads(result['skipped']):
+            print(f'- `{suite}` skipped temporarily because the original snapshot fixture is unavailable', file=summary)
