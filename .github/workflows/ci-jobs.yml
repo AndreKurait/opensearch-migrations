@@ -766,8 +766,8 @@ jobs:
           disable-telemetry: true
           allowed-endpoints: >-
             api.github.com:443 github.com:443 raw.githubusercontent.com:443
-            objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443
-            registry.terraform.io:443 releases.hashicorp.com:443 releases.hashicorp.com:80 registry.opentofu.org:443
+            ${{ !inputs.cache-only && 'objects.githubusercontent.com:443 release-assets.githubusercontent.com:443 nodejs.org:443 registry.npmjs.org:443' || '' }}
+            ${{ !inputs.cache-only && 'registry.terraform.io:443 releases.hashicorp.com:443 releases.hashicorp.com:80 registry.opentofu.org:443' || '' }}
       - *enforce_unprivileged
       # END generated network guard
 
