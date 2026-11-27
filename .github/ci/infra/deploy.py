@@ -37,16 +37,14 @@ def render():
     resources = template['Resources']
     workloads = resources['SandboxBoundary']['Properties']['PolicyDocument']['Statement']
     control_plane = resources['ControlPlaneBoundary']['Properties']['PolicyDocument']['Statement']
-    for index, statement in enumerate(workloads):
+    # Restore the existing fixture grants when the snapshot suites are re-enabled.
+    workloads[:] = [statement for statement in workloads if statement.get('Sid') not in {'FixtureIndex', 'FixtureObjects'}]
+    for statement in workloads:
         if statement.get('Sid') in {'DiscoverRegionalInfrastructure', 'TagAtCreation', 'UseSandboxNetwork',
                                     'UseImages', 'AutoModeCreate', 'AutoModeManage', 'EksManagedSecurityGroup',
                                     'NodeInstanceProfile', 'NodeAndSnapshotRole'}:
             control_plane.append(statement.copy())
-        sid = statement.pop('Sid', None)
-        if sid in {'FixtureIndex', 'FixtureObjects'}:
-            # Snapshot-backed suites are paused. Keep the existing Oregon fixture
-            # permissions, and add them in other regions when a replica is available.
-            workloads[index] = {'Fn::If': ['Oregon', statement, {'Ref': 'AWS::NoValue'}]}
+        statement.pop('Sid', None)
     for statement in control_plane:
         statement.pop('Sid', None)
     return template

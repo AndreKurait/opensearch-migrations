@@ -10,6 +10,7 @@ Statement:
       - es:ListDomainNames
       - ecr:GetAuthorizationToken
       - cloudwatch:ListMetrics
+      - cloudwatch:GetMetricData
       - cloudwatch:DescribeAlarmsForMetric
     Resource: '*'
     Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
@@ -28,6 +29,15 @@ Statement:
       - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/ci-*'
       - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/OpenSearch-ci-*'
       - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/migration-assistant-ci-*'
+  # The EKS collector's EMF exporter uses this metrics namespace as its log group.
+  - Sid: EmfMetricGroup
+    Effect: Allow
+    Action: logs:CreateLogGroup
+    Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/metrics/OpenSearchMigrations:*'
+  - Sid: EmfMetricStreams
+    Effect: Allow
+    Action: ['logs:CreateLogStream', 'logs:PutLogEvents']
+    Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/metrics/OpenSearchMigrations:log-stream:otel-stream-*'
   - Sid: NoPublicResourcePolicies
     Effect: Deny
     Action: ['ecr:SetRepositoryPolicy', 'ecr:PutRegistryPolicy', 's3:PutBucketPolicy', 's3:PutBucketAcl', 's3:PutObjectAcl', 's3:PutBucketPublicAccessBlock', 'lambda:AddPermission']
