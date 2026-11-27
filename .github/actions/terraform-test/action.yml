@@ -23,13 +23,13 @@ runs:
           echo 'available=true' >> "$GITHUB_OUTPUT"
         fi
     - name: Restore the requested Terraform CLI
-      if: steps.installed.outputs.available != 'true'
       id: cli
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: ${{ runner.temp }}/terraform-tools/terraform
         key: terraform-cli-v1-${{ runner.os }}-${{ runner.arch }}-1.17.2
-        fail-on-cache-miss: ${{ inputs.cache-only == 'true' }}
+        lookup-only: ${{ steps.installed.outputs.available == 'true' }}
+        fail-on-cache-miss: ${{ steps.installed.outputs.available != 'true' && inputs.cache-only == 'true' }}
     - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
       if: steps.installed.outputs.available != 'true' && steps.cli.outputs.cache-hit != 'true'
       with:
