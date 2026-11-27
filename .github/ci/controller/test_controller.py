@@ -171,9 +171,16 @@ class ObservationTests(unittest.TestCase):
                                         {'name': 'CI_RECOVER_BUILD', 'value': BUILD}]}
         rows = [dict(id=retry, buildStatus='SUCCEEDED', environment=env),
                 dict(id=earlier, buildStatus='TIMED_OUT', environment=env)]
-        with patch.object(build, 'aws', side_effect=[{'ids': [retry, earlier, BUILD]}, {'builds': rows}]), \
-                patch.object(build, 'summary'):
-            self.assertEqual('SUCCEEDED', build.wait_for_cleanup(BUILD, 0))
+        for available in (True, False):
+            with self.subTest(available=available), \
+                    patch.object(build, 'aws', side_effect=[{'ids': [retry, earlier, BUILD]}, {'builds': rows}]), \
+                    patch.object(build, 'summary'), patch.object(build, 'collect', return_value=available) as collect:
+                if available:
+                    self.assertEqual('SUCCEEDED', build.wait_for_cleanup(BUILD, 0))
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'no report archive'):
+                        build.wait_for_cleanup(BUILD, 0)
+                collect.assert_called_once_with(rows[0], cleanup=True)
 
     def test_empty_next_page_and_delayed_stream(self):
         logs = {'groupName': build.LOG_GROUP, 'streamName': 'worker'}

@@ -174,7 +174,8 @@ def wait_for_cleanup(build_id, deadline):
             cursors[key] = stream(attempt.get('logs', {}), cursors.get(key, ''))
             if attempt['buildStatus'] == 'SUCCEEDED':
                 summary(f'Cleanup `{key}` succeeded.')
-                collect(attempt, cleanup=True)
+                if not collect(attempt, cleanup=True):
+                    raise RuntimeError(f'Successful cleanup {key} has no report archive')
                 return 'SUCCEEDED'
         if len(attempts) >= 3 and all(a['buildStatus'] in TERMINAL for a in attempts):
             return 'FAILED'
