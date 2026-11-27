@@ -9,6 +9,7 @@ const {pipeline} = require('node:stream/promises');
 
 const helmCharts = require('./helm-charts.json');
 
+const terraformProviders = new Set(['aws', 'helm', 'google', 'google-beta', 'kubernetes', 'random']);
 const digestPattern = /^[a-f0-9]{64}$/;
 const manifestTypes = [
   'application/vnd.oci.image.index.v1+json', 'application/vnd.docker.distribution.manifest.list.v2+json',
@@ -114,9 +115,18 @@ function parseKey(key) {
     return {urls: [new URL(`https://codeload.github.com/grafana/k6-operator/tar.gz/${originId}`)], cdn: [],
       digest: '87808985b4c5519b13673d1c1227250e6d215a710f04d5fe7c65c370105c7c0e'};
   }
+  if (kind === 'terraform-registry') {
+    const [, provider, ...suffix] = parts;
+    const resource = suffix.join('/');
+    if (!terraformProviders.has(provider) ||
+        !(resource === 'versions' || /^\d+\.\d+\.\d+\/download\/linux\/amd64$/.test(resource))) {
+      throw new Error('Unsupported Terraform registry request');
+    }
+    return {urls: [new URL(`https://registry.terraform.io/v1/providers/hashicorp/${provider}/${resource}`)], cdn: []};
+  }
   if (kind === 'terraform-provider') {
     const [, provider, version, platform, digest] = parts;
-    if (parts.length !== 5 || !/^(aws|helm|google|google-beta|kubernetes|random)$/.test(provider) ||
+    if (parts.length !== 5 || !terraformProviders.has(provider) ||
         !/^\d+\.\d+\.\d+$/.test(version) || platform !== 'linux_amd64' || !digestPattern.test(digest)) {
       throw new Error('Unsupported Terraform provider archive');
     }

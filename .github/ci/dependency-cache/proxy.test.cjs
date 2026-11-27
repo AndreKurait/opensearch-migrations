@@ -37,6 +37,17 @@ function get(base, key, method = 'GET', headers = {}) {
   });
 }
 
+test('Terraform registry requests fetch metadata without downloading provider archives', async t => {
+  const dir = await scratch(t);
+  const calls = mockFetch(t, [new Response('{}'), new Response('{}')]);
+  for (const resource of ['versions', '7.1.0/download/linux/amd64']) {
+    await fetchPublic(`/terraform-registry/google-beta/${resource}`, path.join(dir, String(calls.length)));
+    assert.equal(calls.at(-1).url.href, `https://registry.terraform.io/v1/providers/hashicorp/google-beta/${resource}`);
+  }
+  assert.throws(() => validateKey('/terraform-registry/unknown/versions'));
+  assert.throws(() => validateKey('/terraform-registry/aws/token'));
+});
+
 test('Terraform provider downloads verify the archive checksum', async t => {
   const dir = await scratch(t);
   const calls = mockFetch(t, [new Response('archive'), new Response('wrong bytes')]);
