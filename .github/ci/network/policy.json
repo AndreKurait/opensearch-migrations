@@ -222,6 +222,7 @@
       ]
     },
     "ci-jobs.yml/python-lint": {
+      "cacheOnlyInput": true,
       "purposes": [
         "github",
         "bootstrap",
@@ -233,6 +234,7 @@
       "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true'"
     },
     "ci-jobs.yml/python-tests": {
+      "cacheOnlyInput": true,
       "purposes": [
         "github",
         "bootstrap",
@@ -294,6 +296,7 @@
       "unreviewedForkSandbox": "false"
     },
     "ci-jobs.yml/node-tests": {
+      "cacheOnlyInput": true,
       "purposes": [
         "github",
         "bootstrap",
@@ -355,6 +358,7 @@
       "nativePrivileges": false
     },
     "ci-jobs.yml/sonarqube-analysis": {
+      "cacheOnlyInput": true,
       "purposes": [
         "github",
         "bootstrap",
