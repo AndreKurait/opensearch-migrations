@@ -204,11 +204,8 @@ def watch(build_id, cursor, minutes):
         state = build['buildStatus']
         cursor = stream(build.get('logs', {}), cursor, max_pages=10000 if state in TERMINAL else 50)
         if state in TERMINAL:
-            if state != 'SUCCEEDED':
-                for section in build.get('phases', []):
-                    print(section.get('phaseType'), section.get('phaseStatus'),
-                          [error.get('statusCode') for error in section.get('contexts', [])], flush=True)
             env = {v['name']: v['value'] for v in build.get('environment', {}).get('environmentVariables', [])}
+            cleanup_state = None
             if env.get('CI_SEPARATE_CLEANUP') == 'true':
                 cleanup_state = wait_for_cleanup(build_id, stop_at)
                 if cleanup_state == 'IN_PROGRESS':
@@ -216,7 +213,19 @@ def watch(build_id, cursor, minutes):
                     return
                 if cleanup_state != 'SUCCEEDED':
                     state = 'FAILED'
-            summary(f"CodeBuild `{build_id}` finished **{state}**.")
+            worker_state = build['buildStatus']
+            summary(f"CodeBuild test worker `{build_id}` finished **{worker_state}**.")
+            phases = []
+            if worker_state != 'SUCCEEDED':
+                for section in build.get('phases', []):
+                    phase = {key: section.get(key) for key in ('phaseType', 'phaseStatus', 'durationInSeconds')}
+                    codes = [context['statusCode'] for context in section.get('contexts', [])
+                             if re.fullmatch(r'[A-Z][A-Z0-9_]{0,79}', context.get('statusCode') or '')]
+                    if codes:
+                        phase['statusCodes'] = codes
+                        formatted = ", ".join(f"`{code}`" for code in codes)
+                        summary(f"CodeBuild `{phase['phaseType']}` reported {formatted}.")
+                    phases.append(phase)
             # In a provisioning failure CodeBuild can advertise an S3 destination without creating an object.
             # A successful suite must have produced its evidence. A failed suite remains failed either way.
             try:
@@ -230,21 +239,20 @@ def watch(build_id, cursor, minutes):
                 # CodeBuild omits the worker archive on a hard timeout or provisioning failure.
                 directory = Path(os.environ['RUNNER_TEMP']) / 'aws-test-results'
                 directory.mkdir(exist_ok=True)
-                phases = [{key: phase.get(key) for key in ('phaseType', 'phaseStatus', 'durationInSeconds')}
-                          for phase in build.get('phases', [])]
-                for phase, section in zip(phases, build.get('phases', [])):
-                    codes = [context['statusCode'] for context in section.get('contexts', [])
-                             if re.fullmatch(r'[A-Z][A-Z0-9_]{0,79}', context.get('statusCode') or '')]
-                    if codes:
-                        phase['statusCodes'] = codes
-                        formatted = ", ".join(f"`{code}`" for code in codes)
-                        summary(f"CodeBuild `{phase['phaseType']}` reported {formatted}.")
                 evidence = dict(buildId=build_id, buildStatus=state, phases=phases, workerReportAvailable=False)
                 status_file = directory / 'codebuild-status.json'
                 status_file.write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
                 artifact = True
             output(state=state, cursor=cursor, artifact=str(artifact).lower())
             if state != 'SUCCEEDED':
+                details = [f"test worker {build_id}: {worker_state}"]
+                for phase in phases:
+                    if phase.get('statusCodes') or phase['phaseStatus'] not in ('SUCCEEDED', None):
+                        status = ', '.join([str(phase['phaseStatus']), *phase.get('statusCodes', [])])
+                        details.append(f"{phase['phaseType']}: {status}")
+                if cleanup_state:
+                    details.append(f"cleanup: {cleanup_state}")
+                print('AWS suite failed (' + '; '.join(details) + ')', file=sys.stderr, flush=True)
                 sys.exit(1)
             if not build.get('artifacts', {}).get('location'):
                 raise RuntimeError('Successful build has no test report')

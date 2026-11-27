@@ -3,7 +3,7 @@ import json
 import os
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
@@ -203,7 +203,10 @@ class ObservationTests(unittest.TestCase):
             result['buildStatus'] = 'FAILED'
             result['phases'] = [dict(phaseType='BUILD', phaseStatus='TIMED_OUT',
                                      contexts=[{'statusCode': 'BUILD_TIMED_OUT', 'message': 'private detail'}])]
-            with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, RUNNER_TEMP=tmp):
+            result['environment'] = {'environmentVariables': [{'name': 'CI_SEPARATE_CLEANUP', 'value': 'true'}]}
+            stderr = io.StringIO()
+            with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, RUNNER_TEMP=tmp), \
+                    patch.object(build, 'wait_for_cleanup', return_value='SUCCEEDED'), redirect_stderr(stderr):
                 with self.assertRaises(SystemExit):
                     build.watch(BUILD, '', 0)
                 evidence = json.loads((Path(tmp) / 'aws-test-results/codebuild-status.json').read_text())
@@ -211,6 +214,9 @@ class ObservationTests(unittest.TestCase):
                 self.assertEqual('TIMED_OUT', evidence['phases'][0]['phaseStatus'])
                 self.assertEqual(['BUILD_TIMED_OUT'], evidence['phases'][0]['statusCodes'])
                 self.assertNotIn('private detail', json.dumps(evidence))
+                self.assertIn(f'test worker {BUILD}: FAILED', stderr.getvalue())
+                self.assertIn('BUILD: TIMED_OUT, BUILD_TIMED_OUT; cleanup: SUCCEEDED', stderr.getvalue())
+                self.assertNotIn('private detail', stderr.getvalue())
         outputs = {'Stacks': [{'Outputs': [{'OutputKey': 'ArtifactBucketName', 'OutputValue': 'expected'}]}]}
         with patch.object(build, 'aws', return_value=outputs) as api, self.assertRaises(ValueError):
             build.collect(dict(id=BUILD, artifacts={'location': 'arn:aws:s3:::other/other'}))
