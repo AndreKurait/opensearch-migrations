@@ -63,7 +63,9 @@ def handler(event, context):
             raise ValueError('VPC does not match stack')
         client = boto3.client('opensearchserverless')
         if event['RequestType'] == 'Delete':
-            if endpoint_id != 'never-created':
+            # When Create never returned a physical ID, CloudFormation supplies its generated ID.
+            placeholder = f'{stack[1]}-endpoints-{event["LogicalResourceId"]}-'
+            if endpoint_id != 'never-created' and not re.fullmatch(re.escape(placeholder) + r'[A-Z0-9]+', endpoint_id):
                 current = endpoint(client, endpoint_id)
                 if current and current['name'] == props['Name'] and current['vpcId'] == vpc_id:
                     if current['status'] != 'DELETING':

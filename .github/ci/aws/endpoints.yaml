@@ -23,6 +23,7 @@ Resources:
     Type: Custom::SandboxAossVpcEndpoint
     Properties:
       ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:migrations-ci-private-endpoint'
+      ServiceTimeout: '360'
       Name: !Sub '${Stage}-classic'
       VpcId: !Ref VpcId
       SubnetIds: !Ref Subnets
