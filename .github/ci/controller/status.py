@@ -64,7 +64,7 @@ def publish(plan, state):
     sha, run, attempt = plan['sha'], plan['run'], plan['attempt']
     attempt_prefix = f'https://github.com/{REPO}/actions/runs/{run}/attempts/'
     target = f'{attempt_prefix}{attempt}'
-    descriptions = {'pending': 'Approved and queued for Oregon capacity', 'error': 'AWS test run cancelled',
+    descriptions = {'pending': 'Approved and queued for sandbox capacity', 'error': 'AWS test run cancelled',
                     'failure': 'AWS test failure', 'success': 'AWS test success'}
     pages = json.loads(api(f'commits/{sha}/status?per_page=100', '--paginate', '--slurp'))
     latest = {row['context']: row for page in pages for row in page['statuses']}
