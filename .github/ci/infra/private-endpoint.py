@@ -35,10 +35,11 @@ def response_url(value, region):
     # A caller allowed to invoke this broker cannot turn it into an HTTP proxy.
     bucket = 'cloudformation-custom-resource-response-' + region.replace('-', '')
     url = urlsplit(value)
-    endpoints = {f's3.{region}.amazonaws.com', 's3.amazonaws.com'}
+    # CloudFormation can sign callbacks against S3's legacy dash-delimited regional endpoint.
+    endpoints = {f's3.{region}.amazonaws.com', f's3-{region}.amazonaws.com', 's3.amazonaws.com'}
     permitted = url.hostname in {f'{bucket}.{host}' for host in endpoints} or (
         url.hostname in endpoints and url.path.startswith('/' + bucket + '/'))
-    if url.scheme != 'https' or url.username or url.password or url.port or not permitted:
+    if url.scheme != 'https' or url.username is not None or url.password is not None or url.port or not permitted:
         raise ValueError('Expected the regional CloudFormation response bucket')
 
 
