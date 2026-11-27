@@ -200,6 +200,7 @@
   },
   "jobs": {
     "ci-jobs.yml/gradle-extended-check": {
+      "cacheOnlyInput": true,
       "purposes": [
         "github",
         "bootstrap",
@@ -211,6 +212,7 @@
       "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true'"
     },
     "ci-jobs.yml/gradle-build-macos": {
+      "cacheOnlyInput": true,
       "platform": "macos",
       "candidate": "seatbelt",
       "purposes": [
@@ -258,6 +260,7 @@
       "nativePrivileges": false
     },
     "ci-jobs.yml/gradle-repository-tests": {
+      "cacheOnlyInput": true,
       "purposes": [
         "github",
         "bootstrap",
@@ -277,6 +280,7 @@
       "unreviewedForkSandbox": "false"
     },
     "ci-jobs.yml/gradle-tests": {
+      "cacheOnlyInput": true,
       "purposes": [
         "es-build-packages",
         "github",
@@ -304,6 +308,7 @@
       "unreviewedForkSandbox": "vars.DEPENDENCY_PROXY_ENABLED == 'true' && matrix.npm-project != './orchestrationSpecs'"
     },
     "ci-jobs.yml/mountable-transforms-k8s-test": {
+      "cacheOnlyInput": true,
       "purposes": [
         "github",
         "bootstrap",

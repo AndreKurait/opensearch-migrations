@@ -49,13 +49,6 @@ def bootstrap(file, native, platform):
 
 
 def guard(job, definitions):
-    if job.get('platform') == 'macos':
-        guard_step = bootstrap('darwin_guard.py', False, 'macOS')
-        endpoints = ' '.join(
-            dict.fromkeys(host for name in job['purposes'] for host in POLICY['purposes'][name])
-        )
-        return guard_step.replace('  run: |', '    GITHUB_META_TOKEN: ${{ github.token }}\n'
-                                  '    PUBLIC_ENDPOINTS: ' + endpoints + '\n  run: |')
     purposes = job['purposes']
     hosts = set()
     groups = []
@@ -67,9 +60,14 @@ def guard(job, definitions):
         hosts.update(group)
         if group:
             endpoints = ' '.join(group)
-            if job.get('cacheOnlyInput') and purpose != 'github':
+            if job.get('cacheOnlyInput') and purpose not in ('github', 'coverage'):
                 endpoints = "${{ !inputs.cache-only && '" + endpoints + "' || '' }}"
             groups.append(endpoints)
+    if job.get('platform') == 'macos':
+        endpoints = ' '.join(groups)
+        guard_step = bootstrap('darwin_guard.py', False, 'macOS')
+        return guard_step.replace('  run: |', '    GITHUB_META_TOKEN: ${{ github.token }}\n'
+                                  '    PUBLIC_ENDPOINTS: ' + endpoints + '\n  run: |')
     key = tuple(groups)
     prefix = f'network_{len(definitions[0]) + 1}'
     if key in definitions[0]:
