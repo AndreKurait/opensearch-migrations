@@ -109,6 +109,7 @@ jobs:
         with:
           gradle-cache-enabled: 'true'
           gradle-cache-read-only: 'false'
+          dependency-proxy-enabled: ${{ vars.DEPENDENCY_PROXY_ENABLED == 'true' }}
 
       - name: Alias docker-registry to 127.0.0.1
         run: |
