@@ -1,18 +1,20 @@
 name: Test a Terraform module
-description: Run plan-time tests with a local provider mirror.
+description: Run plan-time tests with an on-demand provider mirror.
 inputs:
   module:
     required: true
     description: Terraform module path
   cache-only:
     required: true
-    description: Require the published CLI and provider mirror
+    description: Require cached CLI and provider requests
 runs:
   using: composite
   steps:
-    - id: period
-      shell: bash
-      run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+    - uses: ./.github/actions/install-dependency-toolkit
+    - uses: ./.github/actions/dependency-cache
+      with:
+        catalog-token: ${{ github.token }}
+        mode: ${{ inputs.cache-only != 'true' && github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && 'record' || 'read' }}
     - id: installed
       shell: bash
       run: |
@@ -45,30 +47,7 @@ runs:
       with:
         path: ${{ runner.temp }}/terraform-tools/terraform
         key: terraform-cli-v1-${{ runner.os }}-${{ runner.arch }}-1.17.2
-    - name: Restore providers for the selected module
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-      id: cache
-      with:
-        path: ${{ runner.temp }}/terraform-tools/providers
-        key: terraform-providers-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.period.outputs.month }}-${{ hashFiles(format('{0}/**/*.tf', inputs.module)) }}
-        fail-on-cache-miss: ${{ inputs.cache-only == 'true' }}
-    - name: Populate the provider mirror
-      if: steps.cache.outputs.cache-hit != 'true'
-      shell: bash
-      working-directory: ${{ inputs.module }}
-      run: |
-        set -euo pipefail
-        tools="$RUNNER_TEMP/terraform-tools"
-        mkdir -p "$tools/providers"
-        CHECKPOINT_DISABLE=1 "$tools/terraform" get
-        CHECKPOINT_DISABLE=1 "$tools/terraform" providers mirror "$tools/providers"
-    - name: Publish the selected module provider mirror
-      if: steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name)
-      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-      with:
-        path: ${{ runner.temp }}/terraform-tools/providers
-        key: ${{ steps.cache.outputs.cache-primary-key }}
-    - name: Run Terraform tests from the local provider mirror
+    - name: Run Terraform tests with on-demand provider downloads
       shell: bash
       working-directory: ${{ inputs.module }}
       env:
@@ -77,7 +56,17 @@ runs:
       run: |
         set -euo pipefail
         tools="$RUNNER_TEMP/terraform-tools"
-        export TF_CLI_CONFIG_FILE="$RUNNER_TEMP/test-terraform.rc"
-        printf 'provider_installation {\n  filesystem_mirror {\n    path = "%s"\n  }\n}\n' "$tools/providers" > "$TF_CLI_CONFIG_FILE"
+        openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=localhost' \
+          -addext 'subjectAltName=IP:127.0.0.1' -keyout "$tools/key.pem" -out "$tools/cert.pem" 2>/dev/null
+        export SSL_CERT_FILE="$tools/cert.pem" TF_CLI_CONFIG_FILE="$tools/mirror.rc"
+        python3 "$GITHUB_ACTION_PATH/mirror.py" "$tools/cert.pem" "$tools/key.pem" "$TF_CLI_CONFIG_FILE" &
+        mirror_pid=$!
+        trap 'kill "$mirror_pid" 2>/dev/null || true' EXIT
+        for attempt in {1..100}; do
+          [[ -s "$TF_CLI_CONFIG_FILE" ]] && break
+          kill -0 "$mirror_pid"
+          sleep 0.1
+        done
+        test -s "$TF_CLI_CONFIG_FILE"
         "$tools/terraform" init -backend=false
         "$tools/terraform" test
