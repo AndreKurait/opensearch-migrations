@@ -604,12 +604,12 @@ class Worker:
                     Isolated=str(self.suite == 'isolated').lower(),
                 )
         bootstrap_minutes = 90 if self.suite in ('aoss', 'isolated', 'cfn-import', 'cfn-create') else 150
-        # Managed clusters for these three suites share the private EKS VPC; their deploys use the same deadline.
+        # Managed test endpoints share the private EKS VPC and the bootstrap deadline.
         bootstrap_end = time.monotonic() + bootstrap_minutes * 60
         endpoints = None
         with phase('EKS deployment and install', bootstrap_minutes):
-            if self.suite in ('eks', 'cdc', 'cdc-k6'):
-                # Domain creation only needs the completed EKS infrastructure, not the image builds or Helm install.
+            if self.suite in ('eks', 'cdc', 'cdc-k6', 'cdc-aoss'):
+                # Domain and collection creation only need the completed EKS infrastructure.
                 with ThreadPoolExecutor(max_workers=1) as executor:
                     install = executor.submit(copy_context().run, self.bootstrap)
                     while not wait([install], timeout=20).done:

@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+from threading import Event
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
@@ -30,6 +32,32 @@ class TestCloudWorker(unittest.TestCase):
                 worker = Worker('aoss', self.temp)
                 self.assertEqual((worker.classic, worker.nextgen), expected)
                 self.assertEqual(worker.results, self.temp / 'ci-results')
+
+    def test_cdc_aoss_provisions_test_endpoints_before_bootstrap_finishes(self):
+        worker = Worker('cdc-aoss', self.temp)
+        provisioned = Event()
+        endpoints = {'ClassicEndpoint': 'vpce-example'}
+
+        def bootstrap():
+            self.assertTrue(provisioned.wait(5), 'Test endpoints were not provisioned during bootstrap')
+
+        def clusters(vpc):
+            self.assertEqual(vpc, 'vpc-test')
+            provisioned.set()
+            return endpoints
+
+        with patch.object(worker, 'build'), patch.object(worker, 'pipenv'), \
+                patch.object(worker, 'bootstrap', side_effect=bootstrap), \
+                patch.object(worker, 'clusters', side_effect=clusters) as provision, \
+                patch.object(worker, 'configure_clusters') as configure, \
+                patch.object(worker, 'aws', side_effect=[
+                    {'Stacks': [{'StackStatus': 'CREATE_COMPLETE'}]},
+                    {'cluster': {'resourcesVpcConfig': {'vpcId': 'vpc-test'}}},
+                ]), patch('run.wait', return_value=SimpleNamespace(done=set())), \
+                patch('run.nodepools'):
+            worker.execute()
+        provision.assert_called_once_with('vpc-test')
+        configure.assert_called_once_with(endpoints)
 
     def test_source_suites_prepare_only_the_production_bootstrap(self):
         for suite, release in [('eks', ''), ('cfn-create', ''), ('cfn-import', ''), ('cdc-k6', '3.4.2')]:
