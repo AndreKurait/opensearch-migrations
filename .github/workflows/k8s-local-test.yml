@@ -170,7 +170,6 @@ jobs:
       - name: Build Docker images (BuildKit)
         shell: test-shell.sh {0}
         working-directory: ${{ env.TEST_REPO_DIR }}
-        timeout-minutes: 45
         run: |
           set -eu
           kubectl config unset current-context || true
