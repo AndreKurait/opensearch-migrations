@@ -123,8 +123,10 @@ repositories {
         // Overridable for environments that mirror get.helm.sh.
         url = providers.environmentVariable('HELM_DISTRIBUTION_URL')
                 .orElse(providers.gradleProperty('helmDistributionUrl'))
+                .orElse(providers.environmentVariable('CI_DEPENDENCY_PROXY_URL').map { it.replaceAll('/+$', '') + '/raw/helm/' })
                 .orElse('https://get.helm.sh')
                 .get()
+        allowInsecureProtocol = url.scheme == 'http' && url.host in ['127.0.0.1', 'localhost', '::1', '[::1]']
         patternLayout { artifact 'helm-v[revision]-[classifier].[ext]' }
         metadataSources { artifact() }
         content { includeModule('sh.helm', 'helm') }
